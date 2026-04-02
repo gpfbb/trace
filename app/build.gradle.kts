@@ -29,19 +29,13 @@ android {
             keyAlias = "trackmaster"
             keyPassword = "trackmaster2024"
         }
-        create("debug") {
-            storeFile = file("../trackmaster_debug.jks")
-            storePassword = "trackmaster2024"
-            keyAlias = "trackmaster_debug"
-            keyPassword = "trackmaster2024"
-        }
     }
 
     buildTypes {
         debug {
             isDebuggable = true
-            signingConfig = signingConfigs.getByName("debug")
             buildConfigField("String", "AMAP_API_KEY", "\"de0019af032b8f64f337ce0004d78bf1\"")
+            manifestPlaceholders["AMAP_API_KEY"] = "de0019af032b8f64f337ce0004d78bf1"
         }
         release {
             isMinifyEnabled = true
@@ -52,6 +46,7 @@ android {
             )
             signingConfig = signingConfigs.getByName("release")
             buildConfigField("String", "AMAP_API_KEY", "\"de0019af032b8f64f337ce0004d78bf1\"")
+            manifestPlaceholders["AMAP_API_KEY"] = "de0019af032b8f64f337ce0004d78bf1"
         }
     }
 
