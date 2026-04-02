@@ -6,6 +6,7 @@ import com.amap.api.location.AMapLocation
 import com.amap.api.location.AMapLocationClient
 import com.amap.api.location.AMapLocationClientOption
 import com.amap.api.location.AMapLocationListener
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,7 +29,7 @@ data class LocationData(
 
 @Singleton
 class LocationService @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) : AMapLocationListener {
 
     private var locationClient: AMapLocationClient? = null
@@ -82,16 +83,16 @@ class LocationService @Inject constructor(
     }
 
     private fun createLocationOption(interval: Long): AMapLocationClientOption {
-        return AMapLocationClientOption().apply {
-            locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
-            interval = interval
-            isNeedAddress = true
-            isOnceLocation = false
-            isOnceLocationLatest = false
-            isWifiScan = true
-            isLocationCacheEnable = true
-            httpTimeOut = 30000
-        }
+        val option = AMapLocationClientOption()
+        option.locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
+        option.interval = interval
+        option.isNeedAddress = true
+        option.isOnceLocation = false
+        option.isOnceLocationLatest = false
+        option.isWifiScan = true
+        option.isLocationCacheEnable = true
+        option.httpTimeOut = 30000
+        return option
     }
 
     fun startLocation() {

@@ -79,17 +79,19 @@ fun MainScreen(viewModel: MainViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
+                .then(
                     if (uiState.isDarkMode) {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF0D1B2A),
-                                Color(0xFF1B263B),
-                                Color(0xFF0D1B2A)
+                        Modifier.background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF0D1B2A),
+                                    Color(0xFF1B263B),
+                                    Color(0xFF0D1B2A)
+                                )
                             )
                         )
                     } else {
-                        Color(0xFFF5F7FA)
+                        Modifier.background(Color(0xFFF5F7FA))
                     }
                 )
         ) {

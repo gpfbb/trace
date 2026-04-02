@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- 轨迹路径图标 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30
+                         C54,30 58,26 62,26
+                         C68,26 72,30 72,36
+                         C72,42 68,46 62,46
+                         C58,46 54,42 54,42
+                         L54,30Z"/>
+    
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,42
+                         L54,78
+                         C54,78 50,82 46,82
+                         C40,82 36,78 36,72
+                         C36,66 40,62 46,62
+                         C50,62 54,66 54,66"/>
+    
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:pathData="M54,54
+                         C54,54 62,50 66,54
+                         C70,58 70,66 66,70
+                         C62,74 54,70 54,70"/>
+    
+    <!-- 定位点 -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M54,54
+                         m-8,0
+                         a8,8 0,1 1,16 0
+                         a8,8 0,1 1,-16 0"/>
+</vector>

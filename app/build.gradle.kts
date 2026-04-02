@@ -104,7 +104,6 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
 
     implementation("com.amap.api:3dmap:10.0.600")
-    implementation("com.amap.api:location:6.3.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

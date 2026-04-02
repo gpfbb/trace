@@ -257,8 +257,8 @@ class TrackingService : Service() {
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("TrackMaster - $stateText")
-            .setContentText("里程: $distanceText")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentText("里程：$distanceText")
+            .setSmallIcon(R.mipmap.ic_launcher_foreground)
             .setContentIntent(contentIntent)
             .setOngoing(true)
             .addAction(
