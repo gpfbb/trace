@@ -170,11 +170,18 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         super.onCreate(savedInstanceState)
 
         sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        dbHelper = GeoFenceDatabaseHelper(this)
         
-        loadGeoFencesFromDB()
-        loadGeoFenceEvents()
-        loadFenceStayRecords()
+        val app = application as TrackMasterApplication
+        dbHelper = app.dbHelper
+        
+        geoFences.clear()
+        geoFences.addAll(app.geoFences)
+        
+        geoFenceEvents.clear()
+        geoFenceEvents.addAll(app.geoFenceEvents)
+        
+        fenceStayRecords.clear()
+        fenceStayRecords.addAll(app.fenceStayRecords)
 
         val activityContext = this
 
@@ -244,6 +251,9 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             locationStatus.value = "正在获取位置..."
             locationError.value = null
             locationClient?.startLocation()
+            
+            val app = application as TrackMasterApplication
+            app.startLocationService()
         } catch (e: Exception) {
             Log.e("TrackMaster", "启动定位失败", e)
             locationStatus.value = "启动失败"
@@ -1002,6 +1012,8 @@ fun MainScreen(
     // 控制清理确认对话框显示
     val showClearConfirmation = remember { mutableStateOf(false) }
     val showSecondClearConfirmation = remember { mutableStateOf(false) }
+    // 控制设置对话框显示
+    val showSettingsDialog = remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -1078,6 +1090,14 @@ fun MainScreen(
                             modifier = Modifier.size(48.dp)
                         ) {
                             Text("记")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FloatingActionButton(
+                            onClick = { showSettingsDialog.value = true },
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Text("⚙")
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -1893,6 +1913,13 @@ fun MainScreen(
                     Text("关闭")
                 }
             }
+        )
+    }
+
+    // 设置对话框
+    if (showSettingsDialog.value) {
+        SettingsScreen(
+            onDismiss = { showSettingsDialog.value = false }
         )
     }
 }
