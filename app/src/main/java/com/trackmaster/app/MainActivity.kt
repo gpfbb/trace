@@ -1,22 +1,37 @@
 package com.trackmaster.app
 
 import android.Manifest
+import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.graphics.Color
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.*
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -32,6 +47,8 @@ import com.amap.api.maps.MapView
 import com.amap.api.maps.model.Circle
 import com.amap.api.maps.model.CircleOptions
 import com.amap.api.maps.model.LatLng
+import com.amap.api.maps.model.Marker
+import com.amap.api.maps.model.MarkerOptions
 import com.amap.api.maps.model.MyLocationStyle
 import com.amap.api.maps.model.Polygon
 import com.amap.api.maps.model.PolygonOptions
@@ -66,21 +83,70 @@ enum class GeoFenceAction {
 }
 
 data class GeoFenceEvent(
+    val id: String = UUID.randomUUID().toString(),
     val fenceId: String,
     val fenceName: String,
     val action: GeoFenceAction,
-    val time: Date
+    val time: Date,
+    val latitude: Double,
+    val longitude: Double,
+    val accuracy: Float,
+    val durationSeconds: Long? = null
+)
+
+data class FenceStayRecord(
+    val fenceId: String,
+    val fenceName: String,
+    val enterTime: Date,
+    val exitTime: Date? = null,
+    val durationSeconds: Long? = null
+)
+
+data class DailyFenceStats(
+    val date: String,
+    val fenceId: String,
+    val fenceName: String,
+    val totalStayDuration: Long,
+    val enterCount: Int,
+    val exitCount: Int
 )
 
 class MainActivity : ComponentActivity(), AMapLocationListener {
 
     private var locationClient: AMapLocationClient? = null
     private val geoFences = mutableStateListOf<GeoFence>()
-    private val geoFenceEvents = mutableStateListOf<GeoFenceEvent>()
-    private val currentFenceStates = mutableMapOf<String, Boolean>() // fenceId to isInside
+    private val geoFenceEvents = mutableListOf<GeoFenceEvent>()
+    private val currentFenceStates = mutableMapOf<String, Boolean>()
+    private val fenceEnterTimes = mutableMapOf<String, Date>()
+    private val fenceStayRecords = mutableListOf<FenceStayRecord>()
+    private val stableLocationCount = mutableMapOf<String, Int>()
+    private var aMap: AMap? = null
+    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var dbHelper: GeoFenceDatabaseHelper
+    
+    private val MIN_CONSECUTIVE_LOCATIONS = 3
+    private val MAX_LOCATION_ACCURACY = 50f
+    private val PREFS_NAME = "GeoFencePrefs"
+    private val KEY_EVENTS = "geoFenceEvents"
+    private val KEY_STAY_RECORDS = "fenceStayRecords"
+    
+    private val SAVE_DELAY_MS = 2000L
+    private val handler = Handler(Looper.getMainLooper())
+    private var pendingSaveRunnable: Runnable? = null
+
+    // 设置地图对象
+    fun setMap(map: AMap?) {
+        this.aMap = map
+    }
+
+    // 获取当前地图对象
+    fun getCurrentMap(): AMap? {
+        return aMap
+    } // fenceId to isInside
     
     private val circleOverlays = mutableMapOf<String, Circle>() // fenceId to Circle
     private val polygonOverlays = mutableMapOf<String, Polygon>() // fenceId to Polygon
+    private val tempDrawingMarkers = mutableListOf<Marker>() // 临时绘制标记
 
     private val currentLocation = mutableStateOf<AMapLocation?>(null)
     private val locationStatus = mutableStateOf("正在初始化...")
@@ -102,6 +168,13 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        dbHelper = GeoFenceDatabaseHelper(this)
+        
+        loadGeoFencesFromDB()
+        loadGeoFenceEvents()
+        loadFenceStayRecords()
 
         val activityContext = this
 
@@ -209,9 +282,12 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        pendingSaveRunnable?.let { handler.removeCallbacks(it) }
+        performSaveGeoFenceEvents()
+        performSaveFenceStayRecords()
         locationClient?.stopLocation()
         locationClient?.onDestroy()
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -220,8 +296,11 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     }
 
     override fun onPause() {
-        super.onPause()
+        pendingSaveRunnable?.let { handler.removeCallbacks(it) }
+        performSaveGeoFenceEvents()
+        performSaveFenceStayRecords()
         locationClient?.stopLocation()
+        super.onPause()
     }
 
     // 计算两点之间的距离（米）
@@ -275,6 +354,12 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     private fun checkGeoFences(location: AMapLocation) {
         val userPoint = GeoFencePoint(location.latitude, location.longitude)
 
+        // 检查位置精度，避免使用精度过低的位置
+        if (location.accuracy > MAX_LOCATION_ACCURACY) {
+            Log.d("TrackMaster", "位置精度不足: ${location.accuracy}m，跳过围栏检测")
+            return
+        }
+
         for (fence in geoFences) {
             val isInside = when (fence.type) {
                 GeoFenceType.CIRCLE -> isPointInCircle(userPoint, fence)
@@ -282,19 +367,96 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             }
 
             val previousState = currentFenceStates[fence.id] ?: false
-            if (isInside && !previousState) {
-                // 进入围栏
-                val event = GeoFenceEvent(fence.id, fence.name, GeoFenceAction.ENTER, Date())
-                geoFenceEvents.add(event)
-                Log.d("TrackMaster", "进入围栏: ${fence.name}")
-            } else if (!isInside && previousState) {
-                // 退出围栏
-                val event = GeoFenceEvent(fence.id, fence.name, GeoFenceAction.EXIT, Date())
-                geoFenceEvents.add(event)
-                Log.d("TrackMaster", "退出围栏: ${fence.name}")
+            val currentCount = stableLocationCount[fence.id] ?: 0
+
+            if (isInside) {
+                if (!previousState) {
+                    stableLocationCount[fence.id] = currentCount + 1
+                    if (stableLocationCount[fence.id]!! >= MIN_CONSECUTIVE_LOCATIONS) {
+                        recordFenceEnter(fence, location)
+                        currentFenceStates[fence.id] = true
+                        stableLocationCount[fence.id] = 0
+                    }
+                }
+            } else {
+                if (previousState) {
+                    stableLocationCount[fence.id] = currentCount + 1
+                    if (stableLocationCount[fence.id]!! >= MIN_CONSECUTIVE_LOCATIONS) {
+                        recordFenceExit(fence, location)
+                        currentFenceStates[fence.id] = false
+                        stableLocationCount[fence.id] = 0
+                    }
+                } else {
+                    stableLocationCount[fence.id] = 0
+                }
             }
-            currentFenceStates[fence.id] = isInside
         }
+    }
+
+    private fun recordFenceEnter(fence: GeoFence, location: AMapLocation) {
+        val now = Date()
+        fenceEnterTimes[fence.id] = now
+        val event = GeoFenceEvent(
+            fenceId = fence.id,
+            fenceName = fence.name,
+            action = GeoFenceAction.ENTER,
+            time = now,
+            latitude = location.latitude,
+            longitude = location.longitude,
+            accuracy = location.accuracy
+        )
+        geoFenceEvents.add(event)
+        dbHelper.insertEvent(event)
+        Log.d("TrackMaster", "进入围栏: ${fence.name} at $now")
+        saveGeoFenceEvents()
+    }
+
+    private fun recordFenceExit(fence: GeoFence, location: AMapLocation) {
+        val now = Date()
+        val enterTime = fenceEnterTimes[fence.id]
+        val durationSeconds = if (enterTime != null) {
+            (now.time - enterTime.time) / 1000
+        } else null
+        
+        if (enterTime != null) {
+            val record = FenceStayRecord(
+                fenceId = fence.id,
+                fenceName = fence.name,
+                enterTime = enterTime,
+                exitTime = now,
+                durationSeconds = durationSeconds
+            )
+            fenceStayRecords.add(record)
+            dbHelper.insertStayRecord(record)
+        }
+        
+        val event = GeoFenceEvent(
+            fenceId = fence.id,
+            fenceName = fence.name,
+            action = GeoFenceAction.EXIT,
+            time = now,
+            latitude = location.latitude,
+            longitude = location.longitude,
+            accuracy = location.accuracy,
+            durationSeconds = durationSeconds
+        )
+        geoFenceEvents.add(event)
+        dbHelper.insertEvent(event)
+        fenceEnterTimes.remove(fence.id)
+        Log.d("TrackMaster", "退出围栏: ${fence.name}, 停留: ${durationSeconds ?: 0}秒")
+        saveGeoFenceEvents()
+        saveFenceStayRecords()
+    }
+
+    // 从数据库加载围栏
+    private fun loadGeoFencesFromDB() {
+        val fencesFromDB = dbHelper.getAllFences()
+        geoFences.clear()
+        geoFences.addAll(fencesFromDB)
+        fencesFromDB.forEach { fence ->
+            currentFenceStates[fence.id] = false
+        }
+        Log.d("TrackMaster", "从数据库加载了 ${fencesFromDB.size} 个围栏")
     }
 
     // 创建圆形地理围栏
@@ -308,6 +470,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         )
         geoFences.add(fence)
         currentFenceStates[fence.id] = false
+        dbHelper.insertFence(fence)
         Log.d("TrackMaster", "创建圆形围栏: $name, 半径: ${radius}米")
     }
 
@@ -325,6 +488,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         )
         geoFences.add(fence)
         currentFenceStates[fence.id] = false
+        dbHelper.insertFence(fence)
         Log.d("TrackMaster", "创建多边形围栏: $name, 顶点数: ${points.size}")
     }
 
@@ -334,6 +498,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         if (fence != null) {
             geoFences.remove(fence)
             currentFenceStates.remove(fenceId)
+            dbHelper.deleteFence(fenceId)
             
             // 移除地图上的覆盖物
             circleOverlays[fenceId]?.remove()
@@ -350,6 +515,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         geoFences.clear()
         currentFenceStates.clear()
         geoFenceEvents.clear()
+        dbHelper.deleteAllFences()
         
         // 清除所有地图覆盖物
         circleOverlays.values.forEach { it.remove() }
@@ -367,7 +533,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
 
     // 获取地理围栏事件
     fun getGeoFenceEvents(): List<GeoFenceEvent> {
-        return geoFenceEvents.toList()
+        return dbHelper.getEventsByTimeRange(Date(0), Date())
     }
 
     // 获取用户当前在哪些围栏内
@@ -375,6 +541,146 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         return geoFences.filter { 
             val state = currentFenceStates[it.id]
             state == true
+        }
+    }
+
+    // 获取围栏停留记录
+    fun getFenceStayRecords(): List<FenceStayRecord> {
+        return dbHelper.getAllStayRecords()
+    }
+
+    // 延迟保存围栏事件
+    private fun saveGeoFenceEvents() {
+        pendingSaveRunnable?.let { handler.removeCallbacks(it) }
+        pendingSaveRunnable = Runnable {
+            performSaveGeoFenceEvents()
+            performSaveFenceStayRecords()
+            pendingSaveRunnable = null
+        }
+        handler.postDelayed(pendingSaveRunnable!!, SAVE_DELAY_MS)
+    }
+
+    // 实际执行保存围栏事件
+    private fun performSaveGeoFenceEvents() {
+        val jsonArray = JSONArray()
+        geoFenceEvents.takeLast(1000).forEach { event ->
+            val json = JSONObject()
+            json.put("id", event.id)
+            json.put("fenceId", event.fenceId)
+            json.put("fenceName", event.fenceName)
+            json.put("action", event.action.name)
+            json.put("time", event.time.time)
+            json.put("latitude", event.latitude)
+            json.put("longitude", event.longitude)
+            json.put("accuracy", event.accuracy)
+            if (event.durationSeconds != null) {
+                json.put("durationSeconds", event.durationSeconds)
+            }
+            jsonArray.put(json)
+        }
+        sharedPreferences.edit().putString(KEY_EVENTS, jsonArray.toString()).apply()
+    }
+
+    // 加载围栏事件
+    private fun loadGeoFenceEvents() {
+        val jsonString = sharedPreferences.getString(KEY_EVENTS, null) ?: return
+        try {
+            val jsonArray = JSONArray(jsonString)
+            geoFenceEvents.clear()
+            for (i in 0 until jsonArray.length()) {
+                val json = jsonArray.getJSONObject(i)
+                val event = GeoFenceEvent(
+                    id = json.getString("id"),
+                    fenceId = json.getString("fenceId"),
+                    fenceName = json.getString("fenceName"),
+                    action = GeoFenceAction.valueOf(json.getString("action")),
+                    time = Date(json.getLong("time")),
+                    latitude = json.getDouble("latitude"),
+                    longitude = json.getDouble("longitude"),
+                    accuracy = json.getDouble("accuracy").toFloat(),
+                    durationSeconds = if (json.has("durationSeconds")) json.getLong("durationSeconds") else null
+                )
+                geoFenceEvents.add(event)
+            }
+            Log.d("TrackMaster", "加载了 ${geoFenceEvents.size} 个围栏事件")
+        } catch (e: Exception) {
+            Log.e("TrackMaster", "加载围栏事件失败", e)
+        }
+    }
+
+    // 保存围栏停留记录（使用延迟机制）
+    private fun saveFenceStayRecords() {
+        saveGeoFenceEvents()
+    }
+
+    // 实际执行保存围栏停留记录
+    private fun performSaveFenceStayRecords() {
+        val jsonArray = JSONArray()
+        fenceStayRecords.takeLast(500).forEach { record ->
+            val json = JSONObject()
+            json.put("fenceId", record.fenceId)
+            json.put("fenceName", record.fenceName)
+            json.put("enterTime", record.enterTime.time)
+            if (record.exitTime != null) {
+                json.put("exitTime", record.exitTime.time)
+            }
+            if (record.durationSeconds != null) {
+                json.put("durationSeconds", record.durationSeconds)
+            }
+            jsonArray.put(json)
+        }
+        sharedPreferences.edit().putString(KEY_STAY_RECORDS, jsonArray.toString()).apply()
+    }
+
+    // 加载围栏停留记录
+    private fun loadFenceStayRecords() {
+        val jsonString = sharedPreferences.getString(KEY_STAY_RECORDS, null) ?: return
+        try {
+            val jsonArray = JSONArray(jsonString)
+            fenceStayRecords.clear()
+            for (i in 0 until jsonArray.length()) {
+                val json = jsonArray.getJSONObject(i)
+                val record = FenceStayRecord(
+                    fenceId = json.getString("fenceId"),
+                    fenceName = json.getString("fenceName"),
+                    enterTime = Date(json.getLong("enterTime")),
+                    exitTime = if (json.has("exitTime")) Date(json.getLong("exitTime")) else null,
+                    durationSeconds = if (json.has("durationSeconds")) json.getLong("durationSeconds") else null
+                )
+                fenceStayRecords.add(record)
+            }
+            Log.d("TrackMaster", "加载了 ${fenceStayRecords.size} 个围栏停留记录")
+        } catch (e: Exception) {
+            Log.e("TrackMaster", "加载围栏停留记录失败", e)
+        }
+    }
+
+    // 获取围栏停留时间统计
+    fun getFenceStats(): Map<String, Long> {
+        val stats = mutableMapOf<String, Long>()
+        val dbStats = dbHelper.getAllStayRecords()
+        dbStats.forEach { record ->
+            if (record.durationSeconds != null) {
+                stats[record.fenceName] = (stats[record.fenceName] ?: 0) + record.durationSeconds
+            }
+        }
+        return stats
+    }
+
+    // 导出CSV
+    fun exportData(): String? {
+        return dbHelper.exportToCSV(this)
+    }
+
+    // 格式化停留时间
+    fun formatDuration(seconds: Long): String {
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        val secs = seconds % 60
+        return when {
+            hours > 0 -> "${hours}小时${minutes}分${secs}秒"
+            minutes > 0 -> "${minutes}分${secs}秒"
+            else -> "${secs}秒"
         }
     }
 
@@ -400,36 +706,98 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             when (fence.type) {
                 GeoFenceType.CIRCLE -> {
                     if (!circleOverlays.containsKey(fence.id)) {
-                        val circleOptions = CircleOptions()
-                            .center(LatLng(fence.center!!.latitude, fence.center!!.longitude))
-                            .radius(fence.radius!!.toDouble())
-                            .strokeColor(Color.parseColor("#FF0000"))
-                            .fillColor(Color.argb(50, 255, 0, 0))
-                            .strokeWidth(2f)
-                        val circle = aMap.addCircle(circleOptions)
-                        circleOverlays[fence.id] = circle
+                        fence.center?.let { center ->
+                            fence.radius?.let { radius ->
+                                val circleOptions = CircleOptions()
+                                    .center(LatLng(center.latitude, center.longitude))
+                                    .radius(radius.toDouble())
+                                    .strokeColor(AndroidColor.parseColor("#FF0000"))
+                                    .fillColor(AndroidColor.argb(50, 255, 0, 0))
+                                    .strokeWidth(2f)
+                                val circle = aMap.addCircle(circleOptions)
+                                circleOverlays[fence.id] = circle
+                            }
+                        }
                     }
                 }
                 GeoFenceType.POLYGON -> {
                     if (!polygonOverlays.containsKey(fence.id)) {
-                        val points = fence.points!!.map { LatLng(it.latitude, it.longitude) }
-                        val polygonOptions = PolygonOptions()
-                            .addAll(points)
-                            .strokeColor(Color.parseColor("#FF0000"))
-                            .fillColor(Color.argb(50, 255, 0, 0))
-                            .strokeWidth(2f)
-                        val polygon = aMap.addPolygon(polygonOptions)
-                        polygonOverlays[fence.id] = polygon
+                        fence.points?.let { pointsList ->
+                            val points = pointsList.map { LatLng(it.latitude, it.longitude) }
+                            val polygonOptions = PolygonOptions()
+                                .addAll(points)
+                                .strokeColor(AndroidColor.parseColor("#FF0000"))
+                                .fillColor(AndroidColor.argb(50, 255, 0, 0))
+                                .strokeWidth(2f)
+                            val polygon = aMap.addPolygon(polygonOptions)
+                            polygonOverlays[fence.id] = polygon
+                        }
                     }
                 }
             }
         }
     }
-}
+
+    // 添加临时绘制标记
+    fun addDrawingMarker(aMap: AMap, point: GeoFencePoint, index: Int) {
+        val markerOptions = MarkerOptions()
+            .position(LatLng(point.latitude, point.longitude))
+            .title("点 ${index + 1}")
+            .snippet("${point.latitude}, ${point.longitude}")
+            .draggable(false)
+        val marker = aMap.addMarker(markerOptions)
+        if (marker != null) {
+            tempDrawingMarkers.add(marker)
+        }
+    }
+
+    // 清除所有临时绘制标记
+    fun clearDrawingMarkers() {
+        tempDrawingMarkers.forEach { it.remove() }
+        tempDrawingMarkers.clear()
+    }
+
+    // 高亮显示指定围栏
+    fun highlightGeoFence(fenceId: String) {
+        // 重置所有围栏的样式
+        circleOverlays.forEach { (_, circle) ->
+            circle.strokeColor = AndroidColor.parseColor("#FF0000")
+                circle.strokeWidth = 2f
+        }
+        polygonOverlays.forEach { (_, polygon) ->
+            polygon.strokeColor = AndroidColor.parseColor("#FF0000")
+            polygon.strokeWidth = 2f
+        }
+        // 高亮选中的围栏
+        if (circleOverlays.containsKey(fenceId)) {
+            val circle = circleOverlays[fenceId]
+            circle?.strokeColor = AndroidColor.parseColor("#00FF00")
+            circle?.strokeWidth = 4f
+        } else if (polygonOverlays.containsKey(fenceId)) {
+            val polygon = polygonOverlays[fenceId]
+            polygon?.strokeColor = AndroidColor.parseColor("#00FF00")
+            polygon?.strokeWidth = 4f
+        }
+    }
+
+    // 设置地图类型
+    fun setMapType(aMap: AMap?, mapType: Int) {
+        aMap?.mapType = mapType
+    }
+
+    // 设置路况显示
+    fun setTrafficEnabled(aMap: AMap?, enabled: Boolean) {
+        aMap?.isTrafficEnabled = enabled
+    }
+
+
+} 
 
 @Composable
 fun AMapView(
     currentLocation: AMapLocation?,
+    isDrawingMode: Boolean = false,
+    drawingPoints: List<GeoFencePoint> = emptyList(),
     onMapReady: (AMap) -> Unit = {},
     onMapClick: (LatLng) -> Unit = {}
 ) {
@@ -447,10 +815,8 @@ fun AMapView(
         }
     }
 
-    val mapType = remember { mutableStateOf(AMap.MAP_TYPE_NORMAL) }
-    val showTraffic = remember { mutableStateOf(false) }
-    val isLayerMenuExpanded = remember { mutableStateOf(false) }
     val hasMovedCamera = remember { mutableStateOf(false) }
+    val lastDrawingPointsSize = remember { mutableStateOf(0) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -476,6 +842,9 @@ fun AMapView(
     LaunchedEffect(mapView) {
         val aMap = mapView.map
         if (aMap != null) {
+            // 设置地图对象到MainActivity
+            mainActivity.setMap(aMap)
+            
             aMap.uiSettings.isZoomControlsEnabled = true
             aMap.uiSettings.isCompassEnabled = true
             aMap.uiSettings.isScaleControlsEnabled = true
@@ -485,8 +854,8 @@ fun AMapView(
                 val myLocationStyle = MyLocationStyle()
                 myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE_NO_CENTER)
                 myLocationStyle.interval(2000)
-                myLocationStyle.strokeColor(Color.parseColor("#3D9BE9"))
-                myLocationStyle.radiusFillColor(Color.argb(50, 63, 155, 233))
+                myLocationStyle.strokeColor(AndroidColor.parseColor("#3D9BE9"))
+                myLocationStyle.radiusFillColor(AndroidColor.argb(50, 63, 155, 233))
                 myLocationStyle.strokeWidth(2f)
                 aMap.myLocationStyle = myLocationStyle
                 aMap.isMyLocationEnabled = true
@@ -512,19 +881,7 @@ fun AMapView(
         }
     }
 
-    LaunchedEffect(mapType.value, mapView) {
-        val aMap = mapView.map
-        if (aMap != null) {
-            aMap.mapType = mapType.value
-        }
-    }
 
-    LaunchedEffect(showTraffic.value, mapView) {
-        val aMap = mapView.map
-        if (aMap != null) {
-            aMap.isTrafficEnabled = showTraffic.value
-        }
-    }
 
     LaunchedEffect(currentLocation, mapView) {
         val aMap = mapView.map
@@ -549,6 +906,35 @@ fun AMapView(
         }
     }
 
+    // 处理绘制模式下的临时标记
+    LaunchedEffect(drawingPoints.size, isDrawingMode, mapView) {
+        val aMap = mapView.map
+        if (aMap != null) {
+            if (isDrawingMode) {
+                // 如果点数增加，添加新标记
+                if (drawingPoints.size > lastDrawingPointsSize.value) {
+                    val newPoint = drawingPoints.last()
+                    mainActivity.addDrawingMarker(aMap, newPoint, drawingPoints.size - 1)
+                }
+                // 如果点数减少（重置），清除所有标记
+                else if (drawingPoints.size < lastDrawingPointsSize.value) {
+                    mainActivity.clearDrawingMarkers()
+                    // 重新添加所有标记
+                    drawingPoints.forEachIndexed { index, point ->
+                        mainActivity.addDrawingMarker(aMap, point, index)
+                    }
+                }
+                lastDrawingPointsSize.value = drawingPoints.size
+            } else {
+                // 退出绘制模式，清除所有临时标记
+                if (lastDrawingPointsSize.value > 0) {
+                    mainActivity.clearDrawingMarkers()
+                    lastDrawingPointsSize.value = 0
+                }
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -558,84 +944,11 @@ fun AMapView(
             AndroidView(
                 factory = { mapView },
                 modifier = Modifier.fillMaxSize()
-            ) { view ->
+            ) { _ ->
                 // 不需要在这里调用 onResume，已经在 DisposableEffect 中处理了生命周期
             }
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(16.dp)
-            ) {
-                Card(
-                    modifier = Modifier
-                        .width(200.dp)
-                        .animateContentSize(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "图层",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { isLayerMenuExpanded.value = !isLayerMenuExpanded.value }) {
-                            Text(
-                                text = if (isLayerMenuExpanded.value) "▼" else "▶",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
 
-                    if (isLayerMenuExpanded.value) {
-                        Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                            RadioButtonWithLabel(
-                                selected = mapType.value == AMap.MAP_TYPE_NORMAL,
-                                label = "白昼地图",
-                                onSelected = { mapType.value = AMap.MAP_TYPE_NORMAL }
-                            )
-                            RadioButtonWithLabel(
-                                selected = mapType.value == AMap.MAP_TYPE_NIGHT,
-                                label = "夜景地图",
-                                onSelected = { mapType.value = AMap.MAP_TYPE_NIGHT }
-                            )
-                            RadioButtonWithLabel(
-                                selected = mapType.value == AMap.MAP_TYPE_SATELLITE,
-                                label = "卫星地图",
-                                onSelected = { mapType.value = AMap.MAP_TYPE_SATELLITE }
-                            )
-                            RadioButtonWithLabel(
-                                selected = mapType.value == AMap.MAP_TYPE_NAVI,
-                                label = "导航地图",
-                                onSelected = { mapType.value = AMap.MAP_TYPE_NAVI }
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "路况图层",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Switch(
-                                    checked = showTraffic.value,
-                                    onCheckedChange = { showTraffic.value = it }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -680,11 +993,22 @@ fun MainScreen(
     val isDrawingFence = remember { mutableStateOf(false) }
     val drawingPoints = remember { mutableStateListOf<GeoFencePoint>() }
 
+    // 控制菜单展开状态
+    val isMenuExpanded = remember { mutableStateOf(false) }
+    // 控制图层对话框显示
+    val showLayerDialog = remember { mutableStateOf(false) }
+    // 控制历史记录对话框显示
+    val showHistoryDialog = remember { mutableStateOf(false) }
+    // 控制清理确认对话框显示
+    val showClearConfirmation = remember { mutableStateOf(false) }
+    val showSecondClearConfirmation = remember { mutableStateOf(false) }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
-            Column {
-                if (isDrawingFence.value) {
+            if (isDrawingFence.value) {
+                // 绘制模式下的按钮
+                Column {
                     FloatingActionButton(
                         onClick = {
                             if (drawingPoints.size >= 3) {
@@ -693,6 +1017,7 @@ fun MainScreen(
                                         name = fenceName.value,
                                         points = drawingPoints.toList()
                                     )
+                                    mainActivity.clearDrawingMarkers() // 清除临时标记
                                     isDrawingFence.value = false
                                     drawingPoints.clear()
                                     fenceName.value = ""
@@ -709,6 +1034,7 @@ fun MainScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     FloatingActionButton(
                         onClick = {
+                            mainActivity.clearDrawingMarkers() // 清除临时标记
                             isDrawingFence.value = false
                             drawingPoints.clear()
                         },
@@ -716,19 +1042,51 @@ fun MainScreen(
                     ) {
                         Text("取消")
                     }
-                } else {
-                    FloatingActionButton(
-                        onClick = { showGeoFenceDialog.value = true },
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Text("+")
+                }
+            } else {
+                // 正常模式下的可收起菜单
+                Column {
+                    if (isMenuExpanded.value) {
+                        // 展开状态下的按钮
+                        FloatingActionButton(
+                            onClick = { showGeoFenceDialog.value = true },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Text("+")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FloatingActionButton(
+                            onClick = { showClearConfirmation.value = true },
+                            containerColor = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Text("删", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FloatingActionButton(
+                            onClick = { showLayerDialog.value = true },
+                            containerColor = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Text("图")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FloatingActionButton(
+                            onClick = { showHistoryDialog.value = true },
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Text("记")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    // 主按钮
                     FloatingActionButton(
-                        onClick = { mainActivity.clearAllGeoFences() },
-                        containerColor = MaterialTheme.colorScheme.error
+                        onClick = { isMenuExpanded.value = !isMenuExpanded.value },
+                        containerColor = if (isMenuExpanded.value) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
                     ) {
-                        Text("清")
+                        Text(if (isMenuExpanded.value) "▼" else "≡")
                     }
                 }
             }
@@ -744,70 +1102,130 @@ fun MainScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp),
+                        .padding(8.dp)
+                        .shadow(elevation = 4.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
-                    )
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "轨迹大师",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f)
-                        )
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "轨迹大师",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f)
+                            )
 
-                        Text(
-                            text = locationStatus,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when {
-                                locationStatus.contains("成功") -> MaterialTheme.colorScheme.primary
-                                locationStatus.contains("失败") || locationStatus.contains("拒绝") -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            Badge(
+                                containerColor = when {
+                                    locationStatus.contains("成功") -> MaterialTheme.colorScheme.primary
+                                    locationStatus.contains("失败") || locationStatus.contains("拒绝") -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            ) {
+                                Text(
+                                    text = locationStatus,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
                             }
-                        )
-                    }
+                        }
 
-                    if (locationError != null) {
-                        Text(
-                            text = locationError,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
-                        )
-                    }
+                        if (locationError != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f))
+                                    .padding(8.dp)
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                            ) {
+                                Text(
+                                    text = locationError,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
 
-                    if (currentLocation != null && currentLocation.errorCode == 0) {
-                        Text(
-                            text = "经纬度: ${String.format("%.6f", currentLocation.longitude)}, ${String.format("%.6f", currentLocation.latitude)} | 精度: ${currentLocation.accuracy.toInt()}m",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp)
-                        )
-                    }
+                        if (currentLocation != null && currentLocation.errorCode == 0) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))
+                                    .padding(8.dp)
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                            ) {
+                                Text(
+                                    text = "经纬度: ${String.format("%.6f", currentLocation.longitude)}, ${String.format("%.6f", currentLocation.latitude)} | 精度: ${currentLocation.accuracy.toInt()}m",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
 
-                    // 显示当前在哪些围栏内
-                    val currentFences = mainActivity.getCurrentFences()
-                    if (currentFences.isNotEmpty()) {
-                        Text(
-                            text = "当前在围栏内: ${currentFences.joinToString { it.name }}",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp)
-                        )
-                    }
+                        // 显示当前在哪些围栏内
+                        val currentFences = mainActivity.getCurrentFences()
+                        if (currentFences.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f))
+                                    .padding(8.dp)
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                            ) {
+                                Text(
+                                    text = "当前在围栏内: ${currentFences.joinToString { it.name }}",
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
 
-                    // 显示绘制状态
-                    if (isDrawingFence.value) {
-                        Text(
-                            text = "绘制模式：已点击 ${drawingPoints.size} 个点（至少需要3个点）",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp)
-                        )
+                        // 显示绘制状态
+                        if (isDrawingFence.value) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f))
+                                    .padding(8.dp)
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                            ) {
+                                Text(
+                                    text = "绘制模式：已点击 ${drawingPoints.size} 个点（至少需要3个点）",
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -818,6 +1236,8 @@ fun MainScreen(
                 ) {
                     AMapView(
                         currentLocation = currentLocation,
+                        isDrawingMode = isDrawingFence.value,
+                        drawingPoints = drawingPoints.toList(),
                         onMapClick = { latLng ->
                             if (isDrawingFence.value) {
                                 drawingPoints.add(GeoFencePoint(latLng.latitude, latLng.longitude))
@@ -831,48 +1251,107 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp)
-                        .heightIn(min = 100.dp, max = 200.dp),
+                        .heightIn(min = 100.dp, max = 200.dp)
+                        .shadow(elevation = 4.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
-                    )
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Text(
-                            text = "地理围栏",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        val fences = mainActivity.getGeoFences()
-                        if (fences.isEmpty()) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "暂无围栏",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "地理围栏",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "${mainActivity.getGeoFences().size} 个",
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val fences = mainActivity.getGeoFences()
+                        if (fences.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp)
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "暂无围栏",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         } else {
-                            Column {
-                                fences.forEach { fence ->
-                                    Row(
+                            LazyColumn(modifier = Modifier.fillMaxHeight()) {
+                                items(fences) { fence ->
+                                    Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = fence.name,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Text(
-                                            text = when (fence.type) {
-                                                GeoFenceType.CIRCLE -> "圆形"
-                                                GeoFenceType.POLYGON -> "多边形"
+                                            .padding(vertical = 4.dp)
+                                            .clickable {
+                                                // 选中围栏，高亮显示
+                                                mainActivity.highlightGeoFence(fence.id)
                                             },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        IconButton(onClick = { mainActivity.deleteGeoFence(fence.id) }) {
-                                            Text("×", color = MaterialTheme.colorScheme.error)
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        elevation = CardDefaults.cardElevation(2.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = fence.name,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.Medium,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Badge(
+                                                    containerColor = when (fence.type) {
+                                                        GeoFenceType.CIRCLE -> MaterialTheme.colorScheme.primary
+                                                        GeoFenceType.POLYGON -> MaterialTheme.colorScheme.secondary
+                                                    }
+                                                ) {
+                                                    Text(
+                                                        text = when (fence.type) {
+                                                            GeoFenceType.CIRCLE -> "圆形"
+                                                            GeoFenceType.POLYGON -> "多边形"
+                                                        },
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onPrimary
+                                                    )
+                                                }
+                                                IconButton(
+                                                    onClick = { mainActivity.deleteGeoFence(fence.id) },
+                                                    modifier = Modifier.size(24.dp)
+                                                ) {
+                                                    Text("×", color = MaterialTheme.colorScheme.error)
+                                                }
+                                            }
+                                            Text(
+                                                text = "创建时间: ${fence.createdAt}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -962,6 +1441,7 @@ fun MainScreen(
                                 name = fenceName.value,
                                 points = drawingPoints.toList()
                             )
+                            mainActivity.clearDrawingMarkers() // 清除临时标记
                             showGeoFenceDialog.value = false
                             isDrawingFence.value = false
                             drawingPoints.clear()
@@ -996,6 +1476,7 @@ fun MainScreen(
             dismissButton = {
                 if (isDrawingFence.value) {
                     Button(onClick = {
+                        mainActivity.clearDrawingMarkers() // 清除临时标记
                         showGeoFenceDialog.value = false
                         isDrawingFence.value = false
                         drawingPoints.clear()
@@ -1008,6 +1489,408 @@ fun MainScreen(
                     }) {
                         Text("取消")
                     }
+                }
+            }
+        )
+    }
+
+    // 图层选择对话框
+    if (showLayerDialog.value) {
+        val mapType = remember { mutableStateOf(AMap.MAP_TYPE_NORMAL) }
+        val showTraffic = remember { mutableStateOf(false) }
+        
+        AlertDialog(
+            onDismissRequest = { showLayerDialog.value = false },
+            title = { Text("选择地图图层") },
+            text = {
+                Column {
+                    RadioButtonWithLabel(
+                        selected = mapType.value == AMap.MAP_TYPE_NORMAL,
+                        label = "白昼地图",
+                        onSelected = { mapType.value = AMap.MAP_TYPE_NORMAL }
+                    )
+                    RadioButtonWithLabel(
+                        selected = mapType.value == AMap.MAP_TYPE_NIGHT,
+                        label = "夜景地图",
+                        onSelected = { mapType.value = AMap.MAP_TYPE_NIGHT }
+                    )
+                    RadioButtonWithLabel(
+                        selected = mapType.value == AMap.MAP_TYPE_SATELLITE,
+                        label = "卫星地图",
+                        onSelected = { mapType.value = AMap.MAP_TYPE_SATELLITE }
+                    )
+                    RadioButtonWithLabel(
+                        selected = mapType.value == AMap.MAP_TYPE_NAVI,
+                        label = "导航地图",
+                        onSelected = { mapType.value = AMap.MAP_TYPE_NAVI }
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "路况图层",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = showTraffic.value,
+                            onCheckedChange = { showTraffic.value = it }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    // 应用图层设置
+                    val aMap = mainActivity.getCurrentMap()
+                    mainActivity.setMapType(aMap, mapType.value)
+                    mainActivity.setTrafficEnabled(aMap, showTraffic.value)
+                    showLayerDialog.value = false
+                }) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                Button(onClick = {
+                    showLayerDialog.value = false
+                }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 第一步确认对话框
+    if (showClearConfirmation.value) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmation.value = false },
+            title = { 
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("⚠️", fontSize = 24.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("警告")
+                }
+            },
+            text = { 
+                Column {
+                    Text("此操作将删除所有图层和围栏数据，且无法恢复。")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("是否继续？", fontWeight = FontWeight.Bold)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { 
+                        showClearConfirmation.value = false 
+                        showSecondClearConfirmation.value = true 
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("继续")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showClearConfirmation.value = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 第二步确认对话框
+    if (showSecondClearConfirmation.value) {
+        AlertDialog(
+            onDismissRequest = { showSecondClearConfirmation.value = false },
+            title = { 
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🗑️", fontSize = 24.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("最终确认")
+                }
+            },
+            text = { 
+                Column {
+                    Text("这是最后的确认机会！")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("点击\"确认删除\"将永久删除所有数据。", fontWeight = FontWeight.Bold)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { 
+                        showSecondClearConfirmation.value = false 
+                        mainActivity.clearAllGeoFences() 
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("确认删除")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showSecondClearConfirmation.value = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 历史记录对话框
+    if (showHistoryDialog.value) {
+        val selectedTab = remember { mutableStateOf(0) }
+        val fenceStats = mainActivity.getFenceStats()
+        val stayRecords = mainActivity.getFenceStayRecords()
+        val events = mainActivity.getGeoFenceEvents()
+        val exportStatus = remember { mutableStateOf<String?>(null) }
+        
+        AlertDialog(
+            onDismissRequest = { showHistoryDialog.value = false },
+            title = { 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("围栏历史记录")
+                    Button(
+                        onClick = {
+                            val filePath = mainActivity.exportData()
+                            exportStatus.value = if (filePath != null) {
+                                "导出成功: $filePath"
+                            } else {
+                                "导出失败"
+                            }
+                        },
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text("导出CSV", fontSize = 12.sp)
+                    }
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    exportStatus.value?.let { status ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (status.contains("成功")) 
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                else 
+                                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            Text(
+                                text = status,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                    
+                    TabRow(selectedTabIndex = selectedTab.value) {
+                        Tab(
+                            selected = selectedTab.value == 0,
+                            onClick = { selectedTab.value = 0 },
+                            text = { Text("统计") }
+                        )
+                        Tab(
+                            selected = selectedTab.value == 1,
+                            onClick = { selectedTab.value = 1 },
+                            text = { Text("停留记录") }
+                        )
+                        Tab(
+                            selected = selectedTab.value == 2,
+                            onClick = { selectedTab.value = 2 },
+                            text = { Text("事件日志") }
+                        )
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp)
+                    ) {
+                        when (selectedTab.value) {
+                            0 -> {
+                                if (fenceStats.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "暂无统计数据",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                } else {
+                                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                        items(fenceStats.entries.toList().sortedByDescending { it.value }) { (fenceName, duration) ->
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                                )
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(12.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(
+                                                        text = fenceName,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    Text(
+                                                        text = mainActivity.formatDuration(duration),
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            1 -> {
+                                if (stayRecords.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "暂无停留记录",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                } else {
+                                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                        items(stayRecords.reversed()) { record ->
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                                )
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Text(
+                                                        text = record.fenceName,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "进入: ${android.text.format.DateFormat.format("yyyy-MM-dd HH:mm:ss", record.enterTime).toString()}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    if (record.exitTime != null) {
+                                                        Text(
+                                                            text = "离开: ${android.text.format.DateFormat.format("yyyy-MM-dd HH:mm:ss", record.exitTime).toString()}",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                    if (record.durationSeconds != null) {
+                                                        Text(
+                                                            text = "停留: ${mainActivity.formatDuration(record.durationSeconds)}",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            2 -> {
+                                if (events.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "暂无事件日志",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                } else {
+                                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                        items(events.reversed().take(100)) { event ->
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 2.dp),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = when (event.action) {
+                                                        GeoFenceAction.ENTER -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                                        GeoFenceAction.EXIT -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                                                        GeoFenceAction.STAY -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
+                                                    }
+                                                )
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Badge(
+                                                        containerColor = when (event.action) {
+                                                            GeoFenceAction.ENTER -> MaterialTheme.colorScheme.primary
+                                                            GeoFenceAction.EXIT -> MaterialTheme.colorScheme.error
+                                                            GeoFenceAction.STAY -> MaterialTheme.colorScheme.secondary
+                                                        }
+                                                    ) {
+                                                        Text(
+                                                            text = when (event.action) {
+                                                                GeoFenceAction.ENTER -> "进"
+                                                                GeoFenceAction.EXIT -> "出"
+                                                                GeoFenceAction.STAY -> "留"
+                                                            },
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onPrimary
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = event.fenceName,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            fontWeight = FontWeight.Medium
+                                                        )
+                                                        Text(
+                                                            text = android.text.format.DateFormat.format("HH:mm:ss", event.time).toString(),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showHistoryDialog.value = false }) {
+                    Text("关闭")
                 }
             }
         )
