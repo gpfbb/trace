@@ -2,6 +2,7 @@ package com.trackmaster.app
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,33 +22,59 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.amap.api.maps.AMap
 import com.amap.api.maps.MapView
 import com.amap.api.maps.model.MyLocationStyle
+import com.trackmaster.app.service.LocationService
 import com.trackmaster.app.service.MotionState
 import com.trackmaster.app.service.PowerMode
 import com.trackmaster.app.ui.theme.TrackMasterTheme
 import com.trackmaster.app.viewmodel.MainViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    @Inject
+    lateinit var locationService: LocationService
+
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
+        viewModel.checkPermissions()
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+            requestBackgroundLocationPermission()
+        }
+    }
+
+    private val backgroundLocationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.checkPermissions()
+        if (granted) {
+            requestNotificationPermission()
+        }
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
         viewModel.checkPermissions()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        locationService.init()
+        
         setContent {
             TrackMasterTheme(darkTheme = viewModel.uiState.value.isDarkMode) {
-                MainScreen(viewModel = viewModel)
+                MainScreen(viewModel = viewModel, locationService = locationService)
             }
         }
+        
         requestPermissionsIfNeeded()
     }
 
@@ -61,16 +88,47 @@ class MainActivity : ComponentActivity() {
 
         if (permissionsToRequest.isNotEmpty()) {
             locationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+        } else {
+            requestBackgroundLocationPermission()
+        }
+    }
+
+    private fun requestBackgroundLocationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                backgroundLocationPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            } else {
+                requestNotificationPermission()
+            }
+        } else {
+            requestNotificationPermission()
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(viewModel: MainViewModel, locationService: LocationService) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     var mapView by remember { mutableStateOf<MapView?>(null) }
+    var isMapReady by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        try {
+            locationService.startLocation()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -91,26 +149,43 @@ fun MainScreen(viewModel: MainViewModel) {
                             )
                         )
                     } else {
-                        Modifier.background(Color(0xFFF5F7FA))
+                        Modifier.background(MaterialTheme.colorScheme.surface)
                     }
                 )
         ) {
             AndroidView(
                 factory = { ctx ->
                     MapView(ctx).apply {
-                        onCreate(Bundle())
-                        mapView = this
-                        val aMap = this.map
-                        aMap.uiSettings.isMyLocationButtonEnabled = false
-                        aMap.isMyLocationEnabled = true
-                        
-                        val myLocationStyle = MyLocationStyle()
-                        myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE)
-                        myLocationStyle.interval(2000)
-                        aMap.setMyLocationStyle(myLocationStyle)
+                        try {
+                            onCreate(Bundle())
+                            mapView = this
+                            val aMap = this.map
+                            aMap.uiSettings.isMyLocationButtonEnabled = false
+                            aMap.isMyLocationEnabled = true
+                            
+                            val myLocationStyle = MyLocationStyle()
+                            myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE)
+                            myLocationStyle.interval(2000)
+                            aMap.setMyLocationStyle(myLocationStyle)
+                            
+                            onResume()
+                            isMapReady = true
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                update = { view ->
+                    if (!isMapReady) {
+                        try {
+                            view.onResume()
+                            isMapReady = true
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
             )
 
             Column(
@@ -129,10 +204,46 @@ fun MainScreen(viewModel: MainViewModel) {
 
                 ControlDrawer(
                     uiState = uiState,
-                    onStartTracking = { viewModel.startTracking() },
-                    onPauseTracking = { viewModel.pauseTracking() },
-                    onResumeTracking = { viewModel.resumeTracking() },
-                    onStopTracking = { viewModel.stopTracking() },
+                    onStartTracking = { 
+                        try {
+                            if (viewModel.uiState.value.hasLocationPermission) {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && 
+                                    !viewModel.uiState.value.hasBackgroundLocationPermission) {
+                                    viewModel.openAppSettings()
+                                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && 
+                                    !viewModel.uiState.value.hasNotificationPermission) {
+                                    viewModel.openAppSettings()
+                                } else {
+                                    viewModel.startTracking()
+                                }
+                            } else {
+                                viewModel.openAppSettings()
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    },
+                    onPauseTracking = { 
+                        try {
+                            viewModel.pauseTracking()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    },
+                    onResumeTracking = { 
+                        try {
+                            viewModel.resumeTracking()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    },
+                    onStopTracking = { 
+                        try {
+                            viewModel.stopTracking()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    },
                     onPowerModeChange = { viewModel.setPowerMode(it) },
                     onToggleDarkMode = { viewModel.toggleDarkMode() },
                     modifier = Modifier.fillMaxWidth()
@@ -143,7 +254,13 @@ fun MainScreen(viewModel: MainViewModel) {
 
     DisposableEffect(Unit) {
         onDispose {
-            mapView?.onDestroy()
+            try {
+                mapView?.onPause()
+                mapView?.onDestroy()
+                locationService.stopLocation()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }
@@ -158,7 +275,9 @@ fun InfoCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (uiState.isDarkMode) 
-                Color(0xCC1B263B) else Color(0xEEFFFFFF)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f) 
+            else 
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
@@ -176,8 +295,7 @@ fun InfoCard(
                         uiState.isPaused -> "已暂停"
                         uiState.isTracking -> "记录中"
                         else -> "待机"
-                    },
-                    isDark = uiState.isDarkMode
+                    }
                 )
                 InfoItem(
                     label = "运动",
@@ -186,8 +304,7 @@ fun InfoCard(
                         MotionState.WALKING -> "步行"
                         MotionState.RIDING -> "骑行"
                         MotionState.DRIVING -> "驾车"
-                    },
-                    isDark = uiState.isDarkMode
+                    }
                 )
             }
 
@@ -199,13 +316,11 @@ fun InfoCard(
             ) {
                 InfoItem(
                     label = "速度",
-                    value = "${(uiState.currentSpeed * 3.6).toInt()} km/h",
-                    isDark = uiState.isDarkMode
+                    value = "${(uiState.currentSpeed * 3.6).toInt()} km/h"
                 )
                 InfoItem(
                     label = "精度",
-                    value = "${uiState.accuracy.toInt()} m",
-                    isDark = uiState.isDarkMode
+                    value = "${uiState.accuracy.toInt()} m"
                 )
             }
         }
@@ -213,17 +328,17 @@ fun InfoCard(
 }
 
 @Composable
-fun InfoItem(label: String, value: String, isDark: Boolean) {
+fun InfoItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = value,
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = if (isDark) Color.White else Color(0xFF1F2937)
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
@@ -244,7 +359,9 @@ fun ControlDrawer(
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (uiState.isDarkMode) 
-                Color(0xE61B263B) else Color(0xFFFFFFFF)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f) 
+            else 
+                MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
     ) {
@@ -257,7 +374,7 @@ fun ControlDrawer(
                     .width(40.dp)
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(if (uiState.isDarkMode) Color(0xFF4A5568) else Color(0xFFE5E7EB))
+                    .background(MaterialTheme.colorScheme.outlineVariant)
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -269,12 +386,12 @@ fun ControlDrawer(
                         .fillMaxWidth()
                         .height(56.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text(
                         text = "开始记录",
                         style = MaterialTheme.typography.titleLarge,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 }
             } else {
@@ -289,9 +406,9 @@ fun ControlDrawer(
                                 .weight(1f)
                                 .height(56.dp),
                             shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
-                            Text("继续", color = Color.White)
+                            Text("继续", color = MaterialTheme.colorScheme.onPrimary)
                         }
                     } else {
                         Button(
@@ -300,9 +417,9 @@ fun ControlDrawer(
                                 .weight(1f)
                                 .height(56.dp),
                             shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                         ) {
-                            Text("暂停", color = Color.White)
+                            Text("暂停", color = MaterialTheme.colorScheme.onSecondary)
                         }
                     }
 
@@ -312,9 +429,9 @@ fun ControlDrawer(
                             .weight(1f)
                             .height(56.dp),
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336))
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("停止", color = Color.White)
+                        Text("停止", color = MaterialTheme.colorScheme.onError)
                     }
                 }
             }
@@ -328,25 +445,21 @@ fun ControlDrawer(
                 ActionButton(
                     text = "省电",
                     isSelected = uiState.powerMode == PowerMode.POWER_SAVE,
-                    isDark = uiState.isDarkMode,
                     onClick = { onPowerModeChange(PowerMode.POWER_SAVE) }
                 )
                 ActionButton(
                     text = "均衡",
                     isSelected = uiState.powerMode == PowerMode.BALANCED,
-                    isDark = uiState.isDarkMode,
                     onClick = { onPowerModeChange(PowerMode.BALANCED) }
                 )
                 ActionButton(
                     text = "性能",
                     isSelected = uiState.powerMode == PowerMode.HIGH_PERFORMANCE,
-                    isDark = uiState.isDarkMode,
                     onClick = { onPowerModeChange(PowerMode.HIGH_PERFORMANCE) }
                 )
                 ActionButton(
                     text = "夜间",
                     isSelected = uiState.isDarkMode,
-                    isDark = uiState.isDarkMode,
                     onClick = onToggleDarkMode
                 )
             }
@@ -358,7 +471,6 @@ fun ControlDrawer(
 fun ActionButton(
     text: String,
     isSelected: Boolean,
-    isDark: Boolean,
     onClick: () -> Unit
 ) {
     Button(
@@ -367,16 +479,17 @@ fun ActionButton(
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isSelected) {
-                if (isDark) Color(0xFF2196F3) else Color(0xFF2196F3)
+                MaterialTheme.colorScheme.primary
             } else {
-                if (isDark) Color(0xFF374151) else Color(0xFFF3F4F6)
+                MaterialTheme.colorScheme.surfaceVariant
             }
         )
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodySmall,
-            color = if (isSelected || !isDark) Color.White else Color(0xFF9CA3AF)
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimary 
+            else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
