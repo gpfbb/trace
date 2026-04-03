@@ -2,21 +2,35 @@ package com.trackmaster.app
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.amap.api.location.AMapLocation
 import com.amap.api.location.AMapLocationClient
 import com.amap.api.location.AMapLocationClientOption
 import com.amap.api.location.AMapLocationListener
+import com.amap.api.maps.AMap
+import com.amap.api.maps.AMapOptions
+import com.amap.api.maps.CameraUpdateFactory
+import com.amap.api.maps.MapView
+import com.amap.api.maps.model.LatLng
+import com.amap.api.maps.model.MyLocationStyle
 import com.trackmaster.app.ui.theme.TrackMasterTheme
 
 class MainActivity : ComponentActivity(), AMapLocationListener {
@@ -25,7 +39,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     private val currentLocation = mutableStateOf<AMapLocation?>(null)
     private val locationStatus = mutableStateOf("正在初始化...")
     private val locationError = mutableStateOf<String?>(null)
-    
+
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -41,37 +55,36 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         val activityContext = this
-        
+
         Log.d("TrackMaster", "开始初始化高德 SDK")
-        
+
         AMapLocationClient.updatePrivacyShow(activityContext, true, true)
         AMapLocationClient.updatePrivacyAgree(activityContext, true)
         AMapLocationClient.setApiKey(BuildConfig.AMAP_API_KEY)
-        
+
         initLocationClient()
-        
+
         setContent {
             TrackMasterTheme {
                 MainScreen(
                     currentLocation = currentLocation.value,
                     locationStatus = locationStatus.value,
-                    locationError = locationError.value,
-                    onRequestPermission = { requestLocationPermission() }
+                    locationError = locationError.value
                 )
             }
         }
-        
+
         requestLocationPermission()
     }
-    
+
     private fun initLocationClient() {
         try {
             Log.d("TrackMaster", "创建定位客户端")
             locationClient = AMapLocationClient(applicationContext)
             locationClient?.setLocationListener(this)
-            
+
             val option = AMapLocationClientOption()
             option.locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
             option.interval = 2000
@@ -79,7 +92,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             option.isOnceLocation = false
             option.httpTimeOut = 30000
             locationClient?.setLocationOption(option)
-            
+
             Log.d("TrackMaster", "定位客户端初始化完成")
         } catch (e: Exception) {
             Log.e("TrackMaster", "初始化定位客户端失败", e)
@@ -87,7 +100,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             locationError.value = e.message
         }
     }
-    
+
     private fun requestLocationPermission() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             Log.d("TrackMaster", "请求定位权限")
@@ -103,7 +116,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             startLocation()
         }
     }
-    
+
     private fun startLocation() {
         try {
             Log.d("TrackMaster", "启动定位服务")
@@ -116,13 +129,13 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             locationError.value = e.message
         }
     }
-    
+
     override fun onLocationChanged(location: AMapLocation?) {
         if (location == null) {
             Log.e("TrackMaster", "onLocationChanged: location is null")
             return
         }
-        
+
         Log.d("TrackMaster", """
             收到位置更新:
             - errorCode: ${location.errorCode}
@@ -132,7 +145,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             - 精度: ${location.accuracy}米
             - 地址: ${location.address}
         """.trimIndent())
-        
+
         if (location.errorCode == 0) {
             currentLocation.value = location
             locationStatus.value = "定位成功"
@@ -143,7 +156,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             Log.e("TrackMaster", "定位错误: ${location.errorInfo}, 错误码: ${location.errorCode}")
         }
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         locationClient?.stopLocation()
@@ -162,75 +175,285 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
 }
 
 @Composable
-fun MainScreen(
+fun AMapView(
     currentLocation: AMapLocation?,
-    locationStatus: String,
-    locationError: String?,
-    onRequestPermission: () -> Unit
+    onMapReady: (AMap) -> Unit = {}
 ) {
-    Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    val mapView = remember {
+        MapView(context, AMapOptions().apply {
+            zoomControlsEnabled(true)
+            compassEnabled(true)
+            scaleControlsEnabled(true)
+        }).apply {
+            onCreate(Bundle())
+        }
+    }
+
+    val mapType = remember { mutableStateOf(AMap.MAP_TYPE_NORMAL) }
+    val showTraffic = remember { mutableStateOf(false) }
+    val isLayerMenuExpanded = remember { mutableStateOf(false) }
+    val hasMovedCamera = remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                Lifecycle.Event.ON_DESTROY -> {
+                    mapView.onDestroy()
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(mapView) {
+        val aMap = mapView.map
+        if (aMap != null) {
+            aMap.uiSettings.isZoomControlsEnabled = true
+            aMap.uiSettings.isCompassEnabled = true
+            aMap.uiSettings.isScaleControlsEnabled = true
+            aMap.uiSettings.isMyLocationButtonEnabled = true
+
+            val myLocationStyle = MyLocationStyle()
+            myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE_NO_CENTER)
+            myLocationStyle.interval(2000)
+            myLocationStyle.strokeColor(Color.parseColor("#3D9BE9"))
+            myLocationStyle.radiusFillColor(Color.argb(50, 63, 155, 233))
+            myLocationStyle.strokeWidth(2f)
+            aMap.myLocationStyle = myLocationStyle
+            aMap.isMyLocationEnabled = true
+
+            aMap.setOnMyLocationChangeListener {
+                if (it != null) {
+                    Log.d("TrackMaster", "地图蓝点位置变化: ${it.latitude}, ${it.longitude}")
+                }
+            }
+
+            onMapReady(aMap)
+
+            Log.d("TrackMaster", "地图初始化完成")
+        }
+    }
+
+    LaunchedEffect(mapType.value, mapView) {
+        val aMap = mapView.map
+        if (aMap != null) {
+            aMap.mapType = mapType.value
+        }
+    }
+
+    LaunchedEffect(showTraffic.value, mapView) {
+        val aMap = mapView.map
+        if (aMap != null) {
+            aMap.isTrafficEnabled = showTraffic.value
+        }
+    }
+
+    LaunchedEffect(currentLocation, mapView) {
+        val aMap = mapView.map
+        if (currentLocation != null && currentLocation.errorCode == 0 && aMap != null) {
+            val latLng = LatLng(currentLocation.latitude, currentLocation.longitude)
+            // 只在首次定位时移动相机，避免强制居中
+            if (!hasMovedCamera.value) {
+                aMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16f))
+                hasMovedCamera.value = true
+            }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .weight(1f)
         ) {
+            AndroidView(
+                factory = { mapView },
+                modifier = Modifier.fillMaxSize()
+            ) { view ->
+                view.onResume()
+            }
+
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp)
             ) {
-                Text(
-                    text = "轨迹大师",
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .width(200.dp)
+                        .animateContentSize(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
                     )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = "状态: $locationStatus",
-                            style = MaterialTheme.typography.titleMedium
+                            text = "图层",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
                         )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        if (locationError != null) {
+                        IconButton(onClick = { isLayerMenuExpanded.value = !isLayerMenuExpanded.value }) {
                             Text(
-                                text = "❌ $locationError",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall
+                                text = if (isLayerMenuExpanded.value) "▼" else "▶",
+                                style = MaterialTheme.typography.bodyMedium
                             )
                         }
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        if (currentLocation != null && currentLocation.errorCode == 0) {
-                            Text("✅ 经度: ${currentLocation.longitude}")
-                            Text("✅ 纬度: ${currentLocation.latitude}")
-                            Text("✅ 精度: ${currentLocation.accuracy}米")
-                            currentLocation.address?.let { 
-                                Text("📍 地址: $it")
+                    }
+
+                    if (isLayerMenuExpanded.value) {
+                        Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                            RadioButtonWithLabel(
+                                selected = mapType.value == AMap.MAP_TYPE_NORMAL,
+                                label = "白昼地图",
+                                onSelected = { mapType.value = AMap.MAP_TYPE_NORMAL }
+                            )
+                            RadioButtonWithLabel(
+                                selected = mapType.value == AMap.MAP_TYPE_NIGHT,
+                                label = "夜景地图",
+                                onSelected = { mapType.value = AMap.MAP_TYPE_NIGHT }
+                            )
+                            RadioButtonWithLabel(
+                                selected = mapType.value == AMap.MAP_TYPE_SATELLITE,
+                                label = "卫星地图",
+                                onSelected = { mapType.value = AMap.MAP_TYPE_SATELLITE }
+                            )
+                            RadioButtonWithLabel(
+                                selected = mapType.value == AMap.MAP_TYPE_NAVI,
+                                label = "导航地图",
+                                onSelected = { mapType.value = AMap.MAP_TYPE_NAVI }
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "路况图层",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Switch(
+                                    checked = showTraffic.value,
+                                    onCheckedChange = { showTraffic.value = it }
+                                )
                             }
-                        } else {
-                            Text("等待位置数据...")
                         }
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Button(
-                    onClick = onRequestPermission,
-                    modifier = Modifier.fillMaxWidth()
+            }
+        }
+    }
+}
+
+@Composable
+fun RadioButtonWithLabel(
+    selected: Boolean,
+    label: String,
+    onSelected: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 8.dp)
+            .clickable { onSelected() },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onSelected
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
+}
+
+@Composable
+fun MainScreen(
+    currentLocation: AMapLocation?,
+    locationStatus: String,
+    locationError: String?
+) {
+    Scaffold(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(it),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+                    )
                 ) {
-                    Text("重新请求定位权限 / 重启定位")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "轨迹大师",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Text(
+                            text = locationStatus,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = when {
+                                locationStatus.contains("成功") -> MaterialTheme.colorScheme.primary
+                                locationStatus.contains("失败") || locationStatus.contains("拒绝") -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+
+                    if (locationError != null) {
+                        Text(
+                            text = locationError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
+                        )
+                    }
+
+                    if (currentLocation != null && currentLocation.errorCode == 0) {
+                        Text(
+                            text = "经纬度: ${String.format("%.6f", currentLocation.longitude)}, ${String.format("%.6f", currentLocation.latitude)} | 精度: ${currentLocation.accuracy.toInt()}m",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp)
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    AMapView(currentLocation = currentLocation)
                 }
             }
         }
