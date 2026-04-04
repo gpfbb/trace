@@ -2,18 +2,13 @@ package com.trackmaster.app
 
 import android.Manifest
 import android.content.Context
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import org.json.JSONArray
-import org.json.JSONObject
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -117,26 +112,16 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
 
     private var locationClient: AMapLocationClient? = null
     private val geoFences = mutableStateListOf<GeoFence>()
-    private val geoFenceEvents = mutableListOf<GeoFenceEvent>()
     private val currentFenceStates = mutableMapOf<String, Boolean>()
     private val fenceEnterTimes = mutableMapOf<String, Date>()
-    private val fenceStayRecords = mutableListOf<FenceStayRecord>()
     private val stableLocationCount = mutableMapOf<String, Int>()
     private var aMap: AMap? = null
-    private lateinit var sharedPreferences: SharedPreferences
     private lateinit var dbHelper: GeoFenceDatabaseHelper
-    
+
     private val MIN_CONSECUTIVE_LOCATIONS = 3
     private val MAX_LOCATION_ACCURACY = 50f
-    private val PREFS_NAME = "GeoFencePrefs"
-    private val KEY_EVENTS = "geoFenceEvents"
-    private val KEY_STAY_RECORDS = "fenceStayRecords"
     private val KEY_MAP_TYPE = "mapType"
     private val KEY_TRAFFIC_ENABLED = "trafficEnabled"
-    
-    private val SAVE_DELAY_MS = 2000L
-    private val handler = Handler(Looper.getMainLooper())
-    private var pendingSaveRunnable: Runnable? = null
 
     // 设置地图对象
     fun setMap(map: AMap?) {
@@ -173,22 +158,14 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        
         val app = application as TrackMasterApplication
         dbHelper = app.dbHelper
-        
+
         // 直接从数据库加载围栏数据，确保数据一致性
         geoFences.clear()
         val fencesFromDB = dbHelper.getAllFences()
         geoFences.addAll(fencesFromDB)
         Log.d("TrackMaster", "MainActivity从数据库加载了 ${geoFences.size} 个围栏")
-        
-        geoFenceEvents.clear()
-        geoFenceEvents.addAll(app.geoFenceEvents)
-        
-        fenceStayRecords.clear()
-        fenceStayRecords.addAll(app.fenceStayRecords)
 
         val activityContext = this
 
@@ -299,9 +276,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     }
 
     override fun onDestroy() {
-        pendingSaveRunnable?.let { handler.removeCallbacks(it) }
-        performSaveGeoFenceEvents()
-        performSaveFenceStayRecords()
         locationClient?.stopLocation()
         locationClient?.onDestroy()
         super.onDestroy()
@@ -313,9 +287,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     }
 
     override fun onPause() {
-        pendingSaveRunnable?.let { handler.removeCallbacks(it) }
-        performSaveGeoFenceEvents()
-        performSaveFenceStayRecords()
         locationClient?.stopLocation()
         super.onPause()
     }
@@ -422,10 +393,8 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             longitude = location.longitude,
             accuracy = location.accuracy
         )
-        geoFenceEvents.add(event)
         dbHelper.insertEvent(event)
         Log.d("TrackMaster", "进入围栏: ${fence.name} at $now")
-        saveGeoFenceEvents()
     }
 
     private fun recordFenceExit(fence: GeoFence, location: AMapLocation) {
@@ -434,7 +403,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         val durationSeconds = if (enterTime != null) {
             (now.time - enterTime.time) / 1000
         } else null
-        
+
         if (enterTime != null) {
             val record = FenceStayRecord(
                 fenceId = fence.id,
@@ -443,10 +412,9 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
                 exitTime = now,
                 durationSeconds = durationSeconds
             )
-            fenceStayRecords.add(record)
             dbHelper.insertStayRecord(record)
         }
-        
+
         val event = GeoFenceEvent(
             fenceId = fence.id,
             fenceName = fence.name,
@@ -457,12 +425,9 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             accuracy = location.accuracy,
             durationSeconds = durationSeconds
         )
-        geoFenceEvents.add(event)
         dbHelper.insertEvent(event)
         fenceEnterTimes.remove(fence.id)
         Log.d("TrackMaster", "退出围栏: ${fence.name}, 停留: ${durationSeconds ?: 0}秒")
-        saveGeoFenceEvents()
-        saveFenceStayRecords()
     }
 
     // 从数据库加载围栏
@@ -573,112 +538,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         return dbHelper.getAllStayRecords()
     }
 
-    // 延迟保存围栏事件
-    private fun saveGeoFenceEvents() {
-        pendingSaveRunnable?.let { handler.removeCallbacks(it) }
-        pendingSaveRunnable = Runnable {
-            performSaveGeoFenceEvents()
-            performSaveFenceStayRecords()
-            pendingSaveRunnable = null
-        }
-        handler.postDelayed(pendingSaveRunnable!!, SAVE_DELAY_MS)
-    }
-
-    // 实际执行保存围栏事件
-    private fun performSaveGeoFenceEvents() {
-        val jsonArray = JSONArray()
-        geoFenceEvents.takeLast(1000).forEach { event ->
-            val json = JSONObject()
-            json.put("id", event.id)
-            json.put("fenceId", event.fenceId)
-            json.put("fenceName", event.fenceName)
-            json.put("action", event.action.name)
-            json.put("time", event.time.time)
-            json.put("latitude", event.latitude)
-            json.put("longitude", event.longitude)
-            json.put("accuracy", event.accuracy)
-            if (event.durationSeconds != null) {
-                json.put("durationSeconds", event.durationSeconds)
-            }
-            jsonArray.put(json)
-        }
-        sharedPreferences.edit().putString(KEY_EVENTS, jsonArray.toString()).apply()
-    }
-
-    // 加载围栏事件
-    private fun loadGeoFenceEvents() {
-        val jsonString = sharedPreferences.getString(KEY_EVENTS, null) ?: return
-        try {
-            val jsonArray = JSONArray(jsonString)
-            geoFenceEvents.clear()
-            for (i in 0 until jsonArray.length()) {
-                val json = jsonArray.getJSONObject(i)
-                val event = GeoFenceEvent(
-                    id = json.getString("id"),
-                    fenceId = json.getString("fenceId"),
-                    fenceName = json.getString("fenceName"),
-                    action = GeoFenceAction.valueOf(json.getString("action")),
-                    time = Date(json.getLong("time")),
-                    latitude = json.getDouble("latitude"),
-                    longitude = json.getDouble("longitude"),
-                    accuracy = json.getDouble("accuracy").toFloat(),
-                    durationSeconds = if (json.has("durationSeconds")) json.getLong("durationSeconds") else null
-                )
-                geoFenceEvents.add(event)
-            }
-            Log.d("TrackMaster", "加载了 ${geoFenceEvents.size} 个围栏事件")
-        } catch (e: Exception) {
-            Log.e("TrackMaster", "加载围栏事件失败", e)
-        }
-    }
-
-    // 保存围栏停留记录（使用延迟机制）
-    private fun saveFenceStayRecords() {
-        saveGeoFenceEvents()
-    }
-
-    // 实际执行保存围栏停留记录
-    private fun performSaveFenceStayRecords() {
-        val jsonArray = JSONArray()
-        fenceStayRecords.takeLast(500).forEach { record ->
-            val json = JSONObject()
-            json.put("fenceId", record.fenceId)
-            json.put("fenceName", record.fenceName)
-            json.put("enterTime", record.enterTime.time)
-            if (record.exitTime != null) {
-                json.put("exitTime", record.exitTime.time)
-            }
-            if (record.durationSeconds != null) {
-                json.put("durationSeconds", record.durationSeconds)
-            }
-            jsonArray.put(json)
-        }
-        sharedPreferences.edit().putString(KEY_STAY_RECORDS, jsonArray.toString()).apply()
-    }
-
-    // 加载围栏停留记录
-    private fun loadFenceStayRecords() {
-        val jsonString = sharedPreferences.getString(KEY_STAY_RECORDS, null) ?: return
-        try {
-            val jsonArray = JSONArray(jsonString)
-            fenceStayRecords.clear()
-            for (i in 0 until jsonArray.length()) {
-                val json = jsonArray.getJSONObject(i)
-                val record = FenceStayRecord(
-                    fenceId = json.getString("fenceId"),
-                    fenceName = json.getString("fenceName"),
-                    enterTime = Date(json.getLong("enterTime")),
-                    exitTime = if (json.has("exitTime")) Date(json.getLong("exitTime")) else null,
-                    durationSeconds = if (json.has("durationSeconds")) json.getLong("durationSeconds") else null
-                )
-                fenceStayRecords.add(record)
-            }
-            Log.d("TrackMaster", "加载了 ${fenceStayRecords.size} 个围栏停留记录")
-        } catch (e: Exception) {
-            Log.e("TrackMaster", "加载围栏停留记录失败", e)
-        }
-    }
-
     // 获取围栏停留时间统计
     fun getFenceStats(): Map<String, Long> {
         val stats = mutableMapOf<String, Long>()
@@ -694,18 +553,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     // 导出CSV
     fun exportData(): String? {
         return dbHelper.exportToCSV(this)
-    }
-
-    // 格式化停留时间
-    fun formatDuration(seconds: Long): String {
-        val hours = seconds / 3600
-        val minutes = (seconds % 3600) / 60
-        val secs = seconds % 60
-        return when {
-            hours > 0 -> "${hours}小时${minutes}分${secs}秒"
-            minutes > 0 -> "${minutes}分${secs}秒"
-            else -> "${secs}秒"
-        }
     }
 
     // 更新地图上的围栏覆盖物

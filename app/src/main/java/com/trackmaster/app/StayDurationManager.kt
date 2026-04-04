@@ -24,7 +24,15 @@ data class FenceActiveSession(
 class StayDurationManager(private val context: Context) {
     companion object {
         private const val TAG = "StayDurationManager"
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        private val DATE_FORMAT_THREAD_LOCAL = object : ThreadLocal<SimpleDateFormat>() {
+            override fun initialValue(): SimpleDateFormat {
+                return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            }
+        }
+
+        fun formatDate(date: Date): String {
+            return DATE_FORMAT_THREAD_LOCAL.get()!!.format(date)
+        }
     }
 
     private val dbHelper = (context.applicationContext as TrackMasterApplication).dbHelper
@@ -38,7 +46,7 @@ class StayDurationManager(private val context: Context) {
     }
 
     fun getDateKey(date: Date): String {
-        return DATE_FORMAT.format(date)
+        return formatDate(date)
     }
 
     fun onFenceEnter(fenceId: String, fenceName: String, enterTime: Date) {
@@ -70,30 +78,45 @@ class StayDurationManager(private val context: Context) {
             }
         } else {
             val calendar = Calendar.getInstance()
+
+            // 第一天：从进入时间到当天结束
             calendar.time = session.enterTime
             calendar.set(Calendar.HOUR_OF_DAY, 23)
             calendar.set(Calendar.MINUTE, 59)
             calendar.set(Calendar.SECOND, 59)
             calendar.set(Calendar.MILLISECOND, 999)
-            val midnightOfEnterDate = calendar.time
-
-            val durationDay1 = (midnightOfEnterDate.time - session.enterTime.time) / 1000
+            val durationDay1 = (calendar.time.time - session.enterTime.time) / 1000
             if (durationDay1 > 0) {
                 addDailyDuration(enterDateKey, fenceId, fenceName, durationDay1)
-                Log.d(TAG, "跨天计时(第一部分): $fenceName, 日期=$enterDateKey, 时长=${durationDay1}秒")
+                Log.d(TAG, "跨天计时(首日): $fenceName, 日期=$enterDateKey, 时长=${durationDay1}秒")
             }
 
-            calendar.time = exitTime
+            // 中间完整天：每整天计 86400 秒
+            calendar.add(Calendar.DAY_OF_MONTH, 1)
             calendar.set(Calendar.HOUR_OF_DAY, 0)
             calendar.set(Calendar.MINUTE, 0)
             calendar.set(Calendar.SECOND, 0)
             calendar.set(Calendar.MILLISECOND, 0)
-            val midnightOfExitDate = calendar.time
 
-            val durationDay2 = (exitTime.time - midnightOfExitDate.time) / 1000
-            if (durationDay2 > 0) {
-                addDailyDuration(exitDateKey, fenceId, fenceName, durationDay2)
-                Log.d(TAG, "跨天计时(第二部分): $fenceName, 日期=$exitDateKey, 时长=${durationDay2}秒")
+            val exitCalendar = Calendar.getInstance()
+            exitCalendar.time = exitTime
+            exitCalendar.set(Calendar.HOUR_OF_DAY, 0)
+            exitCalendar.set(Calendar.MINUTE, 0)
+            exitCalendar.set(Calendar.SECOND, 0)
+            exitCalendar.set(Calendar.MILLISECOND, 0)
+
+            while (calendar.before(exitCalendar)) {
+                val fullDayKey = getDateKey(calendar.time)
+                addDailyDuration(fullDayKey, fenceId, fenceName, 86400L)
+                Log.d(TAG, "跨天计时(整天): $fenceName, 日期=$fullDayKey, 时长=86400秒")
+                calendar.add(Calendar.DAY_OF_MONTH, 1)
+            }
+
+            // 最后一天：从当天开始到退出时间
+            val durationLastDay = (exitTime.time - exitCalendar.time.time) / 1000
+            if (durationLastDay > 0) {
+                addDailyDuration(exitDateKey, fenceId, fenceName, durationLastDay)
+                Log.d(TAG, "跨天计时(末日): $fenceName, 日期=$exitDateKey, 时长=${durationLastDay}秒")
             }
         }
     }
@@ -234,6 +257,22 @@ class StayDurationManager(private val context: Context) {
     }
 
     fun saveAllActiveSessions() {
-        Log.d(TAG, "保存所有活动会话")
+        Log.d(TAG, "保存所有活动会话, 数量=${activeSessions.size}")
+        val openStays = dbHelper.getOpenStayRecords()
+        val openFenceIds = openStays.map { it.fenceId }.toSet()
+
+        for (session in activeSessions.values) {
+            if (session.fenceId !in openFenceIds) {
+                val stayRecord = FenceStayRecord(
+                    fenceId = session.fenceId,
+                    fenceName = session.fenceName,
+                    enterTime = session.enterTime,
+                    exitTime = null,
+                    durationSeconds = null
+                )
+                dbHelper.insertStayRecord(stayRecord)
+                Log.d(TAG, "创建开放停留记录: ${session.fenceName}")
+            }
+        }
     }
 }

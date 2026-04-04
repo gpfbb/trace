@@ -97,6 +97,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         Log.d(TAG, "定位服务销毁")
         stopLocation()
         locationClient?.onDestroy()
+        (application as? TrackMasterApplication)?.stayDurationManager?.saveAllActiveSessions()
     }
 
     private fun createNotificationChannel() {

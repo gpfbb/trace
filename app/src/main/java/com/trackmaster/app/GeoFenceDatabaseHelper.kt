@@ -207,7 +207,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_CATEGORY_ID, fence.categoryId)
 
         val result = db.insert(TABLE_FENCES, null, values)
-        db.close()
         return result
     }
 
@@ -216,44 +215,46 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         val db = readableDatabase
         val cursor = db.query(TABLE_FENCES, null, null, null, null, null, "$KEY_CREATED_AT DESC")
 
-        if (cursor.moveToFirst()) {
-            do {
-                val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_ID))
-                val name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_NAME))
-                val type = GeoFenceType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(KEY_TYPE)))
-                val centerLat = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))
-                val centerLng = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LNG))
-                val radius = cursor.getFloat(cursor.getColumnIndexOrThrow(KEY_RADIUS))
-                val pointsJson = cursor.getString(cursor.getColumnIndexOrThrow(KEY_POINTS))
-                val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CREATED_AT)))
-                val categoryId = if (cursor.getColumnIndex(KEY_CATEGORY_ID) >= 0) {
-                    cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ID))
-                } else {
-                    Category.UNASSIGNED_ID
-                }
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_ID))
+                    val name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_NAME))
+                    val type = GeoFenceType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(KEY_TYPE)))
+                    val centerLat = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))
+                    val centerLng = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LNG))
+                    val radius = cursor.getFloat(cursor.getColumnIndexOrThrow(KEY_RADIUS))
+                    val pointsJson = cursor.getString(cursor.getColumnIndexOrThrow(KEY_POINTS))
+                    val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CREATED_AT)))
+                    val categoryId = if (cursor.getColumnIndex(KEY_CATEGORY_ID) >= 0) {
+                        cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ID))
+                    } else {
+                        Category.UNASSIGNED_ID
+                    }
 
-                val center = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))) {
-                    GeoFencePoint(centerLat, centerLng)
-                } else null
+                    val center = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))) {
+                        GeoFencePoint(centerLat, centerLng)
+                    } else null
 
-                val points = if (pointsJson != null) jsonToPoints(pointsJson) else null
+                    val points = if (pointsJson != null) jsonToPoints(pointsJson) else null
 
-                fences.add(
-                    GeoFence(
-                        id = id,
-                        name = name,
-                        type = type,
-                        center = center,
-                        radius = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_RADIUS))) radius else null,
-                        points = points,
-                        categoryId = categoryId,
-                        createdAt = createdAt
+                    fences.add(
+                        GeoFence(
+                            id = id,
+                            name = name,
+                            type = type,
+                            center = center,
+                            radius = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_RADIUS))) radius else null,
+                            points = points,
+                            categoryId = categoryId,
+                            createdAt = createdAt
+                        )
                     )
-                )
-            } while (cursor.moveToNext())
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return fences
     }
 
@@ -267,7 +268,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_CATEGORY_CREATED_AT, category.createdAt.time)
 
         val result = db.insert(TABLE_CATEGORIES, null, values)
-        db.close()
         return result
     }
 
@@ -284,31 +284,33 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_SORT_ORDER ASC, $KEY_CATEGORY_CREATED_AT ASC"
         )
 
-        if (cursor.moveToFirst()) {
-            do {
-                val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_TABLE_ID))
-                val name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_NAME))
-                val icon = if (cursor.getColumnIndex(KEY_CATEGORY_ICON) >= 0 && !cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ICON))) {
-                    cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ICON))
-                } else null
-                val sortOrder = if (cursor.getColumnIndex(KEY_CATEGORY_SORT_ORDER) >= 0) {
-                    cursor.getInt(cursor.getColumnIndexOrThrow(KEY_CATEGORY_SORT_ORDER))
-                } else 0
-                val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CATEGORY_CREATED_AT)))
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_TABLE_ID))
+                    val name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_NAME))
+                    val icon = if (cursor.getColumnIndex(KEY_CATEGORY_ICON) >= 0 && !cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ICON))) {
+                        cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ICON))
+                    } else null
+                    val sortOrder = if (cursor.getColumnIndex(KEY_CATEGORY_SORT_ORDER) >= 0) {
+                        cursor.getInt(cursor.getColumnIndexOrThrow(KEY_CATEGORY_SORT_ORDER))
+                    } else 0
+                    val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CATEGORY_CREATED_AT)))
 
-                categories.add(
-                    Category(
-                        id = id,
-                        name = name,
-                        icon = icon,
-                        sortOrder = sortOrder,
-                        createdAt = createdAt
+                    categories.add(
+                        Category(
+                            id = id,
+                            name = name,
+                            icon = icon,
+                            sortOrder = sortOrder,
+                            createdAt = createdAt
+                        )
                     )
-                )
-            } while (cursor.moveToNext())
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return categories
     }
 
@@ -325,7 +327,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_TABLE_ID = ?",
             arrayOf(category.id)
         )
-        db.close()
         return result
     }
 
@@ -336,7 +337,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_TABLE_ID = ?",
             arrayOf(categoryId)
         )
-        db.close()
         return result
     }
 
@@ -351,7 +351,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_ID = ?",
             arrayOf(fromCategoryId)
         )
-        db.close()
         return result
     }
 
@@ -366,7 +365,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_ID = ?",
             arrayOf(fenceId)
         )
-        db.close()
         return result
     }
 
@@ -383,27 +381,29 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         )
 
         var category: Category? = null
-        if (cursor.moveToFirst()) {
-            val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_TABLE_ID))
-            val categoryName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_NAME))
-            val icon = if (cursor.getColumnIndex(KEY_CATEGORY_ICON) >= 0 && !cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ICON))) {
-                cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ICON))
-            } else null
-            val sortOrder = if (cursor.getColumnIndex(KEY_CATEGORY_SORT_ORDER) >= 0) {
-                cursor.getInt(cursor.getColumnIndexOrThrow(KEY_CATEGORY_SORT_ORDER))
-            } else 0
-            val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CATEGORY_CREATED_AT)))
+        try {
+            if (cursor.moveToFirst()) {
+                val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_TABLE_ID))
+                val categoryName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_NAME))
+                val icon = if (cursor.getColumnIndex(KEY_CATEGORY_ICON) >= 0 && !cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ICON))) {
+                    cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ICON))
+                } else null
+                val sortOrder = if (cursor.getColumnIndex(KEY_CATEGORY_SORT_ORDER) >= 0) {
+                    cursor.getInt(cursor.getColumnIndexOrThrow(KEY_CATEGORY_SORT_ORDER))
+                } else 0
+                val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CATEGORY_CREATED_AT)))
 
-            category = Category(
-                id = id,
-                name = categoryName,
-                icon = icon,
-                sortOrder = sortOrder,
-                createdAt = createdAt
-            )
+                category = Category(
+                    id = id,
+                    name = categoryName,
+                    icon = icon,
+                    sortOrder = sortOrder,
+                    createdAt = createdAt
+                )
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return category
     }
 
@@ -420,51 +420,52 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CREATED_AT DESC"
         )
 
-        if (cursor.moveToFirst()) {
-            do {
-                val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_ID))
-                val name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_NAME))
-                val type = GeoFenceType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(KEY_TYPE)))
-                val centerLat = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))
-                val centerLng = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LNG))
-                val radius = cursor.getFloat(cursor.getColumnIndexOrThrow(KEY_RADIUS))
-                val pointsJson = cursor.getString(cursor.getColumnIndexOrThrow(KEY_POINTS))
-                val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CREATED_AT)))
-                val categoryIdVal = if (cursor.getColumnIndex(KEY_CATEGORY_ID) >= 0) {
-                    cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ID))
-                } else {
-                    Category.UNASSIGNED_ID
-                }
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_ID))
+                    val name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_NAME))
+                    val type = GeoFenceType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(KEY_TYPE)))
+                    val centerLat = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))
+                    val centerLng = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LNG))
+                    val radius = cursor.getFloat(cursor.getColumnIndexOrThrow(KEY_RADIUS))
+                    val pointsJson = cursor.getString(cursor.getColumnIndexOrThrow(KEY_POINTS))
+                    val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CREATED_AT)))
+                    val categoryIdVal = if (cursor.getColumnIndex(KEY_CATEGORY_ID) >= 0) {
+                        cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ID))
+                    } else {
+                        Category.UNASSIGNED_ID
+                    }
 
-                val center = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))) {
-                    GeoFencePoint(centerLat, centerLng)
-                } else null
+                    val center = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))) {
+                        GeoFencePoint(centerLat, centerLng)
+                    } else null
 
-                val points = if (pointsJson != null) jsonToPoints(pointsJson) else null
+                    val points = if (pointsJson != null) jsonToPoints(pointsJson) else null
 
-                fences.add(
-                    GeoFence(
-                        id = id,
-                        name = name,
-                        type = type,
-                        center = center,
-                        radius = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_RADIUS))) radius else null,
-                        points = points,
-                        categoryId = categoryIdVal,
-                        createdAt = createdAt
+                    fences.add(
+                        GeoFence(
+                            id = id,
+                            name = name,
+                            type = type,
+                            center = center,
+                            radius = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_RADIUS))) radius else null,
+                            points = points,
+                            categoryId = categoryIdVal,
+                            createdAt = createdAt
+                        )
                     )
-                )
-            } while (cursor.moveToNext())
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return fences
     }
 
     fun deleteFence(fenceId: String): Int {
         val db = writableDatabase
         val result = db.delete(TABLE_FENCES, "$KEY_ID = ?", arrayOf(fenceId))
-        db.close()
         return result
     }
 
@@ -499,7 +500,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_ACCURACY, event.accuracy)
 
         val result = db.insert(TABLE_EVENTS, null, values)
-        db.close()
         return result
     }
 
@@ -525,7 +525,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         } finally {
             db.endTransaction()
         }
-        db.close()
         return count
     }
 
@@ -559,13 +558,15 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             limit.toString()
         )
 
-        if (cursor.moveToFirst()) {
-            do {
-                events.add(cursorToEvent(cursor))
-            } while (cursor.moveToNext())
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    events.add(cursorToEvent(cursor))
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return events
     }
 
@@ -594,7 +595,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_DURATION, record.durationSeconds)
 
         val result = db.insert(TABLE_STAYS, null, values)
-        db.close()
         return result
     }
 
@@ -611,13 +611,15 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_ENTER_TIME DESC"
         )
 
-        if (cursor.moveToFirst()) {
-            do {
-                records.add(cursorToStayRecord(cursor))
-            } while (cursor.moveToNext())
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    records.add(cursorToStayRecord(cursor))
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return records
     }
 
@@ -626,13 +628,15 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         val db = readableDatabase
         val cursor = db.query(TABLE_STAYS, null, null, null, null, null, "$KEY_ENTER_TIME DESC")
 
-        if (cursor.moveToFirst()) {
-            do {
-                records.add(cursorToStayRecord(cursor))
-            } while (cursor.moveToNext())
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    records.add(cursorToStayRecord(cursor))
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return records
     }
 
@@ -663,11 +667,13 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             null
         )
 
-        if (cursor.moveToFirst()) {
-            totalDuration = cursor.getLong(0)
+        try {
+            if (cursor.moveToFirst()) {
+                totalDuration = cursor.getLong(0)
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return totalDuration
     }
 
@@ -684,15 +690,17 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             null
         )
 
-        if (cursor.moveToFirst()) {
-            do {
-                val fenceId = cursor.getString(0)
-                val total = cursor.getLong(1)
-                stats[fenceId] = total
-            } while (cursor.moveToNext())
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    val fenceId = cursor.getString(0)
+                    val total = cursor.getLong(1)
+                    stats[fenceId] = total
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return stats
     }
 
@@ -714,18 +722,20 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         )
 
         var stats: DailyFenceStats? = null
-        if (cursor.moveToFirst()) {
-            stats = DailyFenceStats(
-                date = date,
-                fenceId = cursor.getString(0),
-                fenceName = cursor.getString(1),
-                totalStayDuration = cursor.getLong(2),
-                enterCount = cursor.getInt(3),
-                exitCount = cursor.getInt(3)
-            )
+        try {
+            if (cursor.moveToFirst()) {
+                stats = DailyFenceStats(
+                    date = date,
+                    fenceId = cursor.getString(0),
+                    fenceName = cursor.getString(1),
+                    totalStayDuration = cursor.getLong(2),
+                    enterCount = cursor.getInt(3),
+                    exitCount = cursor.getInt(3)
+                )
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return stats
     }
 
@@ -797,7 +807,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         } else {
             db.delete(TABLE_EVENTS, null, null)
         }
-        db.close()
         return deletedCount
     }
 
@@ -808,7 +817,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         } else {
             db.delete(TABLE_STAYS, null, null)
         }
-        db.close()
         return deletedCount
     }
 
@@ -825,36 +833,38 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             null
         )
 
-        if (cursor.moveToFirst()) {
-            do {
-                val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_STAY_ID))
-                val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_ID))
-                val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_NAME))
-                val enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_ENTER_TIME)))
-                val exitTime = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME))) {
-                    null
-                } else {
-                    Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME)))
-                }
-                val duration = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_DURATION))) {
-                    null
-                } else {
-                    cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DURATION))
-                }
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_STAY_ID))
+                    val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_ID))
+                    val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_NAME))
+                    val enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_ENTER_TIME)))
+                    val exitTime = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME))) {
+                        null
+                    } else {
+                        Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME)))
+                    }
+                    val duration = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_DURATION))) {
+                        null
+                    } else {
+                        cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DURATION))
+                    }
 
-                records.add(
-                    FenceStayRecord(
-                        fenceId = fenceId,
-                        fenceName = fenceName,
-                        enterTime = enterTime,
-                        exitTime = exitTime,
-                        durationSeconds = duration
+                    records.add(
+                        FenceStayRecord(
+                            fenceId = fenceId,
+                            fenceName = fenceName,
+                            enterTime = enterTime,
+                            exitTime = exitTime,
+                            durationSeconds = duration
+                        )
                     )
-                )
-            } while (cursor.moveToNext())
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return records
     }
 
@@ -873,7 +883,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             values,
             SQLiteDatabase.CONFLICT_REPLACE
         )
-        db.close()
         Log.d("GeoFenceDB", "保存日统计: ${record.fenceName}, 日期=${record.date}, 时长=${record.totalDurationSeconds}秒")
     }
 
@@ -890,17 +899,19 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         )
 
         var record: DailyStayRecord? = null
-        if (cursor.moveToFirst()) {
-            record = DailyStayRecord(
-                date = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_DATE)),
-                fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_ID)),
-                fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_NAME)),
-                totalDurationSeconds = cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION)),
-                lastUpdated = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_LAST_UPDATED)))
-            )
+        try {
+            if (cursor.moveToFirst()) {
+                record = DailyStayRecord(
+                    date = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_DATE)),
+                    fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_ID)),
+                    fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_NAME)),
+                    totalDurationSeconds = cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION)),
+                    lastUpdated = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_LAST_UPDATED)))
+                )
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return record
     }
 
@@ -917,21 +928,23 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_DAILY_DURATION DESC"
         )
 
-        if (cursor.moveToFirst()) {
-            do {
-                records.add(
-                    DailyStayRecord(
-                        date = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_DATE)),
-                        fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_ID)),
-                        fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_NAME)),
-                        totalDurationSeconds = cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION)),
-                        lastUpdated = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_LAST_UPDATED)))
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    records.add(
+                        DailyStayRecord(
+                            date = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_DATE)),
+                            fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_ID)),
+                            fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_NAME)),
+                            totalDurationSeconds = cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION)),
+                            lastUpdated = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_LAST_UPDATED)))
+                        )
                     )
-                )
-            } while (cursor.moveToNext())
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return records
     }
 
@@ -948,36 +961,38 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_ENTER_TIME DESC"
         )
 
-        if (cursor.moveToFirst()) {
-            do {
-                val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_STAY_ID))
-                val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_ID))
-                val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_NAME))
-                val enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_ENTER_TIME)))
-                val exitTime = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME))) {
-                    null
-                } else {
-                    Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME)))
-                }
-                val duration = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_DURATION))) {
-                    null
-                } else {
-                    cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DURATION))
-                }
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_STAY_ID))
+                    val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_ID))
+                    val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_NAME))
+                    val enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_ENTER_TIME)))
+                    val exitTime = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME))) {
+                        null
+                    } else {
+                        Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME)))
+                    }
+                    val duration = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_DURATION))) {
+                        null
+                    } else {
+                        cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DURATION))
+                    }
 
-                records.add(
-                    FenceStayRecord(
-                        fenceId = fenceId,
-                        fenceName = fenceName,
-                        enterTime = enterTime,
-                        exitTime = exitTime,
-                        durationSeconds = duration
+                    records.add(
+                        FenceStayRecord(
+                            fenceId = fenceId,
+                            fenceName = fenceName,
+                            enterTime = enterTime,
+                            exitTime = exitTime,
+                            durationSeconds = duration
+                        )
                     )
-                )
-            } while (cursor.moveToNext())
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        db.close()
         return records
     }
 }
