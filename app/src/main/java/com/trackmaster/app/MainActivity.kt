@@ -49,6 +49,7 @@ import com.amap.api.maps.model.MyLocationStyle
 import com.amap.api.maps.model.Polygon
 import com.amap.api.maps.model.PolygonOptions
 import com.trackmaster.app.ui.theme.TrackMasterTheme
+import android.content.SharedPreferences
 import java.util.*
 
 // 地理围栏相关数据结构
@@ -117,6 +118,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     private val stableLocationCount = mutableMapOf<String, Int>()
     private var aMap: AMap? = null
     private lateinit var dbHelper: GeoFenceDatabaseHelper
+    private lateinit var sharedPreferences: SharedPreferences
 
     private val MIN_CONSECUTIVE_LOCATIONS = 3
     private val MAX_LOCATION_ACCURACY = 50f
@@ -160,6 +162,7 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
 
         val app = application as TrackMasterApplication
         dbHelper = app.dbHelper
+        sharedPreferences = getSharedPreferences("TrackMaster", Context.MODE_PRIVATE)
 
         // 直接从数据库加载围栏数据，确保数据一致性
         geoFences.clear()
@@ -496,7 +499,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     fun clearAllGeoFences() {
         geoFences.clear()
         currentFenceStates.clear()
-        geoFenceEvents.clear()
         dbHelper.deleteAllFences()
         
         // 清除所有地图覆盖物

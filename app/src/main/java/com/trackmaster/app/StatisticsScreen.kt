@@ -612,7 +612,7 @@ fun BarChartSection(
     statistics: List<FenceStatistics>,
     statisticsManager: StatisticsManager
 ) {
-    val maxDuration = statistics.maxOfOrNull { it.totalDurationSeconds } ?: 1L
+    val maxDuration = statistics.maxOfOrNull { it.totalDurationSeconds }?.coerceAtLeast(1L) ?: 1L
     val chartData = statistics.take(6)
     
     Card(
