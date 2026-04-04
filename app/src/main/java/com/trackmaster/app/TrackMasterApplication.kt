@@ -21,10 +21,20 @@ class TrackMasterApplication : Application() {
     lateinit var dbHelper: GeoFenceDatabaseHelper
         private set
 
+    lateinit var categoryManager: CategoryManager
+        private set
+
+    lateinit var statisticsManager: StatisticsManager
+        private set
+
+    lateinit var dataManager: DataManager
+        private set
+
     private var locationService: GeoFenceLocationService? = null
     private var serviceBound = false
 
     val geoFences = mutableListOf<GeoFence>()
+    val categories = mutableListOf<Category>()
     val fenceEnterTimes = mutableMapOf<String, Date>()
     val fenceStayRecords = mutableListOf<FenceStayRecord>()
     val geoFenceEvents = mutableListOf<GeoFenceEvent>()
@@ -50,6 +60,9 @@ class TrackMasterApplication : Application() {
         super.onCreate()
         instance = this
         dbHelper = GeoFenceDatabaseHelper(this)
+        categoryManager = CategoryManager(this)
+        statisticsManager = StatisticsManager(this)
+        dataManager = DataManager(this)
         Log.d(TAG, "应用创建，初始化数据库")
 
         loadDataFromDatabase()
@@ -57,6 +70,10 @@ class TrackMasterApplication : Application() {
 
     private fun loadDataFromDatabase() {
         try {
+            categories.clear()
+            categories.addAll(dbHelper.getAllCategories())
+            Log.d(TAG, "从数据库加载了 ${categories.size} 个分类")
+
             geoFences.clear()
             geoFences.addAll(dbHelper.getAllFences())
             Log.d(TAG, "从数据库加载了 ${geoFences.size} 个围栏")
