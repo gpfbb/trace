@@ -30,6 +30,9 @@ class TrackMasterApplication : Application() {
     lateinit var dataManager: DataManager
         private set
 
+    lateinit var stayDurationManager: StayDurationManager
+        private set
+
     private var locationService: GeoFenceLocationService? = null
     private var serviceBound = false
 
@@ -63,6 +66,7 @@ class TrackMasterApplication : Application() {
         categoryManager = CategoryManager(this)
         statisticsManager = StatisticsManager(this)
         dataManager = DataManager(this)
+        stayDurationManager = StayDurationManager(this)
         Log.d(TAG, "应用创建，初始化数据库")
 
         loadDataFromDatabase()
@@ -159,6 +163,7 @@ class TrackMasterApplication : Application() {
     private fun recordFenceEnter(fence: GeoFence, location: AMapLocation) {
         val now = Date()
         fenceEnterTimes[fence.id] = now
+        stayDurationManager.onFenceEnter(fence.id, fence.name, now)
         Log.d(TAG, "进入围栏: ${fence.name} at $now")
 
         val event = GeoFenceEvent(
@@ -191,6 +196,7 @@ class TrackMasterApplication : Application() {
             )
             fenceStayRecords.add(record)
             dbHelper.insertStayRecord(record)
+            stayDurationManager.onFenceExit(fence.id, fence.name, now)
         }
 
         val event = GeoFenceEvent(

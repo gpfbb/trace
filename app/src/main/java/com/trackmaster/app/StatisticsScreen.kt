@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
 import java.util.*
 
 val chartColors = listOf(
@@ -37,25 +39,97 @@ fun StatisticsScreen(
     var statistics by remember { mutableStateOf<List<FenceStatistics>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     
-    LaunchedEffect(selectedTimeDimension) {
-        isLoading = true
-        val timeRange = when (selectedTimeDimension) {
-            TimeDimension.DAY -> statisticsManager.getTodayRange()
-            TimeDimension.MONTH -> statisticsManager.getMonthRange()
-            TimeDimension.YEAR -> statisticsManager.getYearRange()
+    var selectedYear by remember { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
+    var selectedMonth by remember { mutableStateOf(Calendar.getInstance().get(Calendar.MONTH)) }
+    var selectedDay by remember { mutableStateOf(Calendar.getInstance().get(Calendar.DAY_OF_MONTH)) }
+    
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showMonthPicker by remember { mutableStateOf(false) }
+    var showYearPicker by remember { mutableStateOf(false) }
+    
+    val isToday = remember(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
+        val today = Calendar.getInstance()
+        selectedTimeDimension == TimeDimension.DAY &&
+            selectedYear == today.get(Calendar.YEAR) &&
+            selectedMonth == today.get(Calendar.MONTH) &&
+            selectedDay == today.get(Calendar.DAY_OF_MONTH)
+    }
+    
+    val timeRange = remember(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
+        when (selectedTimeDimension) {
+            TimeDimension.DAY -> statisticsManager.getDateRange(selectedYear, selectedMonth, selectedDay)
+            TimeDimension.MONTH -> statisticsManager.getMonthRange(selectedYear, selectedMonth)
+            TimeDimension.YEAR -> statisticsManager.getYearRange(selectedYear)
         }
+    }
+    
+    LaunchedEffect(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
+        isLoading = true
         statistics = statisticsManager.getStatistics(selectedTimeDimension, timeRange)
         isLoading = false
+    }
+    
+    LaunchedEffect(isToday, selectedTimeDimension, timeRange) {
+        if (isToday) {
+            while (true) {
+                delay(1000)
+                val newStatistics = statisticsManager.getStatistics(selectedTimeDimension, timeRange)
+                if (newStatistics != statistics) {
+                    statistics = newStatistics
+                }
+            }
+        }
+    }
+    
+    val dateFormat = SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault())
+    val monthFormat = SimpleDateFormat("yyyy年MM月", Locale.getDefault())
+    val yearFormat = SimpleDateFormat("yyyy年", Locale.getDefault())
+    
+    val calendar = Calendar.getInstance()
+    calendar.set(Calendar.YEAR, selectedYear)
+    calendar.set(Calendar.MONTH, selectedMonth)
+    calendar.set(Calendar.DAY_OF_MONTH, selectedDay)
+    
+    val displayDate = when (selectedTimeDimension) {
+        TimeDimension.DAY -> dateFormat.format(calendar.time)
+        TimeDimension.MONTH -> monthFormat.format(calendar.time)
+        TimeDimension.YEAR -> yearFormat.format(calendar.time)
     }
     
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                "统计数据可视化",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    "统计数据可视化",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        displayDate,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Button(
+                        onClick = {
+                            when (selectedTimeDimension) {
+                                TimeDimension.DAY -> showDatePicker = true
+                                TimeDimension.MONTH -> showMonthPicker = true
+                                TimeDimension.YEAR -> showYearPicker = true
+                            }
+                        }
+                    ) {
+                        Text("选择日期")
+                    }
+                }
+            }
         },
         text = {
             Column(
@@ -119,6 +193,253 @@ fun StatisticsScreen(
             }
         }
     )
+    
+    if (showDatePicker) {
+        DatePickerDialog(
+            initialYear = selectedYear,
+            initialMonth = selectedMonth,
+            initialDay = selectedDay,
+            onDateSelected = { year, month, day ->
+                selectedYear = year
+                selectedMonth = month
+                selectedDay = day
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false }
+        )
+    }
+    
+    if (showMonthPicker) {
+        MonthPickerDialog(
+            initialYear = selectedYear,
+            initialMonth = selectedMonth,
+            onMonthSelected = { year, month ->
+                selectedYear = year
+                selectedMonth = month
+                showMonthPicker = false
+            },
+            onDismiss = { showMonthPicker = false }
+        )
+    }
+    
+    if (showYearPicker) {
+        YearPickerDialog(
+            initialYear = selectedYear,
+            onYearSelected = { year ->
+                selectedYear = year
+                showYearPicker = false
+            },
+            onDismiss = { showYearPicker = false }
+        )
+    }
+}
+
+@Composable
+fun DatePickerDialog(
+    initialYear: Int,
+    initialMonth: Int,
+    initialDay: Int,
+    onDateSelected: (Int, Int, Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var year by remember { mutableStateOf(initialYear) }
+    var month by remember { mutableStateOf(initialMonth) }
+    var day by remember { mutableStateOf(initialDay) }
+    
+    val calendar = Calendar.getInstance()
+    calendar.set(Calendar.YEAR, year)
+    calendar.set(Calendar.MONTH, month)
+    val maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+    
+    if (day > maxDay) {
+        day = maxDay
+    }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择日期") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    NumberPicker(
+                        label = "年",
+                        value = year,
+                        range = 2020..2030,
+                        onValueChange = { year = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    NumberPicker(
+                        label = "月",
+                        value = month + 1,
+                        range = 1..12,
+                        onValueChange = { month = it - 1 },
+                        modifier = Modifier.weight(1f)
+                    )
+                    NumberPicker(
+                        label = "日",
+                        value = day,
+                        range = 1..maxDay,
+                        onValueChange = { day = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onDateSelected(year, month, day) }) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+@Composable
+fun MonthPickerDialog(
+    initialYear: Int,
+    initialMonth: Int,
+    onMonthSelected: (Int, Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var year by remember { mutableStateOf(initialYear) }
+    var month by remember { mutableStateOf(initialMonth) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择月份") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    NumberPicker(
+                        label = "年",
+                        value = year,
+                        range = 2020..2030,
+                        onValueChange = { year = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    NumberPicker(
+                        label = "月",
+                        value = month + 1,
+                        range = 1..12,
+                        onValueChange = { month = it - 1 },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onMonthSelected(year, month) }) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+@Composable
+fun YearPickerDialog(
+    initialYear: Int,
+    onYearSelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var year by remember { mutableStateOf(initialYear) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择年份") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                NumberPicker(
+                    label = "年",
+                    value = year,
+                    range = 2020..2030,
+                    onValueChange = { year = it }
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onYearSelected(year) }) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+@Composable
+fun NumberPicker(
+    label: String,
+    value: Int,
+    range: IntRange,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconButton(
+                onClick = {
+                    if (value < range.last) {
+                        onValueChange(value + 1)
+                    }
+                },
+                enabled = value < range.last
+            ) {
+                Text("▲", fontSize = 18.sp)
+            }
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium
+            )
+            IconButton(
+                onClick = {
+                    if (value > range.first) {
+                        onValueChange(value - 1)
+                    }
+                },
+                enabled = value > range.first
+            ) {
+                Text("▼", fontSize = 18.sp)
+            }
+        }
+    }
 }
 
 @Composable

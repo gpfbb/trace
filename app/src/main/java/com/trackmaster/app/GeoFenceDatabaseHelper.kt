@@ -13,7 +13,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
     companion object {
         private const val DATABASE_NAME = "geofence.db"
-        private const val DATABASE_VERSION = 2
+        private const val DATABASE_VERSION = 3
 
         // 围栏表
         private const val TABLE_FENCES = "fences"
@@ -53,6 +53,14 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         private const val KEY_ENTER_TIME = "enter_time"
         private const val KEY_EXIT_TIME = "exit_time"
         private const val KEY_DURATION = "duration"
+        
+        // 按日停留记录表
+        private const val TABLE_DAILY_STAYS = "daily_stays"
+        private const val KEY_DAILY_DATE = "daily_date"
+        private const val KEY_DAILY_FENCE_ID = "daily_fence_id"
+        private const val KEY_DAILY_FENCE_NAME = "daily_fence_name"
+        private const val KEY_DAILY_DURATION = "daily_duration"
+        private const val KEY_DAILY_LAST_UPDATED = "daily_last_updated"
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -107,10 +115,23 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             )
         """.trimIndent()
 
+        val createDailyStaysTable = """
+            CREATE TABLE $TABLE_DAILY_STAYS (
+                $KEY_DAILY_DATE TEXT NOT NULL,
+                $KEY_DAILY_FENCE_ID TEXT NOT NULL,
+                $KEY_DAILY_FENCE_NAME TEXT NOT NULL,
+                $KEY_DAILY_DURATION INTEGER NOT NULL DEFAULT 0,
+                $KEY_DAILY_LAST_UPDATED INTEGER NOT NULL,
+                PRIMARY KEY($KEY_DAILY_DATE, $KEY_DAILY_FENCE_ID),
+                FOREIGN KEY($KEY_DAILY_FENCE_ID) REFERENCES $TABLE_FENCES($KEY_ID) ON DELETE CASCADE
+            )
+        """.trimIndent()
+
         db.execSQL(createFencesTable)
         db.execSQL(createCategoriesTable)
         db.execSQL(createEventsTable)
         db.execSQL(createStaysTable)
+        db.execSQL(createDailyStaysTable)
 
         db.execSQL("CREATE INDEX idx_fences_created ON $TABLE_FENCES($KEY_CREATED_AT)")
         db.execSQL("CREATE INDEX idx_fences_category ON $TABLE_FENCES($KEY_CATEGORY_ID)")
@@ -118,6 +139,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         db.execSQL("CREATE INDEX idx_events_fence ON $TABLE_EVENTS($KEY_FENCE_ID)")
         db.execSQL("CREATE INDEX idx_events_timestamp ON $TABLE_EVENTS($KEY_TIMESTAMP)")
         db.execSQL("CREATE INDEX idx_stays_fence ON $TABLE_STAYS($KEY_FENCE_ID)")
+        db.execSQL("CREATE INDEX idx_daily_stays_date ON $TABLE_DAILY_STAYS($KEY_DAILY_DATE)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -144,6 +166,28 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_categories_sort ON $TABLE_CATEGORIES($KEY_CATEGORY_SORT_ORDER)")
             } catch (e: Exception) {
                 Log.e("GeoFenceDB", "创建分类表失败", e)
+            }
+        }
+        
+        if (oldVersion < 3) {
+            val createDailyStaysTable = """
+                CREATE TABLE IF NOT EXISTS $TABLE_DAILY_STAYS (
+                    $KEY_DAILY_DATE TEXT NOT NULL,
+                    $KEY_DAILY_FENCE_ID TEXT NOT NULL,
+                    $KEY_DAILY_FENCE_NAME TEXT NOT NULL,
+                    $KEY_DAILY_DURATION INTEGER NOT NULL DEFAULT 0,
+                    $KEY_DAILY_LAST_UPDATED INTEGER NOT NULL,
+                    PRIMARY KEY($KEY_DAILY_DATE, $KEY_DAILY_FENCE_ID),
+                    FOREIGN KEY($KEY_DAILY_FENCE_ID) REFERENCES $TABLE_FENCES($KEY_ID) ON DELETE CASCADE
+                )
+            """.trimIndent()
+            
+            try {
+                db.execSQL(createDailyStaysTable)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_daily_stays_date ON $TABLE_DAILY_STAYS($KEY_DAILY_DATE)")
+                Log.d("GeoFenceDB", "创建按日停留记录表成功")
+            } catch (e: Exception) {
+                Log.e("GeoFenceDB", "创建按日停留记录表失败", e)
             }
         }
     }
@@ -755,5 +799,174 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         }
         db.close()
         return deletedCount
+    }
+
+    fun getOpenStayRecords(): List<FenceStayRecord> {
+        val records = mutableListOf<FenceStayRecord>()
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_STAYS,
+            null,
+            "$KEY_EXIT_TIME IS NULL",
+            null,
+            null,
+            null,
+            null
+        )
+
+        if (cursor.moveToFirst()) {
+            do {
+                val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_STAY_ID))
+                val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_ID))
+                val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_NAME))
+                val enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_ENTER_TIME)))
+                val exitTime = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME))) {
+                    null
+                } else {
+                    Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME)))
+                }
+                val duration = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_DURATION))) {
+                    null
+                } else {
+                    cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DURATION))
+                }
+
+                records.add(
+                    FenceStayRecord(
+                        fenceId = fenceId,
+                        fenceName = fenceName,
+                        enterTime = enterTime,
+                        exitTime = exitTime,
+                        durationSeconds = duration
+                    )
+                )
+            } while (cursor.moveToNext())
+        }
+        cursor.close()
+        db.close()
+        return records
+    }
+
+    fun saveDailyStayRecord(record: DailyStayRecord) {
+        val db = writableDatabase
+        val values = ContentValues()
+        values.put(KEY_DAILY_DATE, record.date)
+        values.put(KEY_DAILY_FENCE_ID, record.fenceId)
+        values.put(KEY_DAILY_FENCE_NAME, record.fenceName)
+        values.put(KEY_DAILY_DURATION, record.totalDurationSeconds)
+        values.put(KEY_DAILY_LAST_UPDATED, record.lastUpdated.time)
+
+        db.insertWithOnConflict(
+            TABLE_DAILY_STAYS,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+        db.close()
+        Log.d("GeoFenceDB", "保存日统计: ${record.fenceName}, 日期=${record.date}, 时长=${record.totalDurationSeconds}秒")
+    }
+
+    fun getDailyStayRecord(dateKey: String, fenceId: String): DailyStayRecord? {
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_DAILY_STAYS,
+            null,
+            "$KEY_DAILY_DATE = ? AND $KEY_DAILY_FENCE_ID = ?",
+            arrayOf(dateKey, fenceId),
+            null,
+            null,
+            null
+        )
+
+        var record: DailyStayRecord? = null
+        if (cursor.moveToFirst()) {
+            record = DailyStayRecord(
+                date = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_DATE)),
+                fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_ID)),
+                fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_NAME)),
+                totalDurationSeconds = cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION)),
+                lastUpdated = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_LAST_UPDATED)))
+            )
+        }
+        cursor.close()
+        db.close()
+        return record
+    }
+
+    fun getDailyStayRecordsByDate(dateKey: String): List<DailyStayRecord> {
+        val records = mutableListOf<DailyStayRecord>()
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_DAILY_STAYS,
+            null,
+            "$KEY_DAILY_DATE = ?",
+            arrayOf(dateKey),
+            null,
+            null,
+            "$KEY_DAILY_DURATION DESC"
+        )
+
+        if (cursor.moveToFirst()) {
+            do {
+                records.add(
+                    DailyStayRecord(
+                        date = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_DATE)),
+                        fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_ID)),
+                        fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_NAME)),
+                        totalDurationSeconds = cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION)),
+                        lastUpdated = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_LAST_UPDATED)))
+                    )
+                )
+            } while (cursor.moveToNext())
+        }
+        cursor.close()
+        db.close()
+        return records
+    }
+
+    fun getStayRecordsByTimeRange(startTime: Date, endTime: Date): List<FenceStayRecord> {
+        val records = mutableListOf<FenceStayRecord>()
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_STAYS,
+            null,
+            "$KEY_ENTER_TIME >= ? AND $KEY_ENTER_TIME <= ?",
+            arrayOf(startTime.time.toString(), endTime.time.toString()),
+            null,
+            null,
+            "$KEY_ENTER_TIME DESC"
+        )
+
+        if (cursor.moveToFirst()) {
+            do {
+                val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_STAY_ID))
+                val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_ID))
+                val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_NAME))
+                val enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_ENTER_TIME)))
+                val exitTime = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME))) {
+                    null
+                } else {
+                    Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_EXIT_TIME)))
+                }
+                val duration = if (cursor.isNull(cursor.getColumnIndexOrThrow(KEY_DURATION))) {
+                    null
+                } else {
+                    cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DURATION))
+                }
+
+                records.add(
+                    FenceStayRecord(
+                        fenceId = fenceId,
+                        fenceName = fenceName,
+                        enterTime = enterTime,
+                        exitTime = exitTime,
+                        durationSeconds = duration
+                    )
+                )
+            } while (cursor.moveToNext())
+        }
+        cursor.close()
+        db.close()
+        return records
     }
 }
