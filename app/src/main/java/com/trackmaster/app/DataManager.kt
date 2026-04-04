@@ -334,6 +334,90 @@ class DataManager(private val context: Context) {
             include
         }
     }
+
+    // ============================================================
+    // 围栏 JSON 导入导出（轻量版，仅围栏定义）
+    // ============================================================
+
+    /** 导出围栏为 JSON 文件（仅围栏定义，不含事件/停留） */
+    suspend fun exportFencesToJson(): String? = withContext(Dispatchers.IO) {
+        try {
+            val fences = dbHelper.getAllFences()
+            val jsonArray = JSONArray()
+            fences.forEach { fence ->
+                val obj = JSONObject()
+                obj.put("id", fence.id)
+                obj.put("name", fence.name)
+                obj.put("type", fence.type.name)
+                obj.put("categoryId", fence.categoryId)
+                if (fence.type == GeoFenceType.CIRCLE) {
+                    obj.put("centerLat", fence.center?.latitude)
+                    obj.put("centerLng", fence.center?.longitude)
+                    obj.put("radius", fence.radius)
+                } else {
+                    val pts = JSONArray()
+                    fence.points?.forEach { p ->
+                        val pj = JSONObject()
+                        pj.put("lat", p.latitude)
+                        pj.put("lng", p.longitude)
+                        pts.put(pj)
+                    }
+                    obj.put("points", pts)
+                }
+                jsonArray.put(obj)
+            }
+
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val file = File(exportDir, "fences_$timestamp.json")
+            file.writeText(jsonArray.toString(2))
+            file.absolutePath
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** 从 JSON 文件导入围栏 */
+    suspend fun importFencesFromJson(filePath: String): Int = withContext(Dispatchers.IO) {
+        try {
+            val file = File(filePath)
+            if (!file.exists()) return@withContext 0
+            val jsonArray = JSONArray(file.readText())
+            var count = 0
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val type = GeoFenceType.valueOf(obj.getString("type"))
+                val fence = if (type == GeoFenceType.CIRCLE) {
+                    GeoFence(
+                        id = obj.getString("id"),
+                        name = obj.getString("name"),
+                        type = type,
+                        center = GeoFencePoint(obj.getDouble("centerLat"), obj.getDouble("centerLng")),
+                        radius = obj.getDouble("radius").toFloat(),
+                        categoryId = obj.optString("categoryId", Category.UNASSIGNED_ID),
+                    )
+                } else {
+                    val pts = mutableListOf<GeoFencePoint>()
+                    val arr = obj.getJSONArray("points")
+                    for (j in 0 until arr.length()) {
+                        val pj = arr.getJSONObject(j)
+                        pts.add(GeoFencePoint(pj.getDouble("lat"), pj.getDouble("lng")))
+                    }
+                    GeoFence(
+                        id = obj.getString("id"),
+                        name = obj.getString("name"),
+                        type = type,
+                        points = pts,
+                        categoryId = obj.optString("categoryId", Category.UNASSIGNED_ID),
+                    )
+                }
+                dbHelper.insertFence(fence)
+                count++
+            }
+            count
+        } catch (e: Exception) {
+            0
+        }
+    }
 }
 
 data class StorageInfo(

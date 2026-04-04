@@ -8,6 +8,7 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import com.trackmaster.app.core.PowerMode
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,7 +36,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val permissionManager = remember { PermissionManager(context) }
     var permissionStatus by remember { mutableStateOf(permissionManager.checkPermissions()) }
-    var selectedMode by remember { mutableStateOf(LocationMode.BALANCED) }
+    var selectedMode by remember { mutableStateOf(PowerMode.BALANCED) }
 
     LaunchedEffect(Unit) {
         permissionStatus = permissionManager.checkPermissions()
@@ -76,7 +77,7 @@ fun SettingsScreen(
                     onModeSelected = { mode ->
                         selectedMode = mode
                         (context.applicationContext as? TrackMasterApplication)?.let { app ->
-                            app.getLocationService()?.setLocationMode(mode)
+                            app.getLocationService()?.setPowerMode(mode)
                         }
                     }
                 )
@@ -280,8 +281,8 @@ fun PermissionItem(
 
 @Composable
 fun LocationModeSection(
-    selectedMode: LocationMode,
-    onModeSelected: (LocationMode) -> Unit
+    selectedMode: PowerMode,
+    onModeSelected: (PowerMode) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
@@ -293,22 +294,22 @@ fun LocationModeSection(
         LocationModeItem(
             title = "省电模式",
             description = "定位频率较低(60秒/次)，在围栏边界区域提升至10秒/次，最省电",
-            isSelected = selectedMode == LocationMode.POWER_SAVING,
-            onClick = { onModeSelected(LocationMode.POWER_SAVING) }
+            isSelected = selectedMode == PowerMode.POWERSAVE,
+            onClick = { onModeSelected(PowerMode.POWERSAVE) }
         )
 
         LocationModeItem(
             title = "均衡模式",
             description = "根据运动状态智能调整：静止30秒/次，步行15秒/次，跑步/高速移动5秒/次",
-            isSelected = selectedMode == LocationMode.BALANCED,
-            onClick = { onModeSelected(LocationMode.BALANCED) }
+            isSelected = selectedMode == PowerMode.BALANCED,
+            onClick = { onModeSelected(PowerMode.BALANCED) }
         )
 
         LocationModeItem(
             title = "性能模式",
             description = "最高定位频率(2秒/次)，实时性和精度最好，但耗电最高",
-            isSelected = selectedMode == LocationMode.PERFORMANCE,
-            onClick = { onModeSelected(LocationMode.PERFORMANCE) }
+            isSelected = selectedMode == PowerMode.PERFORMANCE,
+            onClick = { onModeSelected(PowerMode.PERFORMANCE) }
         )
     }
 }

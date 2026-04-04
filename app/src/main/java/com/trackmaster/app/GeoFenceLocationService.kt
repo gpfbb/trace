@@ -5,8 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -18,15 +20,9 @@ import com.amap.api.location.AMapLocationClientOption
 import com.amap.api.location.AMapLocationListener
 import java.util.Date
 
-enum class LocationMode {
-    POWER_SAVING,
-    BALANCED,
-    PERFORMANCE
-}
-
 data class LocationServiceState(
     val isRunning: Boolean = false,
-    val currentMode: LocationMode = LocationMode.BALANCED,
+    val schedulerLevel: Int = 0,
     val lastLocation: AMapLocation? = null,
     val lastUpdateTime: Date? = null,
     val locationCount: Int = 0
@@ -39,35 +35,29 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "geofence_location_channel"
         private const val CHANNEL_NAME = "地理围栏定位服务"
-
-        // 定位频率配置（毫秒）
-        private const val INTERVAL_POWER_SAVING = 60000L
-        private const val INTERVAL_BALANCED_STATIC = 30000L
-        private const val INTERVAL_BALANCED_WALKING = 15000L
-        private const val INTERVAL_BALANCED_RUNNING = 5000L
-        private const val INTERVAL_PERFORMANCE = 2000L
-        private const val INTERVAL_BOUNDARY = 10000L
-
-        // 运动状态判断阈值
-        private const val SPEED_WALKING_THRESHOLD = 1.5f
-        private const val SPEED_RUNNING_THRESHOLD = 4.0f
-        private const val ACCURACY_THRESHOLD = 50f
     }
 
     private val binder = LocalBinder()
     private var locationClient: AMapLocationClient? = null
     private var locationOption: AMapLocationClientOption? = null
-    private var currentMode = LocationMode.BALANCED
-    private var isInBoundaryZone = false
-    private var lastSpeed = 0f
-    private var consecutiveStaticCount = 0
     private val stateListeners = mutableListOf<(LocationServiceState) -> Unit>()
-    
+
     private var serviceState = LocationServiceState()
         set(value) {
             field = value
             stateListeners.forEach { it(value) }
         }
+
+    /** 屏幕状态接收器 */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val app = application as? TrackMasterApplication ?: return
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_ON -> app.engine.onScreenStateChanged(true)
+                Intent.ACTION_SCREEN_OFF -> app.engine.onScreenStateChanged(false)
+            }
+        }
+    }
 
     inner class LocalBinder : Binder() {
         val service: GeoFenceLocationService
@@ -79,6 +69,13 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         Log.d(TAG, "定位服务创建")
         createNotificationChannel()
         initLocationClient()
+
+        // 注册屏幕状态接收器
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(screenReceiver, filter)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -95,9 +92,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "定位服务销毁")
+        try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         stopLocation()
         locationClient?.onDestroy()
-        (application as? TrackMasterApplication)?.stayDurationManager?.saveAllActiveSessions()
     }
 
     private fun createNotificationChannel() {
@@ -145,7 +142,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         }
     }
 
-    private fun updateLocationOptions() {
+    private fun updateLocationOptions(intervalMs: Long = 5_000L) {
         locationOption = AMapLocationClientOption().apply {
             locationPurpose = AMapLocationClientOption.AMapLocationPurpose.Transport
             locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
@@ -153,40 +150,17 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             isNeedAddress = true
             isWifiScan = true
             isSensorEnable = true
-            
-            interval = getCurrentInterval()
-            Log.d(TAG, "定位间隔设置为: ${interval}ms")
+
+            interval = intervalMs
+            Log.d(TAG, "定位间隔设置为: ${intervalMs}ms")
         }
         locationClient?.setLocationOption(locationOption)
     }
 
-    private fun getCurrentInterval(): Long {
-        return when (currentMode) {
-            LocationMode.POWER_SAVING -> {
-                if (isInBoundaryZone) INTERVAL_BOUNDARY else INTERVAL_POWER_SAVING
-            }
-            LocationMode.BALANCED -> {
-                when {
-                    isInBoundaryZone -> INTERVAL_BOUNDARY
-                    consecutiveStaticCount >= 3 -> INTERVAL_BALANCED_STATIC
-                    lastSpeed < SPEED_WALKING_THRESHOLD -> INTERVAL_BALANCED_WALKING
-                    else -> INTERVAL_BALANCED_RUNNING
-                }
-            }
-            LocationMode.PERFORMANCE -> INTERVAL_PERFORMANCE
-        }
+    /** 设置电源模式（转发给 Engine） */
+    fun setPowerMode(mode: com.trackmaster.app.core.PowerMode) {
+        (application as? TrackMasterApplication)?.engine?.setPowerMode(mode)
     }
-
-    fun setLocationMode(mode: LocationMode) {
-        if (currentMode != mode) {
-            Log.d(TAG, "切换定位模式: $mode")
-            currentMode = mode
-            updateLocationOptions()
-            serviceState = serviceState.copy(currentMode = mode)
-        }
-    }
-
-    fun getLocationMode(): LocationMode = currentMode
 
     fun addStateListener(listener: (LocationServiceState) -> Unit) {
         stateListeners.add(listener)
@@ -225,21 +199,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             return
         }
 
-        if (location.accuracy > ACCURACY_THRESHOLD) {
-            Log.d(TAG, "精度不足: ${location.accuracy}m，忽略")
-            return
-        }
-
-        val speed = location.speed
-        lastSpeed = speed
-
-        if (speed < 0.5f) {
-            consecutiveStaticCount++
-        } else {
-            consecutiveStaticCount = 0
-        }
-
-        Log.d(TAG, "定位更新: 速度=$speed m/s, 精度=${location.accuracy}m, 状态=${getMotionState()}")
+        Log.d(TAG, "定位更新: 精度=${location.accuracy}m, 速度=${location.speed}m/s")
 
         serviceState = serviceState.copy(
             lastLocation = location,
@@ -247,30 +207,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             locationCount = serviceState.locationCount + 1
         )
 
-        (application as? TrackMasterApplication)?.let { app ->
-            app.checkGeoFences(location)
-        }
-
-        val currentInterval = getCurrentInterval()
-        if (locationOption?.interval != currentInterval) {
-            updateLocationOptions()
-        }
-    }
-
-    fun setBoundaryZone(isInZone: Boolean) {
-        if (isInBoundaryZone != isInZone) {
-            isInBoundaryZone = isInZone
-            Log.d(TAG, "边界区域状态: $isInZone")
-            updateLocationOptions()
-        }
-    }
-
-    private fun getMotionState(): String {
-        return when {
-            consecutiveStaticCount >= 3 -> "静止"
-            lastSpeed < SPEED_WALKING_THRESHOLD -> "步行"
-            lastSpeed < SPEED_RUNNING_THRESHOLD -> "跑步"
-            else -> "高速移动"
-        }
+        // 围栏检测委托给 Engine（通过 TrackMasterApplication.checkGeoFences）
+        (application as? TrackMasterApplication)?.checkGeoFences(location)
     }
 }

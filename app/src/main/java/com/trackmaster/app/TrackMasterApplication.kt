@@ -8,6 +8,14 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
 import com.amap.api.location.AMapLocation
+import com.trackmaster.app.core.Engine
+import com.trackmaster.app.core.FenceMapper
+import com.trackmaster.app.core.FenceTreeManager
+import com.trackmaster.app.core.Geofence
+import com.trackmaster.app.core.LocationFix
+import com.trackmaster.app.services.Aggregator
+import com.trackmaster.app.storage.Repository
+import com.trackmaster.app.storage.SqliteStorageAdapter
 import java.util.Date
 
 class TrackMasterApplication : Application() {
@@ -33,6 +41,18 @@ class TrackMasterApplication : Application() {
     lateinit var stayDurationManager: StayDurationManager
         private set
 
+    lateinit var engine: Engine
+        private set
+
+    lateinit var repository: Repository
+        private set
+
+    lateinit var aggregator: Aggregator
+        private set
+
+    lateinit var fenceTreeManager: FenceTreeManager
+        private set
+
     private var locationService: GeoFenceLocationService? = null
     private var serviceBound = false
 
@@ -41,8 +61,6 @@ class TrackMasterApplication : Application() {
     val fenceEnterTimes = mutableMapOf<String, Date>()
     val fenceStayRecords = mutableListOf<FenceStayRecord>()
     val geoFenceEvents = mutableListOf<GeoFenceEvent>()
-    val currentFenceStates = mutableMapOf<String, Boolean>()
-    val stableLocationCount = mutableMapOf<String, Int>()
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -70,6 +88,15 @@ class TrackMasterApplication : Application() {
         Log.d(TAG, "应用创建，初始化数据库")
 
         loadDataFromDatabase()
+
+        // 初始化围栏树管理器和核心引擎
+        fenceTreeManager = FenceTreeManager(this)
+        val coreFences = fenceTreeManager.loadFenceTree(geoFences)
+        val storageAdapter = SqliteStorageAdapter(dbHelper)
+        repository = Repository(storageAdapter)
+        engine = Engine(coreFences, repository)
+        aggregator = Aggregator(coreFences, repository)
+        Log.d(TAG, "引擎初始化完成: ${coreFences.size} 个核心围栏")
     }
 
     private fun loadDataFromDatabase() {
@@ -120,144 +147,43 @@ class TrackMasterApplication : Application() {
     fun getLocationService(): GeoFenceLocationService? = locationService
 
     fun checkGeoFences(location: AMapLocation) {
-        val userPoint = GeoFencePoint(location.latitude, location.longitude)
-
-        if (location.accuracy > 50f) {
-            Log.d(TAG, "位置精度不足: ${location.accuracy}m，跳过围栏检测")
-            return
-        }
-
-        for (fence in geoFences) {
-            val isInside = when (fence.type) {
-                GeoFenceType.CIRCLE -> isPointInCircle(userPoint, fence)
-                GeoFenceType.POLYGON -> isPointInPolygon(userPoint, fence)
-            }
-
-            val previousState = currentFenceStates[fence.id] ?: false
-            val currentCount = stableLocationCount[fence.id] ?: 0
-
-            if (isInside) {
-                if (!previousState) {
-                    stableLocationCount[fence.id] = currentCount + 1
-                    if (stableLocationCount[fence.id]!! >= 3) {
-                        recordFenceEnter(fence, location)
-                        currentFenceStates[fence.id] = true
-                        stableLocationCount[fence.id] = 0
-                    }
-                }
-            } else {
-                if (previousState) {
-                    stableLocationCount[fence.id] = currentCount + 1
-                    if (stableLocationCount[fence.id]!! >= 3) {
-                        recordFenceExit(fence, location)
-                        currentFenceStates[fence.id] = false
-                        stableLocationCount[fence.id] = 0
-                    }
-                } else {
-                    stableLocationCount[fence.id] = 0
-                }
-            }
-        }
-    }
-
-    private fun recordFenceEnter(fence: GeoFence, location: AMapLocation) {
-        val now = Date()
-        fenceEnterTimes[fence.id] = now
-        stayDurationManager.onFenceEnter(fence.id, fence.name, now)
-        Log.d(TAG, "进入围栏: ${fence.name} at $now")
-
-        val event = GeoFenceEvent(
-            fenceId = fence.id,
-            fenceName = fence.name,
-            action = GeoFenceAction.ENTER,
-            time = now,
-            latitude = location.latitude,
-            longitude = location.longitude,
-            accuracy = location.accuracy
-        )
-        geoFenceEvents.add(event)
-        dbHelper.insertEvent(event)
-    }
-
-    private fun recordFenceExit(fence: GeoFence, location: AMapLocation) {
-        val now = Date()
-        val enterTime = fenceEnterTimes[fence.id]
-        val durationSeconds = if (enterTime != null) {
-            (now.time - enterTime.time) / 1000
-        } else null
-
-        if (enterTime != null) {
-            val record = FenceStayRecord(
-                fenceId = fence.id,
-                fenceName = fence.name,
-                enterTime = enterTime,
-                exitTime = now,
-                durationSeconds = durationSeconds
-            )
-            fenceStayRecords.add(record)
-            dbHelper.insertStayRecord(record)
-            stayDurationManager.onFenceExit(fence.id, fence.name, now)
-        }
-
-        val event = GeoFenceEvent(
-            fenceId = fence.id,
-            fenceName = fence.name,
-            action = GeoFenceAction.EXIT,
-            time = now,
-            latitude = location.latitude,
-            longitude = location.longitude,
+        val fix = LocationFix(
+            lat = location.latitude,
+            lng = location.longitude,
             accuracy = location.accuracy,
-            durationSeconds = durationSeconds
+            timestamp = location.time,
         )
-        geoFenceEvents.add(event)
-        dbHelper.insertEvent(event)
-        Log.d(TAG, "离开围栏: ${fence.name} at $now, 停留: ${durationSeconds}秒")
 
-        fenceEnterTimes.remove(fence.id)
-    }
-
-    private fun isPointInCircle(point: GeoFencePoint, fence: GeoFence): Boolean {
-        val center = fence.center ?: return false
-        val radius = fence.radius ?: return false
-        val distance = calculateDistance(point, center)
-        return distance <= radius
-    }
-
-    private fun isPointInPolygon(point: GeoFencePoint, fence: GeoFence): Boolean {
-        val points = fence.points ?: return false
-        if (points.size < 3) return false
-
-        var inside = false
-        val n = points.size
-
-        for (i in 0 until n) {
-            val j = (i + 1) % n
-            val xi = points[i].latitude
-            val yi = points[i].longitude
-            val xj = points[j].latitude
-            val yj = points[j].longitude
-
-            if (((yi > point.longitude) != (yj > point.longitude)) &&
-                (point.latitude < (xj - xi) * (point.longitude - yi) / (yj - yi) + xi)) {
-                inside = !inside
-            }
+        val closedSeg = kotlinx.coroutines.runBlocking {
+            engine.onLocationUpdate(fix)
         }
 
-        return inside
+        if (closedSeg != null) {
+            val fenceName = geoFences.find { it.id == closedSeg.leafGeofenceId }?.name ?: closedSeg.leafGeofenceId
+            if (engine.currentLeafId != null) {
+                // 围栏切换：退出旧 → 进入新
+                Log.d(TAG, "离开围栏: $fenceName")
+                fenceEnterTimes.remove(closedSeg.leafGeofenceId)
+            } else {
+                // 完全离开所有围栏
+                Log.d(TAG, "离开围栏: $fenceName")
+                fenceEnterTimes.remove(closedSeg.leafGeofenceId)
+            }
+            val enterFenceId = engine.currentLeafId
+            if (enterFenceId != null) {
+                val enterFenceName = geoFences.find { it.id == enterFenceId }?.name ?: enterFenceId
+                fenceEnterTimes[enterFenceId] = Date(location.time)
+                Log.d(TAG, "进入围栏: $enterFenceName")
+            }
+        }
     }
 
-    private fun calculateDistance(p1: GeoFencePoint, p2: GeoFencePoint): Float {
-        val earthRadius = 6371000.0
-
-        val dLat = Math.toRadians(p2.latitude - p1.latitude)
-        val dLon = Math.toRadians(p2.longitude - p1.longitude)
-
-        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(Math.toRadians(p1.latitude)) * Math.cos(Math.toRadians(p2.latitude)) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2)
-
-        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-        return (earthRadius * c).toFloat()
+    /** 刷新引擎围栏数据（围栏增删后调用） */
+    fun refreshEngineFences() {
+        val coreFences = fenceTreeManager.loadFenceTree(geoFences)
+        engine = Engine(coreFences, repository)
+        aggregator = Aggregator(coreFences, repository)
+        kotlinx.coroutines.runBlocking { engine.init() }
     }
+
 }

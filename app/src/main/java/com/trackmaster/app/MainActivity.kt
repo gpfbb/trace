@@ -49,6 +49,10 @@ import com.amap.api.maps.model.MyLocationStyle
 import com.amap.api.maps.model.Polygon
 import com.amap.api.maps.model.PolygonOptions
 import com.trackmaster.app.ui.theme.TrackMasterTheme
+import com.trackmaster.app.ui.VizTreeScreen
+import com.trackmaster.app.ui.TimelineScreen
+import com.trackmaster.app.ui.CategorizedFenceListScreen
+import com.trackmaster.app.ui.HeatmapOverlay
 import android.content.SharedPreferences
 import java.util.*
 
@@ -113,15 +117,10 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
 
     private var locationClient: AMapLocationClient? = null
     private val geoFences = mutableStateListOf<GeoFence>()
-    private val currentFenceStates = mutableMapOf<String, Boolean>()
-    private val fenceEnterTimes = mutableMapOf<String, Date>()
-    private val stableLocationCount = mutableMapOf<String, Int>()
     private var aMap: AMap? = null
     private lateinit var dbHelper: GeoFenceDatabaseHelper
     private lateinit var sharedPreferences: SharedPreferences
 
-    private val MIN_CONSECUTIVE_LOCATIONS = 3
-    private val MAX_LOCATION_ACCURACY = 50f
     private val KEY_MAP_TYPE = "mapType"
     private val KEY_TRAFFIC_ENABLED = "trafficEnabled"
 
@@ -294,153 +293,11 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         super.onPause()
     }
 
-    // 计算两点之间的距离（米）
-    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val R = 6371e3 // 地球半径（米）
-        val φ1 = Math.toRadians(lat1)
-        val φ2 = Math.toRadians(lat2)
-        val Δφ = Math.toRadians(lat2 - lat1)
-        val Δλ = Math.toRadians(lon2 - lon1)
-
-        val a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2)
-        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-
-        return R * c
-    }
-
-    // 判断点是否在圆形围栏内
-    private fun isPointInCircle(point: GeoFencePoint, fence: GeoFence): Boolean {
-        if (fence.type != GeoFenceType.CIRCLE || fence.center == null || fence.radius == null) {
-            return false
-        }
-        val distance = calculateDistance(point.latitude, point.longitude, fence.center.latitude, fence.center.longitude)
-        return distance <= fence.radius
-    }
-
-    // 判断点是否在多边形围栏内
-    private fun isPointInPolygon(point: GeoFencePoint, fence: GeoFence): Boolean {
-        if (fence.type != GeoFenceType.POLYGON || fence.points == null || fence.points.size < 3) {
-            return false
-        }
-
-        var inside = false
-        val points = fence.points
-        val n = points.size
-        var j = n - 1
-
-        for (i in 0 until n) {
-            if ((points[i].longitude > point.longitude) != (points[j].longitude > point.longitude) &&
-                point.latitude < (points[j].latitude - points[i].latitude) * (point.longitude - points[i].longitude) /
-                (points[j].longitude - points[i].longitude) + points[i].latitude) {
-                inside = !inside
-            }
-            j = i
-        }
-        return inside
-    }
-
-    // 检查用户是否在围栏内
-    private fun checkGeoFences(location: AMapLocation) {
-        val userPoint = GeoFencePoint(location.latitude, location.longitude)
-
-        // 检查位置精度，避免使用精度过低的位置
-        if (location.accuracy > MAX_LOCATION_ACCURACY) {
-            Log.d("TrackMaster", "位置精度不足: ${location.accuracy}m，跳过围栏检测")
-            return
-        }
-
-        for (fence in geoFences) {
-            val isInside = when (fence.type) {
-                GeoFenceType.CIRCLE -> isPointInCircle(userPoint, fence)
-                GeoFenceType.POLYGON -> isPointInPolygon(userPoint, fence)
-            }
-
-            val previousState = currentFenceStates[fence.id] ?: false
-            val currentCount = stableLocationCount[fence.id] ?: 0
-
-            if (isInside) {
-                if (!previousState) {
-                    stableLocationCount[fence.id] = currentCount + 1
-                    if (stableLocationCount[fence.id]!! >= MIN_CONSECUTIVE_LOCATIONS) {
-                        recordFenceEnter(fence, location)
-                        currentFenceStates[fence.id] = true
-                        stableLocationCount[fence.id] = 0
-                    }
-                }
-            } else {
-                if (previousState) {
-                    stableLocationCount[fence.id] = currentCount + 1
-                    if (stableLocationCount[fence.id]!! >= MIN_CONSECUTIVE_LOCATIONS) {
-                        recordFenceExit(fence, location)
-                        currentFenceStates[fence.id] = false
-                        stableLocationCount[fence.id] = 0
-                    }
-                } else {
-                    stableLocationCount[fence.id] = 0
-                }
-            }
-        }
-    }
-
-    private fun recordFenceEnter(fence: GeoFence, location: AMapLocation) {
-        val now = Date()
-        fenceEnterTimes[fence.id] = now
-        val event = GeoFenceEvent(
-            fenceId = fence.id,
-            fenceName = fence.name,
-            action = GeoFenceAction.ENTER,
-            time = now,
-            latitude = location.latitude,
-            longitude = location.longitude,
-            accuracy = location.accuracy
-        )
-        dbHelper.insertEvent(event)
-        Log.d("TrackMaster", "进入围栏: ${fence.name} at $now")
-    }
-
-    private fun recordFenceExit(fence: GeoFence, location: AMapLocation) {
-        val now = Date()
-        val enterTime = fenceEnterTimes[fence.id]
-        val durationSeconds = if (enterTime != null) {
-            (now.time - enterTime.time) / 1000
-        } else null
-
-        if (enterTime != null) {
-            val record = FenceStayRecord(
-                fenceId = fence.id,
-                fenceName = fence.name,
-                enterTime = enterTime,
-                exitTime = now,
-                durationSeconds = durationSeconds
-            )
-            dbHelper.insertStayRecord(record)
-        }
-
-        val event = GeoFenceEvent(
-            fenceId = fence.id,
-            fenceName = fence.name,
-            action = GeoFenceAction.EXIT,
-            time = now,
-            latitude = location.latitude,
-            longitude = location.longitude,
-            accuracy = location.accuracy,
-            durationSeconds = durationSeconds
-        )
-        dbHelper.insertEvent(event)
-        fenceEnterTimes.remove(fence.id)
-        Log.d("TrackMaster", "退出围栏: ${fence.name}, 停留: ${durationSeconds ?: 0}秒")
-    }
-
     // 从数据库加载围栏
     private fun loadGeoFencesFromDB() {
         val fencesFromDB = dbHelper.getAllFences()
         geoFences.clear()
         geoFences.addAll(fencesFromDB)
-        fencesFromDB.forEach { fence ->
-            currentFenceStates[fence.id] = false
-        }
         Log.d("TrackMaster", "从数据库加载了 ${fencesFromDB.size} 个围栏")
     }
 
@@ -454,7 +311,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             radius = radius
         )
         geoFences.add(fence)
-        currentFenceStates[fence.id] = false
         dbHelper.insertFence(fence)
         Log.d("TrackMaster", "创建圆形围栏: $name, 半径: ${radius}米")
     }
@@ -472,7 +328,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             points = points
         )
         geoFences.add(fence)
-        currentFenceStates[fence.id] = false
         dbHelper.insertFence(fence)
         Log.d("TrackMaster", "创建多边形围栏: $name, 顶点数: ${points.size}")
     }
@@ -482,7 +337,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         val fence = geoFences.find { it.id == fenceId }
         if (fence != null) {
             geoFences.remove(fence)
-            currentFenceStates.remove(fenceId)
             dbHelper.deleteFence(fenceId)
             
             // 移除地图上的覆盖物
@@ -498,7 +352,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
     // 清除所有地理围栏
     fun clearAllGeoFences() {
         geoFences.clear()
-        currentFenceStates.clear()
         dbHelper.deleteAllFences()
         
         // 清除所有地图覆盖物
@@ -529,10 +382,9 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
 
     // 获取用户当前在哪些围栏内
     fun getCurrentFences(): List<GeoFence> {
-        return geoFences.filter { 
-            val state = currentFenceStates[it.id]
-            state == true
-        }
+        val app = applicationContext as? TrackMasterApplication ?: return emptyList()
+        val leafId = app.engine.currentLeafId ?: return emptyList()
+        return geoFences.filter { it.id == leafId }
     }
 
     // 获取围栏停留记录
@@ -1028,6 +880,14 @@ fun MainScreen(
     val showCategoryManagerDialog = remember { mutableStateOf(false) }
     // 控制数据管理对话框显示
     val showDataManagementDialog = remember { mutableStateOf(false) }
+    // 控制可视化树对话框显示
+    val showVizTreeDialog = remember { mutableStateOf(false) }
+    // 控制时间线对话框显示
+    val showTimelineDialog = remember { mutableStateOf(false) }
+    // 控制围栏树对话框显示
+    val showFenceTreeDialog = remember { mutableStateOf(false) }
+    // 热力图开关
+    val heatmapEnabled = remember { mutableStateOf(false) }
 
     // 分类相关状态
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
@@ -1142,6 +1002,30 @@ fun MainScreen(
                             modifier = Modifier.size(48.dp)
                         ) {
                             Text("⚙")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FloatingActionButton(
+                            onClick = { showVizTreeDialog.value = true },
+                            containerColor = Color(0xFF7E57C2),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Text("树")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FloatingActionButton(
+                            onClick = { showTimelineDialog.value = true },
+                            containerColor = Color(0xFFFF7043),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Text("线")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FloatingActionButton(
+                            onClick = { showFenceTreeDialog.value = true },
+                            containerColor = Color(0xFF26A69A),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Text("层")
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -1690,6 +1574,22 @@ fun MainScreen(
                             onCheckedChange = { showTraffic.value = it }
                         )
                     }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "热力图",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = heatmapEnabled.value,
+                            onCheckedChange = { heatmapEnabled.value = it }
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -1698,6 +1598,36 @@ fun MainScreen(
                     val aMap = mainActivity.getCurrentMap()
                     mainActivity.setMapType(aMap, mapType.value)
                     mainActivity.setTrafficEnabled(aMap, showTraffic.value)
+                    // 应用热力图
+                    if (aMap != null) {
+                        val overlay = HeatmapOverlay(aMap)
+                        if (heatmapEnabled.value) {
+                            scope.launch {
+                                val summaries = try {
+                                    val today = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                                    app.aggregator.aggregate(today)
+                                } catch (_: Exception) { emptyList() }
+                                overlay.update(app.geoFences.mapNotNull { f ->
+                                    try {
+                                        com.trackmaster.app.core.Geofence(
+                                            id = f.id, name = f.name,
+                                            type = com.trackmaster.app.core.GeoFenceType.valueOf(f.type.name),
+                                            polygon = if (f.type == com.trackmaster.app.GeoFenceType.CIRCLE) {
+                                                com.trackmaster.app.core.GeoMath.circleToPolygon(
+                                                    com.trackmaster.app.core.GeoPoint(f.center!!.latitude, f.center!!.longitude),
+                                                    f.radius?.toDouble() ?: 0.0, 32
+                                                )
+                                            } else {
+                                                f.points!!.map { com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude) }
+                                            }
+                                        )
+                                    } catch (_: Exception) { null }
+                                }, summaries)
+                            }
+                        } else {
+                            overlay.clear()
+                        }
+                    }
                     showLayerDialog.value = false
                 }) {
                     Text("确定")
@@ -1821,11 +1751,87 @@ fun MainScreen(
     // 分类管理对话框
     if (showCategoryManagerDialog.value) {
         CategoryManagerScreen(
-            onDismiss = { 
+            onDismiss = {
                 showCategoryManagerDialog.value = false
                 categoryDialogClosed = true
             }
         )
+    }
+
+    // 可视化树对话框
+    if (showVizTreeDialog.value) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(modifier = Modifier.padding(16.dp)) {
+                    FloatingActionButton(
+                        onClick = { showVizTreeDialog.value = false },
+                        modifier = Modifier.size(40.dp),
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ) {
+                        Text("←")
+                    }
+                }
+                VizTreeScreen(
+                    aggregator = app.aggregator,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+
+    // 时间线对话框
+    if (showTimelineDialog.value) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(modifier = Modifier.padding(16.dp)) {
+                    FloatingActionButton(
+                        onClick = { showTimelineDialog.value = false },
+                        modifier = Modifier.size(40.dp),
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ) {
+                        Text("←")
+                    }
+                }
+                TimelineScreen(
+                    dbHelper = app.dbHelper,
+                    fences = app.geoFences,
+                    categories = app.categories,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+
+    // 围栏层级树对话框
+    if (showFenceTreeDialog.value) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(modifier = Modifier.padding(16.dp)) {
+                    FloatingActionButton(
+                        onClick = { showFenceTreeDialog.value = false },
+                        modifier = Modifier.size(40.dp),
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ) {
+                        Text("←")
+                    }
+                }
+                CategorizedFenceListScreen(
+                    fences = app.geoFences,
+                    categories = app.categories,
+                    treeManager = app.fenceTreeManager,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
     }
 
     // 移动围栏对话框

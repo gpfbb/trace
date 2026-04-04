@@ -1,0 +1,101 @@
+package com.trackmaster.app.storage
+
+import com.trackmaster.app.core.DailySummary
+import com.trackmaster.app.core.StaySegment
+import java.util.concurrent.CopyOnWriteArrayList
+
+/**
+ * 存储仓库 — 内存缓存 + 批量事务写入
+ *
+ * 1. Segment 写入先进内存队列，达到 batchSize 后批量 flush
+ * 2. 读取时内存缓存优先，减少底层存储访问
+ * 3. 所有操作通过 StorageAdapter 委托
+ */
+class Repository(
+    private val adapter: StorageAdapter,
+    private val batchSize: Int = 20,
+) {
+    private val writeBuffer = CopyOnWriteArrayList<StaySegment>()
+    private val segmentCache = mutableMapOf<String, List<StaySegment>>()
+    private val summaryCache = mutableMapOf<String, List<DailySummary>>()
+    @Volatile private var flushing = false
+
+    /** 追加 Segment 到写入缓冲区，达到 batchSize 自动 flush */
+    suspend fun enqueueSegment(seg: StaySegment) {
+        writeBuffer.add(seg)
+        segmentCache.remove(formatDateKey(seg.startTs))
+        if (writeBuffer.size >= batchSize) {
+            flush()
+        }
+    }
+
+    /** 批量 flush 到底层存储（事务保护） */
+    suspend fun flush() {
+        if (writeBuffer.isEmpty() || flushing) return
+        flushing = true
+        val batch = ArrayList(writeBuffer)
+        writeBuffer.clear()
+        try {
+            adapter.beginTransaction()
+            adapter.insertSegments(batch)
+            adapter.commitTransaction()
+        } catch (e: Exception) {
+            adapter.rollbackTransaction()
+            writeBuffer.addAll(0, batch) // 放回重试
+            throw e
+        } finally {
+            flushing = false
+        }
+    }
+
+    /** 按日期获取 Segment（缓存优先） */
+    suspend fun getSegmentsByDate(dateKey: String): List<StaySegment> {
+        segmentCache[dateKey]?.let { return it }
+        val segs = adapter.querySegmentsByDate(dateKey)
+        segmentCache[dateKey] = segs
+        return segs
+    }
+
+    /** 获取未关闭的 Segment */
+    suspend fun getOpenSegments(): List<StaySegment> =
+        adapter.queryOpenSegments()
+
+    /** 保存日汇总（T+1 聚合产物） */
+    suspend fun saveDailySummaries(dateKey: String, summaries: List<DailySummary>) {
+        adapter.beginTransaction()
+        adapter.saveDailySummaries(summaries)
+        adapter.commitTransaction()
+        summaryCache[dateKey] = summaries
+    }
+
+    /** 读取日汇总 */
+    suspend fun getDailySummaries(dateKey: String): List<DailySummary> {
+        summaryCache[dateKey]?.let { return it }
+        val s = adapter.queryDailySummary(dateKey)
+        summaryCache[dateKey] = s
+        return s
+    }
+
+    /** 清除所有缓存 */
+    fun clearCache() {
+        segmentCache.clear()
+        summaryCache.clear()
+    }
+
+    /** 资源释放 */
+    suspend fun dispose() {
+        flush()
+        clearCache()
+    }
+
+    companion object {
+        fun formatDateKey(ts: Long): String {
+            val cal = java.util.Calendar.getInstance()
+            cal.timeInMillis = ts
+            val y = cal.get(java.util.Calendar.YEAR)
+            val m = cal.get(java.util.Calendar.MONTH) + 1
+            val d = cal.get(java.util.Calendar.DAY_OF_MONTH)
+            return "$y-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}"
+        }
+    }
+}
