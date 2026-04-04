@@ -470,9 +470,20 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
     fun deleteAllFences(): Int {
         val db = writableDatabase
-        val result = db.delete(TABLE_FENCES, null, null)
-        db.close()
-        return result
+        db.beginTransaction()
+        try {
+            db.delete(TABLE_DAILY_STAYS, null, null)
+            db.delete(TABLE_STAYS, null, null)
+            db.delete(TABLE_EVENTS, null, null)
+            val result = db.delete(TABLE_FENCES, null, null)
+            db.setTransactionSuccessful()
+            db.endTransaction()
+            return result
+        } catch (e: Exception) {
+            db.endTransaction()
+            Log.e("GeoFenceDB", "删除所有围栏失败", e)
+            return 0
+        }
     }
 
     fun insertEvent(event: GeoFenceEvent): Long {
@@ -665,19 +676,19 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         val db = readableDatabase
         val cursor = db.query(
             TABLE_STAYS,
-            arrayOf(KEY_FENCE_NAME, "SUM($KEY_DURATION) as total"),
+            arrayOf(KEY_FENCE_ID, "SUM($KEY_DURATION) as total"),
             "DATE($KEY_ENTER_TIME/1000, 'unixepoch') = ?",
             arrayOf(date),
-            KEY_FENCE_NAME,
+            KEY_FENCE_ID,
             null,
             null
         )
 
         if (cursor.moveToFirst()) {
             do {
-                val name = cursor.getString(0)
+                val fenceId = cursor.getString(0)
                 val total = cursor.getLong(1)
-                stats[name] = total
+                stats[fenceId] = total
             } while (cursor.moveToNext())
         }
         cursor.close()

@@ -35,8 +35,8 @@ data class DataImportResult(
 )
 
 class DataManager(private val context: Context) {
-    
-    private val dbHelper = GeoFenceDatabaseHelper(context)
+
+    private val dbHelper = (context.applicationContext as TrackMasterApplication).dbHelper
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     private val exportDir = File(
@@ -294,7 +294,7 @@ class DataManager(private val context: Context) {
         val events = dbHelper.getAllEvents().size
         val stays = dbHelper.getAllStayRecords().size
         
-        val dbFile = context.getDatabasePath("geofences.db")
+        val dbFile = context.getDatabasePath("geofence.db")
         val dbSize = if (dbFile.exists()) dbFile.length() else 0L
         
         return StorageInfo(

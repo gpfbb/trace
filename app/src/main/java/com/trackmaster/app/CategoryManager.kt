@@ -149,12 +149,12 @@ class CategoryManager(private val context: Context) {
         return try {
             val categories = dbHelper.getAllCategories()
             val dailyStats = dbHelper.getDailyStats(date)
-            val allFences = dbHelper.getAllFences()
+            val fenceMap = dbHelper.getAllFences().associateBy { it.id }
             
             val result = mutableMapOf<Category, Long>()
             
-            for ((fenceName, duration) in dailyStats) {
-                val fence = allFences.find { it.name == fenceName }
+            for ((fenceId, duration) in dailyStats) {
+                val fence = fenceMap[fenceId]
                 val categoryId = fence?.categoryId ?: Category.UNASSIGNED_ID
                 
                 val category = if (categoryId == Category.UNASSIGNED_ID) {

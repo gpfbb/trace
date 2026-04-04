@@ -289,8 +289,8 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
             locationStatus.value = "定位成功"
             locationError.value = null
             
-            // 检查地理围栏
-            checkGeoFences(location)
+            // 围栏检测由 GeoFenceLocationService → TrackMasterApplication.checkGeoFences() 统一处理
+            // 此处不再重复调用，避免双重事件记录
         } else {
             locationStatus.value = "定位失败"
             locationError.value = "${location.errorInfo} (错误码: ${location.errorCode})"

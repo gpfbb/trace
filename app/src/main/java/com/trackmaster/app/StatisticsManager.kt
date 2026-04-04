@@ -32,8 +32,8 @@ data class ChartData(
 )
 
 class StatisticsManager(private val context: Context) {
-    
-    private val dbHelper = GeoFenceDatabaseHelper(context)
+
+    private val dbHelper = (context.applicationContext as TrackMasterApplication).dbHelper
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val app = context.applicationContext as? TrackMasterApplication
     
