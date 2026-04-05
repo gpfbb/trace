@@ -8,6 +8,7 @@ import android.util.Log
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
@@ -53,7 +54,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         private const val KEY_ENTER_TIME = "enter_time"
         private const val KEY_EXIT_TIME = "exit_time"
         private const val KEY_DURATION = "duration"
-        
+
         // 按日停留记录表
         private const val TABLE_DAILY_STAYS = "daily_stays"
         private const val KEY_DAILY_DATE = "daily_date"
@@ -61,6 +62,29 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         private const val KEY_DAILY_FENCE_NAME = "daily_fence_name"
         private const val KEY_DAILY_DURATION = "daily_duration"
         private const val KEY_DAILY_LAST_UPDATED = "daily_last_updated"
+    }
+
+    // 内存缓存：使用 ConcurrentHashMap 保证线程安全
+    private val fenceCache = ConcurrentHashMap<String, GeoFence>()
+    private val allFencesCache = mutableListOf<GeoFence>()
+    private var allFencesCacheValid = false
+
+    private val categoryCache = ConcurrentHashMap<String, Category>()
+    private val allCategoriesCache = mutableListOf<Category>()
+    private var allCategoriesCacheValid = false
+
+    /** 使围栏缓存失效 */
+    private fun invalidateFenceCache() {
+        fenceCache.clear()
+        allFencesCacheValid = false
+        Log.d("GeoFenceDB", "围栏缓存已失效")
+    }
+
+    /** 使分类缓存失效 */
+    private fun invalidateCategoryCache() {
+        categoryCache.clear()
+        allCategoriesCacheValid = false
+        Log.d("GeoFenceDB", "分类缓存已失效")
     }
 
     override fun onOpen(db: SQLiteDatabase) {
@@ -154,7 +178,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             } catch (e: Exception) {
                 Log.e("GeoFenceDB", "添加 category_id 列失败", e)
             }
-            
+
             val createCategoriesTable = """
                 CREATE TABLE IF NOT EXISTS $TABLE_CATEGORIES (
                     $KEY_CATEGORY_TABLE_ID TEXT PRIMARY KEY,
@@ -164,7 +188,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                     $KEY_CATEGORY_CREATED_AT INTEGER NOT NULL
                 )
             """.trimIndent()
-            
+
             try {
                 db.execSQL(createCategoriesTable)
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_fences_category ON $TABLE_FENCES($KEY_CATEGORY_ID)")
@@ -173,7 +197,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 Log.e("GeoFenceDB", "创建分类表失败", e)
             }
         }
-        
+
         if (oldVersion < 3) {
             val createDailyStaysTable = """
                 CREATE TABLE IF NOT EXISTS $TABLE_DAILY_STAYS (
@@ -186,7 +210,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                     FOREIGN KEY($KEY_DAILY_FENCE_ID) REFERENCES $TABLE_FENCES($KEY_ID) ON DELETE CASCADE
                 )
             """.trimIndent()
-            
+
             try {
                 db.execSQL(createDailyStaysTable)
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_daily_stays_date ON $TABLE_DAILY_STAYS($KEY_DAILY_DATE)")
@@ -212,10 +236,15 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_CATEGORY_ID, fence.categoryId)
 
         val result = db.insert(TABLE_FENCES, null, values)
+        invalidateFenceCache()
         return result
     }
 
     fun getAllFences(): List<GeoFence> {
+        if (allFencesCacheValid) {
+            return allFencesCache.toList()
+        }
+
         val fences = mutableListOf<GeoFence>()
         val db = readableDatabase
         val cursor = db.query(TABLE_FENCES, null, null, null, null, null, "$KEY_CREATED_AT DESC")
@@ -243,23 +272,27 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
                     val points = if (pointsJson != null) jsonToPoints(pointsJson) else null
 
-                    fences.add(
-                        GeoFence(
-                            id = id,
-                            name = name,
-                            type = type,
-                            center = center,
-                            radius = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_RADIUS))) radius else null,
-                            points = points,
-                            categoryId = categoryId,
-                            createdAt = createdAt
-                        )
+                    val fence = GeoFence(
+                        id = id,
+                        name = name,
+                        type = type,
+                        center = center,
+                        radius = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_RADIUS))) radius else null,
+                        points = points,
+                        categoryId = categoryId,
+                        createdAt = createdAt
                     )
+                    fences.add(fence)
+                    fenceCache[id] = fence
                 } while (cursor.moveToNext())
             }
         } finally {
             cursor.close()
         }
+
+        allFencesCache.clear()
+        allFencesCache.addAll(fences)
+        allFencesCacheValid = true
         return fences
     }
 
@@ -273,10 +306,15 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_CATEGORY_CREATED_AT, category.createdAt.time)
 
         val result = db.insert(TABLE_CATEGORIES, null, values)
+        invalidateCategoryCache()
         return result
     }
 
     fun getAllCategories(): List<Category> {
+        if (allCategoriesCacheValid) {
+            return allCategoriesCache.toList()
+        }
+
         val categories = mutableListOf<Category>()
         val db = readableDatabase
         val cursor = db.query(
@@ -302,20 +340,24 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                     } else 0
                     val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CATEGORY_CREATED_AT)))
 
-                    categories.add(
-                        Category(
-                            id = id,
-                            name = name,
-                            icon = icon,
-                            sortOrder = sortOrder,
-                            createdAt = createdAt
-                        )
+                    val category = Category(
+                        id = id,
+                        name = name,
+                        icon = icon,
+                        sortOrder = sortOrder,
+                        createdAt = createdAt
                     )
+                    categories.add(category)
+                    categoryCache[id] = category
                 } while (cursor.moveToNext())
             }
         } finally {
             cursor.close()
         }
+
+        allCategoriesCache.clear()
+        allCategoriesCache.addAll(categories)
+        allCategoriesCacheValid = true
         return categories
     }
 
@@ -332,6 +374,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_TABLE_ID = ?",
             arrayOf(category.id)
         )
+        invalidateCategoryCache()
         return result
     }
 
@@ -342,6 +385,8 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_TABLE_ID = ?",
             arrayOf(categoryId)
         )
+        invalidateCategoryCache()
+        invalidateFenceCache()
         return result
     }
 
@@ -356,6 +401,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_ID = ?",
             arrayOf(fromCategoryId)
         )
+        invalidateFenceCache()
         return result
     }
 
@@ -370,10 +416,13 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_ID = ?",
             arrayOf(fenceId)
         )
+        invalidateFenceCache()
         return result
     }
 
     fun getCategoryByName(name: String): Category? {
+        categoryCache.values.find { it.name == name }?.let { return it }
+
         val db = readableDatabase
         val cursor = db.query(
             TABLE_CATEGORIES,
@@ -405,6 +454,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                     sortOrder = sortOrder,
                     createdAt = createdAt
                 )
+                category?.let { categoryCache[it.id] = it }
             }
         } finally {
             cursor.close()
@@ -471,6 +521,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
     fun deleteFence(fenceId: String): Int {
         val db = writableDatabase
         val result = db.delete(TABLE_FENCES, "$KEY_ID = ?", arrayOf(fenceId))
+        invalidateFenceCache()
         return result
     }
 
@@ -484,10 +535,12 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             val result = db.delete(TABLE_FENCES, null, null)
             db.setTransactionSuccessful()
             db.endTransaction()
+            invalidateFenceCache()
             return result
         } catch (e: Exception) {
             db.endTransaction()
             Log.e("GeoFenceDB", "删除所有围栏失败", e)
+            invalidateFenceCache()
             return 0
         }
     }

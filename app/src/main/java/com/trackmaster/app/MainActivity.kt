@@ -9,7 +9,15 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +25,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -47,9 +59,6 @@ import com.amap.api.maps.model.MyLocationStyle
 import com.amap.api.maps.model.Polygon
 import com.amap.api.maps.model.PolygonOptions
 import com.trackmaster.app.ui.theme.TrackMasterTheme
-import com.trackmaster.app.ui.VizTreeScreen
-import com.trackmaster.app.ui.TimelineScreen
-import com.trackmaster.app.ui.CategorizedFenceListScreen
 import com.trackmaster.app.ui.HeatmapOverlay
 import android.content.SharedPreferences
 import java.util.*
@@ -768,66 +777,86 @@ fun FenceItemWithMove(
     onMove: () -> Unit,
     onDeleteClick: (GeoFence) -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 4.dp)
-            .clickable {
-                mainActivity.highlightGeoFence(fence.id)
-            },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
+            initialOffsetY = { -40 },
+            animationSpec = tween(300)
         ),
-        shape = RoundedCornerShape(6.dp),
-        elevation = CardDefaults.cardElevation(1.dp)
+        exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(
+            targetOffsetY = { 40 },
+            animationSpec = tween(300)
+        )
     ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = fence.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f)
-                )
-                Badge(
-                    containerColor = when (fence.type) {
-                        GeoFenceType.CIRCLE -> MaterialTheme.colorScheme.primary
-                        GeoFenceType.POLYGON -> MaterialTheme.colorScheme.secondary
-                    }
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp, horizontal = 4.dp)
+                .clickable {
+                    mainActivity.highlightGeoFence(fence.id)
+                },
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+            ),
+            shape = RoundedCornerShape(6.dp),
+            elevation = CardDefaults.cardElevation(1.dp)
+        ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = when (fence.type) {
-                            GeoFenceType.CIRCLE -> "圆形"
-                            GeoFenceType.POLYGON -> "多边形"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        text = fence.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
                     )
+                    Badge(
+                        containerColor = when (fence.type) {
+                            GeoFenceType.CIRCLE -> MaterialTheme.colorScheme.primary
+                            GeoFenceType.POLYGON -> MaterialTheme.colorScheme.secondary
+                        }
+                    ) {
+                        Text(
+                            text = when (fence.type) {
+                                GeoFenceType.CIRCLE -> "圆形"
+                                GeoFenceType.POLYGON -> "多边形"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = onMove,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.SwapHoriz, 
+                            contentDescription = "移动围栏",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { onDeleteClick(fence) },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Delete, 
+                            contentDescription = "删除围栏",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(
-                    onClick = onMove,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Text("⇄", color = MaterialTheme.colorScheme.primary, fontSize = 16.sp)
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = { onDeleteClick(fence) },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Text("×", color = MaterialTheme.colorScheme.error, fontSize = 20.sp)
-                }
+                Text(
+                    text = "创建时间: ${fence.createdAt}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
-            Text(
-                text = "创建时间: ${fence.createdAt}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp)
-            )
         }
     }
 }
@@ -842,6 +871,12 @@ fun MainScreen(
     val mainActivity = context as MainActivity
     val app = context.applicationContext as TrackMasterApplication
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val screenHeightDp = configuration.screenHeightDp
+    val isSmallScreen = screenWidthDp < 360
+    val isLargeScreen = screenWidthDp >= 600
     val showGeoFenceDialog = remember { mutableStateOf(false) }
     val fenceName = remember { mutableStateOf("") }
     val fenceRadius = remember { mutableStateOf(100f) }
@@ -857,19 +892,12 @@ fun MainScreen(
     val showHistoryDialog = remember { mutableStateOf(false) }
     // 控制清理确认对话框显示
     val showClearConfirmation = remember { mutableStateOf(false) }
-    val showSecondClearConfirmation = remember { mutableStateOf(false) }
     // 控制设置对话框显示
     val showSettingsDialog = remember { mutableStateOf(false) }
     // 控制分类管理对话框显示
     val showCategoryManagerDialog = remember { mutableStateOf(false) }
     // 控制数据管理对话框显示
     val showDataManagementDialog = remember { mutableStateOf(false) }
-    // 控制可视化树对话框显示
-    val showVizTreeDialog = remember { mutableStateOf(false) }
-    // 控制时间线对话框显示
-    val showTimelineDialog = remember { mutableStateOf(false) }
-    // 控制围栏树对话框显示
-    val showFenceTreeDialog = remember { mutableStateOf(false) }
     // 热力图开关
     val heatmapEnabled = remember { mutableStateOf(false) }
 
@@ -905,6 +933,7 @@ fun MainScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             if (isDrawingFence.value) {
                 // 绘制模式下的按钮
@@ -929,7 +958,7 @@ fun MainScreen(
                         },
                         containerColor = MaterialTheme.colorScheme.primary
                     ) {
-                        Text("完成")
+                        Icon(Icons.Default.Check, contentDescription = "完成")
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     FloatingActionButton(
@@ -940,7 +969,7 @@ fun MainScreen(
                         },
                         containerColor = MaterialTheme.colorScheme.error
                     ) {
-                        Text("取消")
+                        Icon(Icons.Default.Close, contentDescription = "取消", tint = androidx.compose.ui.graphics.Color.White)
                     }
                 }
             } else {
@@ -953,7 +982,7 @@ fun MainScreen(
                             containerColor = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Text("+")
+                            Icon(Icons.Default.Add, contentDescription = "添加围栏")
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         FloatingActionButton(
@@ -961,7 +990,7 @@ fun MainScreen(
                             containerColor = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Text("删", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.Delete, contentDescription = "删除所有")
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         FloatingActionButton(
@@ -969,7 +998,7 @@ fun MainScreen(
                             containerColor = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Text("图")
+                            Icon(Icons.Default.Layers, contentDescription = "图层设置")
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         FloatingActionButton(
@@ -977,7 +1006,7 @@ fun MainScreen(
                             containerColor = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Text("记")
+                            Icon(Icons.Default.History, contentDescription = "历史记录")
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         FloatingActionButton(
@@ -985,40 +1014,18 @@ fun MainScreen(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Text("⚙")
+                            Icon(Icons.Default.Settings, contentDescription = "设置")
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FloatingActionButton(
-                            onClick = { showVizTreeDialog.value = true },
-                            containerColor = Color(0xFF7E57C2),
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Text("树")
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FloatingActionButton(
-                            onClick = { showTimelineDialog.value = true },
-                            containerColor = Color(0xFFFF7043),
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Text("线")
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FloatingActionButton(
-                            onClick = { showFenceTreeDialog.value = true },
-                            containerColor = Color(0xFF26A69A),
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Text("层")
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
                     }
                     // 主按钮
                     FloatingActionButton(
                         onClick = { isMenuExpanded.value = !isMenuExpanded.value },
                         containerColor = if (isMenuExpanded.value) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
                     ) {
-                        Text(if (isMenuExpanded.value) "▼" else "≡")
+                        Icon(
+                            if (isMenuExpanded.value) Icons.Default.ExpandLess else Icons.Default.Menu,
+                            contentDescription = if (isMenuExpanded.value) "收起菜单" else "展开菜单"
+                        )
                     }
                 }
             }
@@ -1041,29 +1048,31 @@ fun MainScreen(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(if (isSmallScreen) 8.dp else 12.dp)) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 8.dp),
+                                .padding(bottom = if (isSmallScreen) 4.dp else 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = "轨迹大师",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = if (isSmallScreen) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.weight(1f)
                             )
                             
-                            Button(
-                                onClick = { showCategoryManagerDialog.value = true },
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Text("添加分类", fontSize = 12.sp)
+                            if (!isSmallScreen) {
+                                Button(
+                                    onClick = { showCategoryManagerDialog.value = true },
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("添加分类", fontSize = 12.sp)
+                                }
+                                
+                                Spacer(modifier = Modifier.width(8.dp))
                             }
-                            
-                            Spacer(modifier = Modifier.width(8.dp))
 
                             Badge(
                                 containerColor = when {
@@ -1192,7 +1201,10 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp)
-                        .heightIn(min = 100.dp, max = 300.dp)
+                        .heightIn(
+                            min = if (isSmallScreen) 80.dp else 100.dp,
+                            max = (screenHeightDp * if (isLargeScreen) 0.45 else 0.4).dp
+                        )
                         .shadow(elevation = 4.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
@@ -1464,6 +1476,12 @@ fun MainScreen(
                             isDrawingFence.value = false
                             drawingPoints.clear()
                             fenceName.value = ""
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = "多边形围栏创建成功",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
                         }
                     }) {
                         Text("完成")
@@ -1479,6 +1497,12 @@ fun MainScreen(
                             )
                             showGeoFenceDialog.value = false
                             fenceName.value = ""
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = "围栏创建成功",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
                         }
                     }) {
                         Text("创建")
@@ -1627,13 +1651,13 @@ fun MainScreen(
         )
     }
 
-    // 第一步确认对话框
+    // 删除确认对话框
     if (showClearConfirmation.value) {
         AlertDialog(
             onDismissRequest = { showClearConfirmation.value = false },
             title = { 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("⚠️", fontSize = 24.sp)
+                    Icon(Icons.Default.Warning, contentDescription = "警告", tint = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("警告")
                 }
@@ -1649,43 +1673,6 @@ fun MainScreen(
                 Button(
                     onClick = { 
                         showClearConfirmation.value = false 
-                        showSecondClearConfirmation.value = true 
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("继续")
-                }
-            },
-            dismissButton = {
-                Button(onClick = { showClearConfirmation.value = false }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-
-    // 第二步确认对话框
-    if (showSecondClearConfirmation.value) {
-        AlertDialog(
-            onDismissRequest = { showSecondClearConfirmation.value = false },
-            title = { 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("🗑️", fontSize = 24.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("最终确认")
-                }
-            },
-            text = { 
-                Column {
-                    Text("这是最后的确认机会！")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("点击\"确认删除\"将永久删除所有数据。", fontWeight = FontWeight.Bold)
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { 
-                        showSecondClearConfirmation.value = false 
                         mainActivity.clearAllGeoFences() 
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -1694,7 +1681,7 @@ fun MainScreen(
                 }
             },
             dismissButton = {
-                Button(onClick = { showSecondClearConfirmation.value = false }) {
+                Button(onClick = { showClearConfirmation.value = false }) {
                     Text("取消")
                 }
             }
@@ -1742,82 +1729,6 @@ fun MainScreen(
         )
     }
 
-    // 可视化树对话框
-    if (showVizTreeDialog.value) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(modifier = Modifier.padding(16.dp)) {
-                    FloatingActionButton(
-                        onClick = { showVizTreeDialog.value = false },
-                        modifier = Modifier.size(40.dp),
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ) {
-                        Text("←")
-                    }
-                }
-                VizTreeScreen(
-                    aggregator = app.aggregator,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-    }
-
-    // 时间线对话框
-    if (showTimelineDialog.value) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(modifier = Modifier.padding(16.dp)) {
-                    FloatingActionButton(
-                        onClick = { showTimelineDialog.value = false },
-                        modifier = Modifier.size(40.dp),
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ) {
-                        Text("←")
-                    }
-                }
-                TimelineScreen(
-                    dbHelper = app.dbHelper,
-                    fences = app.geoFences,
-                    categories = app.categories,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-    }
-
-    // 围栏层级树对话框
-    if (showFenceTreeDialog.value) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(modifier = Modifier.padding(16.dp)) {
-                    FloatingActionButton(
-                        onClick = { showFenceTreeDialog.value = false },
-                        modifier = Modifier.size(40.dp),
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ) {
-                        Text("←")
-                    }
-                }
-                CategorizedFenceListScreen(
-                    fences = app.geoFences,
-                    categories = app.categories,
-                    treeManager = app.fenceTreeManager,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-    }
-
     // 移动围栏对话框
     showMoveFenceDialog?.let { fence ->
         MoveFenceDialog(
@@ -1848,10 +1759,17 @@ fun MainScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        val fenceNameToDelete = fence.name
                         mainActivity.deleteGeoFence(fence.id)
                         showDeleteConfirmDialog = null
                         mainActivity.refreshGeoFences()
                         refreshDataTrigger++
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = "已删除围栏「${fenceNameToDelete}」",
+                                duration = SnackbarDuration.Short
+                            )
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
