@@ -1,9 +1,11 @@
 package com.trackmaster.app
 
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -12,13 +14,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import java.text.SimpleDateFormat
 import java.util.*
 import com.trackmaster.app.ui.theme.*
@@ -75,7 +79,7 @@ fun StatisticsScreen(
     
     LaunchedEffect(isToday, selectedTimeDimension, timeRange) {
         if (isToday) {
-            while (true) {
+            while (currentCoroutineContext().isActive) {
                 delay(1000)
                 val newStatistics = statisticsManager.getStatistics(selectedTimeDimension, timeRange)
                 if (newStatistics != statistics) {
@@ -122,17 +126,27 @@ fun StatisticsScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = NeonCoral
                     )
-                    GlassButton(
-                        onClick = {
-                            when (selectedTimeDimension) {
-                                TimeDimension.DAY -> showDatePicker = true
-                                TimeDimension.MONTH -> showMonthPicker = true
-                                TimeDimension.YEAR -> showYearPicker = true
-                            }
-                        },
-                        modifier = Modifier.height(32.dp)
+                    Box(
+                        modifier = Modifier
+                            .height(32.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(NeonCoral, NeonAmber),
+                                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                    end = androidx.compose.ui.geometry.Offset(100f, 100f)
+                                )
+                            )
+                            .clickable {
+                                when (selectedTimeDimension) {
+                                    TimeDimension.DAY -> showDatePicker = true
+                                    TimeDimension.MONTH -> showMonthPicker = true
+                                    TimeDimension.YEAR -> showYearPicker = true
+                                }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text("选择日期", fontSize = 11.sp, color = Color.White)
+                        Text("📅 选择日期", fontSize = 11.sp, color = Color.White)
                     }
                 }
             }
@@ -141,7 +155,7 @@ fun StatisticsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 500.dp)
+                    .height(500.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -149,7 +163,7 @@ fun StatisticsScreen(
                     selectedDimension = selectedTimeDimension,
                     onDimensionSelected = { selectedTimeDimension = it }
                 )
-                
+
                 if (isLoading) {
                     Box(
                         modifier = Modifier
@@ -173,23 +187,19 @@ fun StatisticsScreen(
                         )
                     }
                 } else {
-                    PieChartSection(
-                        statistics = statistics
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    BarChartSection(
-                        statistics = statistics,
-                        statisticsManager = statisticsManager
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    LeaderboardSection(
-                        statistics = statistics,
-                        statisticsManager = statisticsManager
-                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        DurationProgressSection(
+                            statistics = statistics,
+                            statisticsManager = statisticsManager
+                        )
+
+                        LeaderboardSection(
+                            statistics = statistics,
+                            statisticsManager = statisticsManager
+                        )
+                    }
                 }
             }
         },
@@ -251,15 +261,16 @@ fun DatePickerDialog(
     var year by remember { mutableStateOf(initialYear) }
     var month by remember { mutableStateOf(initialMonth) }
     var day by remember { mutableStateOf(initialDay) }
-    
+
+    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+    val yearRange = 2020..(currentYear + 10)
+
     val calendar = Calendar.getInstance()
     calendar.set(Calendar.YEAR, year)
     calendar.set(Calendar.MONTH, month)
     val maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-    
-    if (day > maxDay) {
-        day = maxDay
-    }
+
+    day = remember(day, maxDay) { if (day > maxDay) maxDay else day }
     
     GlassDialog(
         onDismissRequest = onDismiss,
@@ -275,7 +286,7 @@ fun DatePickerDialog(
                     NumberPicker(
                         label = "年",
                         value = year,
-                        range = 2020..2030,
+                        range = yearRange,
                         onValueChange = { year = it },
                         modifier = Modifier.weight(1f)
                     )
@@ -318,6 +329,9 @@ fun MonthPickerDialog(
 ) {
     var year by remember { mutableStateOf(initialYear) }
     var month by remember { mutableStateOf(initialMonth) }
+
+    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+    val yearRange = 2020..(currentYear + 10)
     
     GlassDialog(
         onDismissRequest = onDismiss,
@@ -333,7 +347,7 @@ fun MonthPickerDialog(
                     NumberPicker(
                         label = "年",
                         value = year,
-                        range = 2020..2030,
+                        range = yearRange,
                         onValueChange = { year = it },
                         modifier = Modifier.weight(1f)
                     )
@@ -367,6 +381,9 @@ fun YearPickerDialog(
     onDismiss: () -> Unit
 ) {
     var year by remember { mutableStateOf(initialYear) }
+
+    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+    val yearRange = 2020..(currentYear + 10)
     
     GlassDialog(
         onDismissRequest = onDismiss,
@@ -378,7 +395,7 @@ fun YearPickerDialog(
                 NumberPicker(
                     label = "年",
                     value = year,
-                    range = 2020..2030,
+                    range = yearRange,
                     onValueChange = { year = it }
                 )
             }
@@ -466,34 +483,28 @@ fun TimeDimensionSelector(
                 shape = RoundedCornerShape(24.dp)
             )
     ) {
-        // 滑动背景指示器
-        AnimatedVisibility(
-            visible = true,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(1f / 3f)
-                    .align(
-                        when (selectedDimension) {
-                            TimeDimension.DAY -> Alignment.CenterStart
-                            TimeDimension.MONTH -> Alignment.Center
-                            TimeDimension.YEAR -> Alignment.CenterEnd
-                        }
-                    )
-                    .padding(2.dp)
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(NeonCoral, NeonAmber),
-                            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                            end = androidx.compose.ui.geometry.Offset(100f, 100f)
-                        ),
-                        shape = RoundedCornerShape(22.dp)
-                    )
-            )
-        }
+        // 滑动背景指示器 - 使用 alignment 实现平滑移动
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(1f / 3f)
+                .align(
+                    when (selectedDimension) {
+                        TimeDimension.DAY -> Alignment.CenterStart
+                        TimeDimension.MONTH -> Alignment.Center
+                        TimeDimension.YEAR -> Alignment.CenterEnd
+                    }
+                )
+                .padding(2.dp)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(NeonCoral, NeonAmber),
+                        start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                        end = androidx.compose.ui.geometry.Offset(100f, 100f)
+                    ),
+                    shape = RoundedCornerShape(22.dp)
+                )
+        )
         
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -531,136 +542,12 @@ fun TimeDimensionSelector(
 }
 
 @Composable
-fun PieChartSection(
-    statistics: List<FenceStatistics>
-) {
-    val totalDuration = statistics.sumOf { it.totalDurationSeconds }
-    val chartData = statistics.take(8).mapIndexed { index, stat ->
-        ChartData(
-            label = stat.fenceName,
-            value = stat.totalDurationSeconds,
-            color = chartColors[index % chartColors.size]
-        )
-    }
-    
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0x4D000000)
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(0.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                "停留时长占比",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = NeonCoral
-            )
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                PieChart(
-                    data = chartData,
-                    modifier = Modifier.size(150.dp)
-                )
-                
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    chartData.forEach { data ->
-                        LegendItem(
-                            color = data.color,
-                            label = data.label,
-                            percentage = if (totalDuration > 0) {
-                                "%.1f%%".format(data.value * 100f / totalDuration)
-                            } else "0%"
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PieChart(
-    data: List<ChartData>,
-    modifier: Modifier = Modifier
-) {
-    val total = data.sumOf { it.value }
-    var startAngle = -90f
-    
-    Canvas(modifier = modifier) {
-        if (total > 0) {
-            data.forEach { item ->
-                val sweepAngle = (item.value * 360f / total).toFloat()
-                drawArc(
-                    color = item.color,
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle,
-                    useCenter = true,
-                    size = Size(size.width, size.height)
-                )
-                startAngle += sweepAngle
-            }
-            
-            drawCircle(
-                color = GlassPanelRich,
-                radius = size.minDimension * 0.3f,
-                center = Offset(size.width / 2, size.height / 2)
-            )
-        }
-    }
-}
-
-@Composable
-fun LegendItem(
-    color: Color,
-    label: String,
-    percentage: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(12.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-        Text(
-            text = label.take(8) + if (label.length > 8) "…" else "",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFE0E0E0),
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = percentage,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            color = NeonCoral
-        )
-    }
-}
-
-@Composable
-fun BarChartSection(
+fun DurationProgressSection(
     statistics: List<FenceStatistics>,
     statisticsManager: StatisticsManager
 ) {
-    val maxDuration = statistics.maxOfOrNull { it.totalDurationSeconds }?.coerceAtLeast(1L) ?: 1L
-    val chartData = statistics.take(6)
-    
+    val totalDuration = statistics.sumOf { it.totalDurationSeconds }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -670,47 +557,119 @@ fun BarChartSection(
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                "停留时长对比",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = NeonCoral
-            )
-            
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.Bottom
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                chartData.forEachIndexed { index, stat ->
-                    val heightRatio = (stat.totalDurationSeconds.toFloat() / maxDuration).coerceAtLeast(0.05f)
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                Text(
+                    "停留时长分布",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = NeonCoral
+                )
+                Text(
+                    "总时长: ${statisticsManager.formatDuration(totalDuration)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFFBDBDBD)
+                )
+            }
+
+            // 使用网格卡片布局
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                statistics.take(6).forEachIndexed { index, stat ->
+                    val percentage = if (totalDuration > 0) {
+                        stat.totalDurationSeconds * 100f / totalDuration
+                    } else 0f
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0x332A221C)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = CardDefaults.cardElevation(0.dp)
                     ) {
-                        Text(
-                            text = statisticsManager.formatDuration(stat.totalDurationSeconds),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 9.sp,
-                            color = Color(0xFFBDBDBD)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .width(30.dp)
-                                .fillMaxHeight(heightRatio)
-                                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                .background(chartColors[index % chartColors.size])
-                        )
-                        Text(
-                            text = stat.fenceName.take(4),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFBDBDBD)
-                        )
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // 颜色指示器
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(chartColors[index % chartColors.size])
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(4.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0x33FFFFFF))
+                                ) {
+                                    Text(
+                                        text = "${index + 1}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = stat.fenceName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFE0E0E0),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${"%.1f".format(percentage)}%",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = NeonCoral
+                                    )
+                                    Text(
+                                        text = statisticsManager.formatDuration(stat.totalDurationSeconds),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFFBDBDBD)
+                                    )
+                                }
+                            }
+
+                            // 小型进度条
+                            Box(
+                                modifier = Modifier
+                                    .width(60.dp)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Color(0x332A221C))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(percentage / 100f)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(chartColors[index % chartColors.size])
+                                )
+                            }
+                        }
                     }
                 }
             }

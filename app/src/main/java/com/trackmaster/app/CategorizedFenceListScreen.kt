@@ -1,18 +1,26 @@
 package com.trackmaster.app
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -22,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import com.trackmaster.app.ui.theme.*
 
 @Composable
 fun CategorizedFenceListScreen(
@@ -192,38 +201,64 @@ fun CategoryHeader(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onToggle)
+            .clickable(onClick = onToggle),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0x4D2A221C)
+        ),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = if (isExpanded) "▼" else "▶",
-                    fontSize = 20.sp
-                )
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0x332A221C)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val arrowRotation by animateFloatAsState(
+                        targetValue = if (isExpanded) 180f else 0f,
+                        animationSpec = tween(
+                            durationMillis = 300,
+                            easing = FastOutSlowInEasing
+                        ),
+                        label = "arrowRotation"
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ExpandMore,
+                        contentDescription = if (isExpanded) "收起" else "展开",
+                        modifier = Modifier
+                            .size(18.dp)
+                            .graphicsLayer { rotationZ = arrowRotation },
+                        tint = NeonCoral
+                    )
+                }
                 Text(
                     text = category.icon ?: "📁",
-                    fontSize = 24.sp
+                    fontSize = 20.sp
                 )
                 Text(
                     text = category.name,
                     fontWeight = FontWeight.Medium,
-                    fontSize = 16.sp
+                    fontSize = 15.sp,
+                    color = Color(0xFFE0E0E0)
                 )
             }
 
             Text(
                 text = formatDuration(totalDuration),
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                fontSize = 13.sp,
+                color = Color(0xFFBDBDBD)
             )
         }
     }

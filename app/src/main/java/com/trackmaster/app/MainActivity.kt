@@ -11,7 +11,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.*
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -27,12 +32,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalConfiguration
@@ -896,11 +904,6 @@ fun MainScreen(
     val app = context.applicationContext as TrackMasterApplication
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val configuration = LocalConfiguration.current
-    val screenWidthDp = configuration.screenWidthDp
-    val screenHeightDp = configuration.screenHeightDp
-    val isSmallScreen = screenWidthDp < 360
-    val isLargeScreen = screenWidthDp >= 600
     val showGeoFenceDialog = remember { mutableStateOf(false) }
     val fenceName = remember { mutableStateOf("") }
     val fenceRadius = remember { mutableStateOf(100f) }
@@ -1029,7 +1032,9 @@ fun MainScreen(
                         // 添加分类按钮 - 始终显示，使用图标 + 文字
                         GlassButton(
                             onClick = { showCategoryManagerDialog.value = true },
-                            modifier = Modifier.height(36.dp)
+                            modifier = Modifier
+                                .height(40.dp)
+                                .wrapContentWidth()
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -1091,7 +1096,7 @@ fun MainScreen(
                     // 显示绘制状态
                     if (isDrawingFence.value) {
                         Text(
-                            text = "绘制模式: ${drawingPoints.size}/3 点",
+                            text = "绘制模式: 已选 ${drawingPoints.size} 个点（至少3个）",
                             style = MaterialTheme.typography.bodySmall,
                             color = Info,
                             fontWeight = FontWeight.Medium
@@ -1118,6 +1123,24 @@ fun MainScreen(
         ) {
             if (isDrawingFence.value) {
                 Column {
+                    // 撤销按钮 - 删除最后一个点
+                    if (drawingPoints.isNotEmpty()) {
+                        GlassFloatingActionButton(
+                            onClick = {
+                                drawingPoints.removeLast()
+                                mainActivity.clearDrawingMarkers()
+                                // 重新添加剩余的标记
+                                drawingPoints.forEachIndexed { index, point ->
+                                    mainActivity.addDrawingMarker(mainActivity.getCurrentMap()!!, point, index)
+                                }
+                            },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "撤销", tint = Color.Black, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    // 完成按钮
                     GlassFloatingActionButton(
                         onClick = {
                             if (drawingPoints.size >= 3) {
@@ -1140,6 +1163,7 @@ fun MainScreen(
                         Icon(Icons.Default.Check, contentDescription = "完成", tint = Color.Black, modifier = Modifier.size(20.dp))
                     }
                     Spacer(modifier = Modifier.height(8.dp))
+                    // 取消按钮
                     GlassFloatingActionButton(
                         onClick = {
                             mainActivity.clearDrawingMarkers()
@@ -1261,7 +1285,7 @@ fun MainScreen(
                                 // "全部分类"作为容器
                                 item {
                                     val isExpanded = expandedCategories.contains("all")
-                                    
+
                                     Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -1276,110 +1300,183 @@ fun MainScreen(
                                         colors = CardDefaults.cardColors(
                                             containerColor = GlassPanelRich
                                         ),
-                                        shape = RoundedCornerShape(10.dp),
+                                        shape = RoundedCornerShape(12.dp),
                                         elevation = CardDefaults.cardElevation(0.dp)
                                     ) {
-                                        Column(modifier = Modifier.padding(10.dp)) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(
+                                                            brush = Brush.linearGradient(
+                                                                colors = listOf(NeonCoral, NeonAmber),
+                                                                start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                                                end = androidx.compose.ui.geometry.Offset(100f, 100f)
+                                                            )
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = "📋",
+                                                        fontSize = 16.sp
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(12.dp))
                                                 Text(
                                                     text = "全部分类",
-                                                    style = MaterialTheme.typography.bodySmall,
+                                                    style = MaterialTheme.typography.bodyMedium,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = NeonCoral,
+                                                    color = Color(0xFFE0E0E0),
                                                     modifier = Modifier.weight(1f)
                                                 )
-                                                Text(
-                                                    text = "${allFences.size} 个",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = Color(0xFFBDBDBD)
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(
-                                                    text = if (isExpanded) "▲" else "▼",
-                                                    fontSize = 14.sp,
-                                                    color = NeonCoral
-                                                )
-                                            }
-                                            if (isExpanded) {
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                                // 在"全部分类"下列出所有分类
-                                                categories.forEach { category ->
-                                                    val fencesInCategory = allFences.filter { it.categoryId == category.id }
-                                                    val categoryExpanded = expandedCategories.contains(category.id)
-                                                    
-                                                    Card(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(vertical = 4.dp, horizontal = 8.dp)
-                                                            .clickable {
-                                                                expandedCategories = if (categoryExpanded) {
-                                                                    expandedCategories - category.id
-                                                                } else {
-                                                                    expandedCategories + category.id
-                                                                }
-                                                            },
-                                                        colors = CardDefaults.cardColors(
-                                                            containerColor = GlassPanelLightRich
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(28.dp)
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(Color(0x332A221C)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    val arrowRotation by animateFloatAsState(
+                                                        targetValue = if (isExpanded) 180f else 0f,
+                                                        animationSpec = tween(
+                                                            durationMillis = 300,
+                                                            easing = FastOutSlowInEasing
                                                         ),
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        elevation = CardDefaults.cardElevation(0.dp)
-                                                    ) {
-                                                        Column(modifier = Modifier.padding(8.dp)) {
-                                                            Row(
-                                                                modifier = Modifier.fillMaxWidth(),
-                                                                verticalAlignment = Alignment.CenterVertically
-                                                            ) {
-                                                                Text(
-                                                                    text = category.icon ?: "📁",
-                                                                    fontSize = 18.sp,
-                                                                    modifier = Modifier.padding(end = 8.dp)
-                                                                )
-                                                                Text(
-                                                                    text = category.name,
-                                                                    style = MaterialTheme.typography.bodySmall,
-                                                                    fontWeight = FontWeight.Medium,
-                                                                    color = Color(0xFFE0E0E0),
-                                                                    modifier = Modifier.weight(1f)
-                                                                )
-                                                                Text(
-                                                                    text = "${fencesInCategory.size} 个",
-                                                                    style = MaterialTheme.typography.labelSmall,
-                                                                    color = Color(0xFFBDBDBD)
-                                                                )
-                                                                Spacer(modifier = Modifier.width(4.dp))
-                                                                Text(
-                                                                    text = if (categoryExpanded) "▲" else "▼",
-                                                                    fontSize = 12.sp,
-                                                                    color = NeonAmber
-                                                                )
-                                                            }
-                                                            if (categoryExpanded) {
-                                                                Spacer(modifier = Modifier.height(6.dp))
-                                                                if (fencesInCategory.isEmpty()) {
+                                                        label = "arrowRotation"
+                                                    )
+                                                    Icon(
+                                                        imageVector = Icons.Default.ExpandMore,
+                                                        contentDescription = if (isExpanded) "收起" else "展开",
+                                                        modifier = Modifier
+                                                            .size(20.dp)
+                                                            .graphicsLayer { rotationZ = arrowRotation },
+                                                        tint = NeonCoral
+                                                    )
+                                                }
+                                            }
+                                            AnimatedVisibility(
+                                                visible = isExpanded,
+                                                enter = fadeIn(animationSpec = tween(200)) + expandVertically(
+                                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                                ),
+                                                exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(
+                                                    animationSpec = tween(200, easing = FastOutSlowInEasing)
+                                                )
+                                            ) {
+                                                Column {
+                                                    Spacer(modifier = Modifier.height(12.dp))
+                                                    // 在"全部分类"下列出所有分类
+                                                    categories.forEach { category ->
+                                                        val fencesInCategory = allFences.filter { it.categoryId == category.id }
+                                                        val categoryExpanded = expandedCategories.contains(category.id)
+
+                                                        Card(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .padding(vertical = 4.dp, horizontal = 8.dp)
+                                                                .clickable {
+                                                                    expandedCategories = if (categoryExpanded) {
+                                                                        expandedCategories - category.id
+                                                                    } else {
+                                                                        expandedCategories + category.id
+                                                                    }
+                                                                },
+                                                            colors = CardDefaults.cardColors(
+                                                                containerColor = GlassPanelLightRich
+                                                            ),
+                                                            shape = RoundedCornerShape(10.dp),
+                                                            elevation = CardDefaults.cardElevation(0.dp)
+                                                        ) {
+                                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                                Row(
+                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                    verticalAlignment = Alignment.CenterVertically
+                                                                ) {
                                                                     Box(
                                                                         modifier = Modifier
-                                                                            .fillMaxWidth()
-                                                                            .padding(8.dp),
+                                                                            .size(28.dp)
+                                                                            .clip(RoundedCornerShape(6.dp))
+                                                                            .background(Color(0x332A221C)),
                                                                         contentAlignment = Alignment.Center
                                                                     ) {
                                                                         Text(
-                                                                            text = "该分类暂无围栏",
-                                                                            style = MaterialTheme.typography.bodySmall,
-                                                                            color = Color(0xFF9E9E9E)
+                                                                            text = category.icon ?: "📁",
+                                                                            fontSize = 16.sp
                                                                         )
                                                                     }
-                                                                } else {
+                                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                                    Text(
+                                                                        text = category.name,
+                                                                        style = MaterialTheme.typography.bodySmall,
+                                                                        fontWeight = FontWeight.Medium,
+                                                                        color = Color(0xFFE0E0E0),
+                                                                        modifier = Modifier.weight(1f)
+                                                                    )
+                                                                    Box(
+                                                                        modifier = Modifier
+                                                                            .size(24.dp)
+                                                                            .clip(RoundedCornerShape(4.dp))
+                                                                            .background(Color(0x332A221C)),
+                                                                        contentAlignment = Alignment.Center
+                                                                    ) {
+                                                                        val arrowRotation by animateFloatAsState(
+                                                                            targetValue = if (categoryExpanded) 180f else 0f,
+                                                                            animationSpec = tween(
+                                                                                durationMillis = 300,
+                                                                                easing = FastOutSlowInEasing
+                                                                            ),
+                                                                            label = "arrowRotation"
+                                                                        )
+                                                                        Icon(
+                                                                            imageVector = Icons.Default.ExpandMore,
+                                                                            contentDescription = if (categoryExpanded) "收起" else "展开",
+                                                                            modifier = Modifier
+                                                                                .size(16.dp)
+                                                                                .graphicsLayer { rotationZ = arrowRotation },
+                                                                            tint = NeonAmber
+                                                                        )
+                                                                    }
+                                                                }
+                                                                AnimatedVisibility(
+                                                                    visible = categoryExpanded,
+                                                                    enter = fadeIn(animationSpec = tween(200)) + expandVertically(
+                                                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                                                    ),
+                                                                    exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(
+                                                                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                                                                    )
+                                                                ) {
                                                                     Column {
-                                                                        fencesInCategory.forEach { fence ->
-                                                                            FenceItemWithMove(
-                                                                                fence = fence,
-                                                                                mainActivity = mainActivity,
-                                                                                onMove = { showMoveFenceDialog = fence },
-                                                                                onDeleteClick = { showDeleteConfirmDialog = it }
-                                                                            )
+                                                                        Spacer(modifier = Modifier.height(8.dp))
+                                                                        if (fencesInCategory.isEmpty()) {
+                                                                            Box(
+                                                                                modifier = Modifier
+                                                                                    .fillMaxWidth()
+                                                                                    .padding(8.dp),
+                                                                                contentAlignment = Alignment.Center
+                                                                            ) {
+                                                                                Text(
+                                                                                    text = "该分类暂无围栏",
+                                                                                    style = MaterialTheme.typography.bodySmall,
+                                                                                    color = Color(0xFF9E9E9E)
+                                                                                )
+                                                                            }
+                                                                        } else {
+                                                                            Column {
+                                                                                fencesInCategory.forEach { fence ->
+                                                                                    FenceItemWithMove(
+                                                                                        fence = fence,
+                                                                                        mainActivity = mainActivity,
+                                                                                        onMove = { showMoveFenceDialog = fence },
+                                                                                        onDeleteClick = { showDeleteConfirmDialog = it }
+                                                                                    )
+                                                                                }
+                                                                            }
                                                                         }
                                                                     }
                                                                 }
@@ -1430,7 +1527,10 @@ fun MainScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         
-                        // 滑动标签切换器
+                        // 滑动标签切换器 - 优化状态管理
+                        val isCircleSelected = selectedFenceType.value == GeoFenceType.CIRCLE
+                        val isPolygonSelected = selectedFenceType.value == GeoFenceType.POLYGON
+                        
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1440,13 +1540,13 @@ fun MainScreen(
                                     shape = RoundedCornerShape(22.dp)
                                 )
                         ) {
-                            // 滑动背景指示器 - 始终可见，只是位置变化
+                            // 滑动背景指示器 - 直接根据状态定位，不使用动画
                             Box(
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .fillMaxWidth(0.5f)
                                     .align(
-                                        if (selectedFenceType.value == GeoFenceType.CIRCLE) 
+                                        if (isCircleSelected) 
                                             Alignment.CenterStart 
                                         else 
                                             Alignment.CenterEnd
@@ -1460,7 +1560,6 @@ fun MainScreen(
                                         ),
                                         shape = RoundedCornerShape(20.dp)
                                     )
-                                    .animateContentSize()
                             )
                             
                             Row(
@@ -1478,11 +1577,11 @@ fun MainScreen(
                                 ) {
                                     Text(
                                         text = "圆形围栏",
-                                        color = if (selectedFenceType.value == GeoFenceType.CIRCLE) 
+                                        color = if (isCircleSelected) 
                                             Color.White 
                                             else 
                                             Color(0xFFBDBDBD),
-                                        fontWeight = if (selectedFenceType.value == GeoFenceType.CIRCLE) 
+                                        fontWeight = if (isCircleSelected) 
                                             FontWeight.Bold 
                                             else 
                                             FontWeight.Normal
@@ -1499,11 +1598,11 @@ fun MainScreen(
                                 ) {
                                     Text(
                                         text = "多边形围栏",
-                                        color = if (selectedFenceType.value == GeoFenceType.POLYGON) 
+                                        color = if (isPolygonSelected) 
                                             Color.White 
                                             else 
                                             Color(0xFFBDBDBD),
-                                        fontWeight = if (selectedFenceType.value == GeoFenceType.POLYGON) 
+                                        fontWeight = if (isPolygonSelected) 
                                             FontWeight.Bold 
                                             else 
                                             FontWeight.Normal
@@ -1514,38 +1613,52 @@ fun MainScreen(
                         
                         Spacer(modifier = Modifier.height(12.dp))
                         
-                        // 半径输入框 - 带透明度动画
-                        AnimatedVisibility(
-                            visible = selectedFenceType.value == GeoFenceType.CIRCLE,
-                            enter = fadeIn() + scaleIn(),
-                            exit = fadeOut() + scaleOut()
+                        // 半径输入框 - 始终存在，使用 alpha 控制可见性
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .alpha(if (selectedFenceType.value == GeoFenceType.CIRCLE) 1f else 0f)
                         ) {
                             GlassTextField(
                                 value = fenceRadius.value.toString(),
-                                onValueChange = { fenceRadius.value = it.toFloatOrNull() ?: 100f },
-                                label = { Text("半径 (米)") }
+                                onValueChange = { 
+                                    fenceRadius.value = it.toFloatOrNull() ?: 100f 
+                                },
+                                label = { Text("半径 (米)") },
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                         
-                        // 绘制按钮 - 带透明度动画
-                        AnimatedVisibility(
-                            visible = selectedFenceType.value == GeoFenceType.POLYGON,
-                            enter = fadeIn() + scaleIn(),
-                            exit = fadeOut() + scaleOut()
+                        // 绘制按钮 - 始终存在，使用 alpha 控制可见性
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .alpha(if (selectedFenceType.value == GeoFenceType.POLYGON) 1f else 0f)
                         ) {
-                            Column {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                GlassButton(
-                                    onClick = { 
-                                        isDrawingFence.value = true
-                                        drawingPoints.clear()
-                                        showGeoFenceDialog.value = false // 关闭对话框，让用户能在地图上点击
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("开始绘制多边形围栏", color = Color.White)
-                                }
+                            GlassButton(
+                                onClick = {
+                                    isDrawingFence.value = true
+                                    drawingPoints.clear()
+                                    showGeoFenceDialog.value = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("开始绘制多边形围栏", color = Color.White)
                             }
+                        }
+                        // 绘制提示 - 始终存在，使用 alpha 控制可见性
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .alpha(if (selectedFenceType.value == GeoFenceType.POLYGON) 1f else 0f)
+                        ) {
+                            Text(
+                                text = "提示：点击地图选点，点会按顺序连接成围栏",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NeonCoral.copy(alpha = 0.8f)
+                            )
                         }
                     }
                 }
@@ -1742,7 +1855,7 @@ fun MainScreen(
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     ResponsiveLabelText(
-                                        text = "显示围栏访问热度，颜色越深越频繁",
+                                        text = "紫色越深表示访问越频繁",
                                         priority = TextPriority.TERTIARY
                                     )
                                 }
@@ -1782,8 +1895,9 @@ fun MainScreen(
                                             id = f.id, name = f.name,
                                             type = com.trackmaster.app.core.GeoFenceType.valueOf(f.type.name),
                                             polygon = if (f.type == com.trackmaster.app.GeoFenceType.CIRCLE) {
+                                                val center = f.center ?: return@mapNotNull null
                                                 com.trackmaster.app.core.GeoMath.circleToPolygon(
-                                                    com.trackmaster.app.core.GeoPoint(f.center!!.latitude, f.center!!.longitude),
+                                                    com.trackmaster.app.core.GeoPoint(center.latitude, center.longitude),
                                                     f.radius?.toDouble() ?: 0.0, 32
                                                 )
                                             } else {

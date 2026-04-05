@@ -64,14 +64,14 @@ class HeatmapOverlay(private val aMap: AMap) {
     }
 
     companion object {
-        /** 将 0..1 映射为冷→暖色 */
+        /** 将 0..1 映射为冷→暖色（紫色系，与红色围栏不冲突） */
         private fun heatColor(ratio: Float): Int {
             val alpha = (80 + 120 * ratio).toInt() // 80~200
             return when {
-                ratio < 0.25f -> AndroidColor.argb(alpha, 66, 165, 245)   // 蓝
-                ratio < 0.5f -> AndroidColor.argb(alpha, 102, 187, 106)   // 绿
-                ratio < 0.75f -> AndroidColor.argb(alpha, 255, 167, 38)   // 橙
-                else -> AndroidColor.argb(alpha, 239, 83, 80)             // 红
+                ratio < 0.25f -> AndroidColor.argb(alpha, 156, 39, 176)   // 浅紫
+                ratio < 0.5f -> AndroidColor.argb(alpha, 142, 36, 170)   // 中紫
+                ratio < 0.75f -> AndroidColor.argb(alpha, 123, 31, 162)   // 深紫
+                else -> AndroidColor.argb(alpha, 74, 20, 140)             // 极深紫
             }
         }
     }

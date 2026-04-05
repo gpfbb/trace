@@ -3,6 +3,9 @@ package com.trackmaster.app.ui.theme
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -15,9 +18,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -195,9 +202,9 @@ fun GlassBottomSheetCard(
     // 平滑动画到目标高度
     val displayHeight by animateDpAsState(
         targetValue = targetHeight,
-        animationSpec = spring(
-            dampingRatio = 0.5f,
-            stiffness = 80f
+        animationSpec = tween(
+            durationMillis = 400,
+            easing = FastOutSlowInEasing
         ),
         label = "sheetHeight"
     )
@@ -266,7 +273,7 @@ fun GlassBottomSheetCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(80.dp)
+                        .height(60.dp)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -276,65 +283,34 @@ fun GlassBottomSheetCard(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    // 点击指示器 - 箭头形式
+                    // 点击指示器 - 使用旋转动画的箭头
+                    val arrowRotation by animateFloatAsState(
+                        targetValue = if (isExpanded) 180f else 0f,
+                        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                        label = "arrowRotation"
+                    )
+
                     Box(
                         modifier = Modifier
-                            .width(60.dp)
-                            .height(30.dp),
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(NeonCoral, NeonAmber),
+                                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                    end = androidx.compose.ui.geometry.Offset(100f, 100f)
+                                )
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
-                        // 使用两个矩形组成箭头形状
-                        if (isExpanded) {
-                            // 展开状态：向下箭头
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                // 箭头顶部
-                                Box(
-                                    modifier = Modifier
-                                        .width(2.dp)
-                                        .height(8.dp)
-                                        .background(
-                                            color = Color(0x80FFFFFF)
-                                        )
-                                )
-                                // 箭头底部（三角形模拟）
-                                Box(
-                                    modifier = Modifier
-                                        .width(12.dp)
-                                        .height(6.dp)
-                                        .background(
-                                            color = Color(0x80FFFFFF),
-                                            shape = RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp)
-                                        )
-                                )
-                            }
-                        } else {
-                            // 收起状态：向上箭头
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                // 箭头底部（三角形模拟）
-                                Box(
-                                    modifier = Modifier
-                                        .width(12.dp)
-                                        .height(6.dp)
-                                        .background(
-                                            color = Color(0x80FFFFFF),
-                                            shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)
-                                        )
-                                )
-                                // 箭头顶部
-                                Box(
-                                    modifier = Modifier
-                                        .width(2.dp)
-                                        .height(8.dp)
-                                        .background(
-                                            color = Color(0x80FFFFFF)
-                                        )
-                                )
-                            }
-                        }
+                        Icon(
+                            imageVector = Icons.Default.ArrowUpward,
+                            contentDescription = if (isExpanded) "收起" else "展开",
+                            modifier = Modifier
+                                .size(24.dp)
+                                .graphicsLayer { rotationZ = arrowRotation },
+                            tint = Color.White
+                        )
                     }
                 }
                 // 内容区域 - 让内容自己处理滚动（如 LazyColumn）
@@ -552,9 +528,7 @@ fun GlassDialog(
             }
         ) {
             GlassCard(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .animateContentSize()
+                modifier = modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth()
