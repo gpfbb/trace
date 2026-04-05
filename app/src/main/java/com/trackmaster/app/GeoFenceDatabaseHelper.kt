@@ -63,6 +63,11 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         private const val KEY_DAILY_LAST_UPDATED = "daily_last_updated"
     }
 
+    override fun onOpen(db: SQLiteDatabase) {
+        super.onOpen(db)
+        db.execSQL("PRAGMA foreign_keys = ON")
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         val createFencesTable = """
             CREATE TABLE $TABLE_FENCES (
@@ -540,8 +545,8 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         )
     }
 
-    fun getAllEvents(): List<GeoFenceEvent> {
-        return getEvents(null, emptyArray(), Int.MAX_VALUE)
+    fun getAllEvents(limit: Int = 10000): List<GeoFenceEvent> {
+        return getEvents(null, emptyArray(), limit)
     }
 
     private fun getEvents(selection: String?, selectionArgs: Array<String>?, limit: Int): List<GeoFenceEvent> {
@@ -712,7 +717,8 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 KEY_FENCE_ID,
                 KEY_FENCE_NAME,
                 "SUM($KEY_DURATION) as total_duration",
-                "COUNT(*) as count"
+                "COUNT(*) as enter_count",
+                "COUNT($KEY_EXIT_TIME) as exit_count"
             ),
             "$KEY_FENCE_ID = ? AND DATE($KEY_ENTER_TIME/1000, 'unixepoch') = ?",
             arrayOf(fenceId, date),
@@ -730,7 +736,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                     fenceName = cursor.getString(1),
                     totalStayDuration = cursor.getLong(2),
                     enterCount = cursor.getInt(3),
-                    exitCount = cursor.getInt(3)
+                    exitCount = cursor.getInt(4)
                 )
             }
         } finally {
@@ -836,7 +842,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         try {
             if (cursor.moveToFirst()) {
                 do {
-                    val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_STAY_ID))
                     val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_ID))
                     val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_NAME))
                     val enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_ENTER_TIME)))
@@ -964,7 +969,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         try {
             if (cursor.moveToFirst()) {
                 do {
-                    val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_STAY_ID))
                     val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_ID))
                     val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_FENCE_NAME))
                     val enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_ENTER_TIME)))

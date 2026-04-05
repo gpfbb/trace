@@ -11,9 +11,10 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * 核心规则：
  * 1. 叶子优先：仅追踪深度最大的命中围栏，父级不参与实时计时
- * 2. 漂移过滤：accuracy > threshold 的定位点被丢弃
- * 3. 智能降频：通过 SmartScheduler 自适应定位频率
- * 4. 所有计算使用事件 timestamp，不用 System.currentTimeMillis()
+ * 2. 嵌套识别：同时识别并返回所有命中的围栏（包括父级和叶子）
+ * 3. 漂移过滤：accuracy > threshold 的定位点被丢弃
+ * 4. 智能降频：通过 SmartScheduler 自适应定位频率
+ * 5. 所有计算使用事件 timestamp，不用 System.currentTimeMillis()
  */
 class Engine(
     fences: List<Geofence>,
@@ -25,9 +26,14 @@ class Engine(
     private val scheduler = SmartScheduler(fences, throttleConfig)
     private val fenceMap: Map<String, Geofence>
     private val leafFences: List<Geofence>
+    private val allFences: List<Geofence>
 
     /** 当前命中的叶子围栏 ID */
     @Volatile var currentLeafId: String? = null
+        private set
+
+    /** 当前所有命中的围栏 ID 列表（按深度排序，最深在前） */
+    @Volatile var currentMatchedFenceIds: List<String> = emptyList()
         private set
 
     /** 当前活跃 Segment 的进入时间戳（事件时间） */
@@ -40,6 +46,7 @@ class Engine(
         val tree = buildFenceTree(fences)
         fenceMap = tree.fenceMap
         leafFences = tree.leavesByDepth
+        allFences = fences
     }
 
     // ============================================================
@@ -67,8 +74,9 @@ class Engine(
      * 流程：
      * 1. SmartScheduler 评估是否应处理
      * 2. 漂移过滤（双重保险）
-     * 3. BBox 快速排除 → 精确命中叶子围栏
-     * 4. 状态转移 → 生成 StaySegment
+     * 3. BBox 快速排除 → 精确命中所有围栏（包括嵌套的父级和子级）
+     * 4. 更新当前命中的所有围栏列表
+     * 5. 状态转移 → 生成 StaySegment
      *
      * @return 生成的 StaySegment（如有），或 null
      */
@@ -83,12 +91,18 @@ class Engine(
         // 2. 漂移过滤
         if (fix.accuracy > 50f) return null
 
-        // 3. 查找最深命中的叶子围栏
-        val matched = findDeepestMatch(fix)
+        // 3. 查找所有命中的围栏（包括嵌套的父级和子级）
+        val allMatched = findAllMatchedFences(fix)
+        
+        // 4. 更新当前命中的所有围栏列表（按深度降序排列）
+        currentMatchedFenceIds = allMatched.map { it.id }
+        
+        // 5. 找出最深的叶子围栏用于计时
+        val deepest = allMatched.maxByOrNull { it.depth }
 
-        // 4. 状态转移
-        if (matched?.id != currentLeafId) {
-            return transition(matched?.id, fix.timestamp)
+        // 6. 状态转移
+        if (deepest?.id != currentLeafId) {
+            return transition(deepest?.id, fix.timestamp)
         }
         return null
     }
@@ -146,6 +160,25 @@ class Engine(
     // ============================================================
     // 内部
     // ============================================================
+
+    /** 
+     * BBox 快速排除 → 精确 point-in-polygon，返回所有命中的围栏
+     * 包括嵌套的父级和子级围栏，按面积升序排列（面积最小的在前）
+     */
+    private fun findAllMatchedFences(fix: LocationFix): List<Geofence> {
+        val matched = mutableListOf<Geofence>()
+
+        for (fence in allFences) {
+            val bbox = fence.bbox ?: continue
+            if (!GeoMath.pointInBBox(fix.lat, fix.lng, bbox)) continue
+            if (GeoMath.pointInFence(GeoPoint(fix.lat, fix.lng), fence)) {
+                matched.add(fence)
+            }
+        }
+        
+        // 按面积升序排列（面积最小的在前，优先识别小围栏）
+        return matched.sortedBy { GeoMath.calculateFenceArea(it) }
+    }
 
     /** BBox 快速排除 → 精确 point-in-polygon，返回最深叶子 */
     private fun findDeepestMatch(fix: LocationFix): Geofence? {

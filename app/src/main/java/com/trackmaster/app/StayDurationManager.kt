@@ -69,6 +69,20 @@ class StayDurationManager(private val context: Context) {
 
         val enterDateKey = session.dateKey
         val exitDateKey = getDateKey(exitTime)
+        val totalDuration = (exitTime.time - session.enterTime.time) / 1000
+
+        // 保存停留记录到数据库
+        if (totalDuration > 0) {
+            val stayRecord = FenceStayRecord(
+                fenceId = fenceId,
+                fenceName = fenceName,
+                enterTime = session.enterTime,
+                exitTime = exitTime,
+                durationSeconds = totalDuration
+            )
+            dbHelper.insertStayRecord(stayRecord)
+            Log.d(TAG, "保存停留记录: $fenceName, 时长=${totalDuration}秒")
+        }
 
         if (enterDateKey == exitDateKey) {
             val duration = (exitTime.time - session.enterTime.time) / 1000

@@ -16,7 +16,12 @@ import com.trackmaster.app.core.LocationFix
 import com.trackmaster.app.services.Aggregator
 import com.trackmaster.app.storage.Repository
 import com.trackmaster.app.storage.SqliteStorageAdapter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.Date
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 class TrackMasterApplication : Application() {
 
@@ -56,11 +61,14 @@ class TrackMasterApplication : Application() {
     private var locationService: GeoFenceLocationService? = null
     private var serviceBound = false
 
-    val geoFences = mutableListOf<GeoFence>()
-    val categories = mutableListOf<Category>()
-    val fenceEnterTimes = mutableMapOf<String, Date>()
-    val fenceStayRecords = mutableListOf<FenceStayRecord>()
-    val geoFenceEvents = mutableListOf<GeoFenceEvent>()
+    val geoFences = CopyOnWriteArrayList<GeoFence>()
+    val categories = CopyOnWriteArrayList<Category>()
+    val fenceEnterTimes = ConcurrentHashMap<String, Date>()
+    val fenceStayRecords = CopyOnWriteArrayList<FenceStayRecord>()
+    val geoFenceEvents = CopyOnWriteArrayList<GeoFenceEvent>()
+    
+    /** 当前所有命中的围栏列表（包括嵌套的父级和子级，按深度排序） */
+    val currentMatchedFences = CopyOnWriteArrayList<GeoFence>()
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -146,6 +154,8 @@ class TrackMasterApplication : Application() {
 
     fun getLocationService(): GeoFenceLocationService? = locationService
 
+    private val appScope = CoroutineScope(Dispatchers.IO)
+
     fun checkGeoFences(location: AMapLocation) {
         val fix = LocationFix(
             lat = location.latitude,
@@ -154,28 +164,100 @@ class TrackMasterApplication : Application() {
             timestamp = location.time,
         )
 
-        val closedSeg = kotlinx.coroutines.runBlocking {
-            engine.onLocationUpdate(fix)
-        }
+        appScope.launch {
+            val closedSeg = engine.onLocationUpdate(fix)
 
-        if (closedSeg != null) {
-            val fenceName = geoFences.find { it.id == closedSeg.leafGeofenceId }?.name ?: closedSeg.leafGeofenceId
-            if (engine.currentLeafId != null) {
-                // 围栏切换：退出旧 → 进入新
+            // 处理离开的围栏（如果有）
+            if (closedSeg != null) {
+                val fenceName = geoFences.find { it.id == closedSeg.leafGeofenceId }?.name ?: closedSeg.leafGeofenceId
                 Log.d(TAG, "离开围栏: $fenceName")
-                fenceEnterTimes.remove(closedSeg.leafGeofenceId)
-            } else {
-                // 完全离开所有围栏
-                Log.d(TAG, "离开围栏: $fenceName")
+                
+                // 记录退出事件
+                recordFenceEvent(
+                    fenceId = closedSeg.leafGeofenceId,
+                    fenceName = fenceName,
+                    action = GeoFenceAction.EXIT,
+                    location = location
+                )
+                
+                // 停止该围栏的计时
+                stayDurationManager.onFenceExit(closedSeg.leafGeofenceId, fenceName, Date(location.time))
                 fenceEnterTimes.remove(closedSeg.leafGeofenceId)
             }
-            val enterFenceId = engine.currentLeafId
-            if (enterFenceId != null) {
-                val enterFenceName = geoFences.find { it.id == enterFenceId }?.name ?: enterFenceId
-                fenceEnterTimes[enterFenceId] = Date(location.time)
-                Log.d(TAG, "进入围栏: $enterFenceName")
+
+            // 处理所有当前命中的围栏（支持嵌套围栏）
+            val allMatchedFenceIds = engine.currentMatchedFenceIds
+            if (allMatchedFenceIds.isNotEmpty()) {
+                Log.d(TAG, "当前所在围栏层级: ${allMatchedFenceIds.size}个 - ${allMatchedFenceIds.joinToString(", ")}")
+                
+                // 记录所有命中的围栏（用于UI显示）
+                currentMatchedFences.clear()
+                for (fenceId in allMatchedFenceIds) {
+                    val fence = geoFences.find { it.id == fenceId }
+                    if (fence != null) {
+                        currentMatchedFences.add(fence)
+                    }
+                }
+                
+                // 处理每个围栏的进入事件（只有面积最小的围栏用于计时）
+                val smallestFenceId = allMatchedFenceIds.firstOrNull() // 已按面积排序，第一个是最小的
+                for (fenceId in allMatchedFenceIds) {
+                    val fence = geoFences.find { it.id == fenceId }
+                    val fenceName = fence?.name ?: fenceId
+                    
+                    // 检查是否已经在该围栏中（避免重复记录）
+                    if (!fenceEnterTimes.containsKey(fenceId)) {
+                        Log.d(TAG, "进入围栏: $fenceName")
+                        
+                        // 记录进入事件
+                        recordFenceEvent(
+                            fenceId = fenceId,
+                            fenceName = fenceName,
+                            action = GeoFenceAction.ENTER,
+                            location = location
+                        )
+                        
+                        // 只有面积最小的围栏开始计时
+                        if (fenceId == smallestFenceId) {
+                            stayDurationManager.onFenceEnter(fenceId, fenceName, Date(location.time))
+                        }
+                        
+                        fenceEnterTimes[fenceId] = Date(location.time)
+                    }
+                }
+            } else {
+                // 清空当前命中的围栏列表
+                currentMatchedFences.clear()
             }
         }
+    }
+
+    /**
+     * 记录围栏事件到数据库
+     */
+    private fun recordFenceEvent(
+        fenceId: String,
+        fenceName: String,
+        action: GeoFenceAction,
+        location: AMapLocation
+    ) {
+        val event = GeoFenceEvent(
+            fenceId = fenceId,
+            fenceName = fenceName,
+            action = action,
+            time = Date(location.time),
+            latitude = location.latitude,
+            longitude = location.longitude,
+            accuracy = location.accuracy
+        )
+        
+        // 添加到内存列表
+        geoFenceEvents.add(event)
+        
+        // 保存到数据库
+        dbHelper.insertEvent(event)
+        
+        Log.d(TAG, "记录围栏事件: ${action.name} - $fenceName")
     }
 
     /** 刷新引擎围栏数据（围栏增删后调用） */
@@ -183,7 +265,7 @@ class TrackMasterApplication : Application() {
         val coreFences = fenceTreeManager.loadFenceTree(geoFences)
         engine = Engine(coreFences, repository)
         aggregator = Aggregator(coreFences, repository)
-        kotlinx.coroutines.runBlocking { engine.init() }
+        appScope.launch { engine.init() }
     }
 
 }

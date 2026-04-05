@@ -19,13 +19,15 @@ import com.amap.api.location.AMapLocationClient
 import com.amap.api.location.AMapLocationClientOption
 import com.amap.api.location.AMapLocationListener
 import java.util.Date
+import java.util.concurrent.CopyOnWriteArrayList
 
 data class LocationServiceState(
     val isRunning: Boolean = false,
     val schedulerLevel: Int = 0,
     val lastLocation: AMapLocation? = null,
     val lastUpdateTime: Date? = null,
-    val locationCount: Int = 0
+    val locationCount: Int = 0,
+    val isFirstLocation: Boolean = true
 )
 
 class GeoFenceLocationService : Service(), AMapLocationListener {
@@ -35,12 +37,13 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "geofence_location_channel"
         private const val CHANNEL_NAME = "地理围栏定位服务"
+        private const val FIRST_LOCATION_TIMEOUT = 10000L // 首次定位超时10秒
     }
 
     private val binder = LocalBinder()
     private var locationClient: AMapLocationClient? = null
     private var locationOption: AMapLocationClientOption? = null
-    private val stateListeners = mutableListOf<(LocationServiceState) -> Unit>()
+    private val stateListeners = CopyOnWriteArrayList<(LocationServiceState) -> Unit>()
 
     private var serviceState = LocationServiceState()
         set(value) {
@@ -75,13 +78,21 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
         }
-        registerReceiver(screenReceiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(screenReceiver, filter)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "定位服务启动")
-        startForeground(NOTIFICATION_ID, createNotification())
-        startLocation()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        } else {
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
+        startLocationWithFastFirst()
         return START_STICKY
     }
 
@@ -122,9 +133,13 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val locationText = serviceState.lastLocation?.let {
+            "定位中... 精度${it.accuracy.toInt()}米"
+        } ?: "正在获取位置..."
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("地理围栏正在运行")
-            .setContentText("后台监测中...")
+            .setContentText(locationText)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -132,17 +147,35 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             .build()
     }
 
+    private fun updateNotification() {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, createNotification())
+    }
+
     private fun initLocationClient() {
         try {
             locationClient = AMapLocationClient(applicationContext)
             locationClient?.setLocationListener(this)
-            updateLocationOptions()
         } catch (e: Exception) {
             Log.e(TAG, "初始化定位客户端失败", e)
         }
     }
 
-    private fun updateLocationOptions(intervalMs: Long = 5_000L) {
+    private fun updateLocationOptionsForFastFirst() {
+        locationOption = AMapLocationClientOption().apply {
+            // 优先使用网络定位，加快首次定位速度
+            locationMode = AMapLocationClientOption.AMapLocationMode.Battery_Saving
+            isOnceLocation = true
+            isNeedAddress = false // 首次定位不需要地址信息，加快速度
+            isWifiScan = true
+            isSensorEnable = false // 首次定位不需要传感器
+            httpTimeOut = FIRST_LOCATION_TIMEOUT
+        }
+        locationClient?.setLocationOption(locationOption)
+        Log.d(TAG, "配置快速首次定位模式")
+    }
+
+    private fun updateLocationOptionsForContinuous(intervalMs: Long = 5000L) {
         locationOption = AMapLocationClientOption().apply {
             locationPurpose = AMapLocationClientOption.AMapLocationPurpose.Transport
             locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
@@ -150,11 +183,28 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             isNeedAddress = true
             isWifiScan = true
             isSensorEnable = true
-
             interval = intervalMs
-            Log.d(TAG, "定位间隔设置为: ${intervalMs}ms")
         }
         locationClient?.setLocationOption(locationOption)
+        Log.d(TAG, "配置连续定位模式，间隔: ${intervalMs}ms")
+    }
+
+    /**
+     * 启动快速首次定位，成功后切换到连续定位
+     */
+    private fun startLocationWithFastFirst() {
+        try {
+            serviceState = serviceState.copy(isRunning = true, isFirstLocation = true)
+            
+            // 先使用快速模式获取首次定位
+            updateLocationOptionsForFastFirst()
+            locationClient?.startLocation()
+            Log.d(TAG, "启动快速首次定位")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "启动定位失败", e)
+            serviceState = serviceState.copy(isRunning = false)
+        }
     }
 
     /** 设置电源模式（转发给 Engine） */
@@ -171,13 +221,15 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         stateListeners.remove(listener)
     }
 
-    private fun startLocation() {
+    private fun startContinuousLocation() {
         try {
+            locationClient?.stopLocation()
+            updateLocationOptionsForContinuous(5000L)
             locationClient?.startLocation()
-            serviceState = serviceState.copy(isRunning = true)
-            Log.d(TAG, "定位已启动")
+            serviceState = serviceState.copy(isFirstLocation = false)
+            Log.d(TAG, "切换到连续定位模式")
         } catch (e: Exception) {
-            Log.e(TAG, "启动定位失败", e)
+            Log.e(TAG, "启动连续定位失败", e)
         }
     }
 
@@ -195,11 +247,17 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         location ?: return
 
         if (location.errorCode != 0) {
-            Log.e(TAG, "定位错误: ${location.errorInfo}")
+            Log.e(TAG, "定位错误: ${location.errorInfo}, 错误码: ${location.errorCode}")
+            // 首次定位失败，尝试切换到连续定位
+            if (serviceState.isFirstLocation) {
+                Log.d(TAG, "首次定位失败，切换到连续定位模式")
+                startContinuousLocation()
+            }
             return
         }
 
-        Log.d(TAG, "定位更新: 精度=${location.accuracy}m, 速度=${location.speed}m/s")
+        Log.d(TAG, "定位成功: 精度=${location.accuracy}m, 速度=${location.speed}m/s, " +
+                "来源=${if (location.locationType == 1) "GPS" else if (location.locationType == 2) "前次" else "网络"}")
 
         serviceState = serviceState.copy(
             lastLocation = location,
@@ -207,7 +265,32 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             locationCount = serviceState.locationCount + 1
         )
 
-        // 围栏检测委托给 Engine（通过 TrackMasterApplication.checkGeoFences）
+        // 更新通知显示最新位置信息
+        updateNotification()
+
+        // 如果是首次定位成功，切换到连续定位模式
+        if (serviceState.isFirstLocation) {
+            Log.d(TAG, "首次定位成功，准备切换到连续定位")
+            // 延迟1秒后切换，让用户看到首次定位结果
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                startContinuousLocation()
+            }, 1000)
+        }
+
+        // 围栏检测委托给 Engine
         (application as? TrackMasterApplication)?.checkGeoFences(location)
+    }
+
+    /**
+     * 强制刷新位置 - 供UI调用
+     */
+    fun refreshLocation() {
+        try {
+            locationClient?.stopLocation()
+            locationClient?.startLocation()
+            Log.d(TAG, "手动刷新位置")
+        } catch (e: Exception) {
+            Log.e(TAG, "刷新位置失败", e)
+        }
     }
 }

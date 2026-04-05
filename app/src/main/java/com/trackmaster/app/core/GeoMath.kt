@@ -79,6 +79,8 @@ object GeoMath {
                 center.lng + dLng * cos(angle),
             ))
         }
+        // 闭合多边形：首尾相连
+        points.add(points[0])
         return points
     }
 
@@ -124,6 +126,43 @@ object GeoMath {
                 pointInPolygon(point.lat, point.lng, fence.polygon)
             }
         }
+    }
+
+    /** 计算围栏面积（平方米） */
+    fun calculateFenceArea(fence: Geofence): Double {
+        return when (fence.type) {
+            GeoFenceType.CIRCLE -> {
+                val r = fence.radius ?: 0.0
+                Math.PI * r * r
+            }
+            GeoFenceType.POLYGON -> {
+                calculatePolygonArea(fence.polygon)
+            }
+        }
+    }
+
+    /** 计算多边形面积（平方米），使用 shoelace 公式 */
+    private fun calculatePolygonArea(polygon: List<GeoPoint>): Double {
+        if (polygon.size < 3) return 0.0
+
+        var area = 0.0
+        val n = polygon.size
+
+        for (i in 0 until n) {
+            val j = (i + 1) % n
+            val p1 = polygon[i]
+            val p2 = polygon[j]
+
+            val midLat = (p1.lat + p2.lat) / 2
+            val latRad = midLat * DEG
+
+            val dLng = (p2.lng - p1.lng) * DEG
+            val dLat = (p2.lat - p1.lat) * DEG
+
+            area += dLng * EARTH_R * EARTH_R * cos(latRad)
+        }
+
+        return Math.abs(area) / 2
     }
 
     // ============================================================

@@ -33,8 +33,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.amap.api.location.AMapLocation
 import com.amap.api.location.AMapLocationClient
-import com.amap.api.location.AMapLocationClientOption
-import com.amap.api.location.AMapLocationListener
 import com.amap.api.maps.AMap
 import com.amap.api.maps.AMapOptions
 import com.amap.api.maps.CameraUpdateFactory
@@ -113,9 +111,8 @@ data class DailyFenceStats(
     val exitCount: Int
 )
 
-class MainActivity : ComponentActivity(), AMapLocationListener {
+class MainActivity : ComponentActivity() {
 
-    private var locationClient: AMapLocationClient? = null
     private val geoFences = mutableStateListOf<GeoFence>()
     private var aMap: AMap? = null
     private lateinit var dbHelper: GeoFenceDatabaseHelper
@@ -175,10 +172,6 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
 
         AMapLocationClient.updatePrivacyShow(activityContext, true, true)
         AMapLocationClient.updatePrivacyAgree(activityContext, true)
-        // 使用硬编码的 API Key 进行测试
-        AMapLocationClient.setApiKey("de0019af032b8f64f337ce0004d78bf1")
-
-        initLocationClient()
 
         setContent {
             TrackMasterTheme {
@@ -193,30 +186,8 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         requestLocationPermission()
     }
 
-    private fun initLocationClient() {
-        try {
-            Log.d("TrackMaster", "创建定位客户端")
-            locationClient = AMapLocationClient(applicationContext)
-            locationClient?.setLocationListener(this)
-
-            val option = AMapLocationClientOption()
-            option.locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
-            option.interval = 2000
-            option.isNeedAddress = true
-            option.isOnceLocation = false
-            option.httpTimeOut = 30000
-            locationClient?.setLocationOption(option)
-
-            Log.d("TrackMaster", "定位客户端初始化完成")
-        } catch (e: Exception) {
-            Log.e("TrackMaster", "初始化定位客户端失败", e)
-            locationStatus.value = "初始化失败"
-            locationError.value = e.message
-        }
-    }
-
     private fun requestLocationPermission() {
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             Log.d("TrackMaster", "请求定位权限")
             locationStatus.value = "请求权限中..."
             locationPermissionLauncher.launch(
@@ -231,15 +202,21 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         }
     }
 
+    private var locationServiceListener: ((LocationServiceState) -> Unit)? = null
+
     private fun startLocation() {
         try {
             Log.d("TrackMaster", "启动定位服务")
-            locationStatus.value = "正在获取位置..."
+            locationStatus.value = "正在启动定位服务..."
             locationError.value = null
-            locationClient?.startLocation()
-            
+
             val app = application as TrackMasterApplication
             app.startLocationService()
+
+            // 延迟一点时间来等待服务绑定，然后添加监听器
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                setupLocationServiceListener()
+            }, 500)
         } catch (e: Exception) {
             Log.e("TrackMaster", "启动定位失败", e)
             locationStatus.value = "启动失败"
@@ -247,50 +224,57 @@ class MainActivity : ComponentActivity(), AMapLocationListener {
         }
     }
 
-    override fun onLocationChanged(location: AMapLocation?) {
-        if (location == null) {
-            Log.e("TrackMaster", "onLocationChanged: location is null")
-            return
-        }
+    private fun setupLocationServiceListener() {
+        val app = application as TrackMasterApplication
+        val service = app.getLocationService()
 
-        Log.d("TrackMaster", """
-            收到位置更新:
-            - errorCode: ${location.errorCode}
-            - errorInfo: ${location.errorInfo}
-            - 经度: ${location.longitude}
-            - 纬度: ${location.latitude}
-            - 精度: ${location.accuracy}米
-            - 地址: ${location.address}
-        """.trimIndent())
+        if (service != null) {
+            // 移除之前的监听器
+            locationServiceListener?.let { service.removeStateListener(it) }
 
-        if (location.errorCode == 0) {
-            currentLocation.value = location
-            locationStatus.value = "定位成功"
-            locationError.value = null
-            
-            // 围栏检测由 GeoFenceLocationService → TrackMasterApplication.checkGeoFences() 统一处理
-            // 此处不再重复调用，避免双重事件记录
+            // 创建新的监听器
+            locationServiceListener = { state ->
+                runOnUiThread {
+                    // 更新当前位置
+                    state.lastLocation?.let { location ->
+                        currentLocation.value = location
+
+                        // 更新状态文本
+                        val statusText = when {
+                            state.isFirstLocation -> "首次定位中..."
+                            state.locationCount == 0 -> "正在获取位置..."
+                            else -> "定位成功 (${state.locationCount}次更新)"
+                        }
+                        locationStatus.value = statusText
+                    }
+
+                    // 如果服务未运行，显示错误
+                    if (!state.isRunning) {
+                        locationStatus.value = "定位服务已停止"
+                    }
+                }
+            }
+
+            // 添加监听器
+            locationServiceListener?.let { service.addStateListener(it) }
+            Log.d("TrackMaster", "已设置定位服务状态监听")
         } else {
-            locationStatus.value = "定位失败"
-            locationError.value = "${location.errorInfo} (错误码: ${location.errorCode})"
-            Log.e("TrackMaster", "定位错误: ${location.errorInfo}, 错误码: ${location.errorCode}")
+            Log.w("TrackMaster", "定位服务尚未绑定，稍后重试")
+            // 服务可能还在绑定中，稍后重试
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                setupLocationServiceListener()
+            }, 1000)
         }
     }
 
     override fun onDestroy() {
-        locationClient?.stopLocation()
-        locationClient?.onDestroy()
         super.onDestroy()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        locationClient?.startLocation()
-    }
-
-    override fun onPause() {
-        locationClient?.stopLocation()
-        super.onPause()
+        // 移除定位服务监听器
+        val app = application as TrackMasterApplication
+        val service = app.getLocationService()
+        locationServiceListener?.let { listener ->
+            service?.removeStateListener(listener)
+        }
     }
 
     // 从数据库加载围栏
@@ -1618,7 +1602,7 @@ fun MainScreen(
                                                     f.radius?.toDouble() ?: 0.0, 32
                                                 )
                                             } else {
-                                                f.points!!.map { com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude) }
+                                                f.points?.map { com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude) } ?: emptyList()
                                             }
                                         )
                                     } catch (_: Exception) { null }

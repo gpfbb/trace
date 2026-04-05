@@ -142,10 +142,13 @@ class SmartScheduler(
     fun evaluate(fix: LocationFix, accel: AccelerometerData? = null): ScheduleDecision {
         val ts = fix.timestamp
 
-        // ---- 性能模式：不降频 ----
+        // ---- 性能模式：不降频（但仍更新状态，避免切换模式时使用陈旧数据） ----
         if (mode == PowerMode.PERFORMANCE) {
             lastProcessedTs = ts
             lastPoint = GeoPoint(fix.lat, fix.lng)
+            stationarySinceTs = 0L
+            accumulatedStationaryMs = 0L
+            level = 0
             return ScheduleDecision(
                 shouldProcess = true,
                 level = 0,
