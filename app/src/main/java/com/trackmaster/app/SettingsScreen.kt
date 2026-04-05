@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.trackmaster.app.core.PowerMode
@@ -24,9 +23,9 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.trackmaster.app.ui.theme.*
 
 @Composable
 fun SettingsScreen(
@@ -42,17 +41,18 @@ fun SettingsScreen(
         permissionStatus = permissionManager.checkPermissions()
     }
 
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "设置",
+                    tint = NeonCoral,
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("应用设置", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text("应用设置", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = NeonCoral)
             }
         },
         text = {
@@ -70,7 +70,7 @@ fun SettingsScreen(
                     }
                 )
 
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0x30FFFFFF))
 
                 LocationModeSection(
                     selectedMode = selectedMode,
@@ -82,7 +82,7 @@ fun SettingsScreen(
                     }
                 )
 
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0x30FFFFFF))
 
                 if (onOpenDataManagement != null) {
                     Card(
@@ -90,8 +90,10 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .clickable { onOpenDataManagement() },
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                        )
+                            containerColor = Color(0x4D000000)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(0.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -102,7 +104,7 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = "数据管理",
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = NeonCoral,
                                 modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
@@ -110,32 +112,33 @@ fun SettingsScreen(
                                 Text(
                                     "数据与日志管理",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
+                                    fontSize = 16.sp,
+                                    color = Color(0xFFE0E0E0)
                                 )
                                 Text(
                                     "导出、导入或删除历史数据",
                                     fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color(0xFFBDBDBD)
                                 )
                             }
                             Text(
                                 ">",
                                 fontSize = 20.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = Color(0xFFBDBDBD),
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
-                    HorizontalDivider()
+                    HorizontalDivider(color = Color(0x30FFFFFF))
                 }
 
                 InfoSection()
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) {
-                Text("关闭")
+            GlassButton(onClick = onDismiss) {
+                Text("关闭", color = Color.White)
             }
         }
     )
@@ -166,7 +169,8 @@ fun PermissionSection(
         Text(
             "权限管理",
             fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            fontSize = 16.sp,
+            color = NeonCoral
         )
 
         PermissionItem(
@@ -213,14 +217,16 @@ fun PermissionSection(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
+                    containerColor = Color(0x4DFF5252)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(0.dp)
             ) {
                 Box(modifier = Modifier.padding(16.dp)) {
                     Text(
                         "⚠️ 部分权限未授予，地理围栏功能可能无法正常工作。请点击上述按钮授予必要权限。",
                         fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                        color = Color(0xFFFFCDD2)
                     )
                 }
             }
@@ -238,11 +244,13 @@ fun PermissionItem(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isGranted) 
-                MaterialTheme.colorScheme.primaryContainer 
-            else 
-                MaterialTheme.colorScheme.surfaceVariant
-        )
+            containerColor = if (isGranted)
+                Color(0x33FF7F50)
+            else
+                Color(0x4D2A221C)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Row(
             modifier = Modifier
@@ -254,12 +262,13 @@ fun PermissionItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFE0E0E0)
                 )
                 Text(
                     text = description,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color(0xFFBDBDBD)
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -267,12 +276,12 @@ fun PermissionItem(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = "已授予",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = Success,
                     modifier = Modifier.size(28.dp)
                 )
             } else {
-                Button(onClick = onGrantClick) {
-                    Text("去设置")
+                GlassButton(onClick = onGrantClick) {
+                    Text("去设置", color = Color.White)
                 }
             }
         }
@@ -288,7 +297,8 @@ fun LocationModeSection(
         Text(
             "定位模式",
             fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            fontSize = 16.sp,
+            color = NeonCoral
         )
 
         LocationModeItem(
@@ -325,14 +335,16 @@ fun LocationModeItem(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick,
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) 
-                MaterialTheme.colorScheme.primaryContainer 
-            else 
-                MaterialTheme.colorScheme.surface
+            containerColor = if (isSelected)
+                Color(0x4DFF7F50)
+            else
+                Color(0x4D2A221C)
         ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp),
         border = if (isSelected) androidx.compose.foundation.BorderStroke(
             2.dp,
-            MaterialTheme.colorScheme.primary
+            NeonCoral
         ) else null
     ) {
         Row(
@@ -344,17 +356,19 @@ fun LocationModeItem(
         ) {
             RadioButton(
                 selected = isSelected,
-                onClick = onClick
+                onClick = onClick,
+                colors = RadioButtonDefaults.colors(selectedColor = NeonCoral)
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFE0E0E0)
                 )
                 Text(
                     text = description,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color(0xFFBDBDBD),
                     lineHeight = 16.sp
                 )
             }
@@ -368,7 +382,8 @@ fun InfoSection() {
         Text(
             "使用说明",
             fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            fontSize = 16.sp,
+            color = NeonCoral
         )
         Text(
             "1. 请授予所有必要权限以确保功能正常运行\n" +
@@ -376,7 +391,7 @@ fun InfoSection() {
                     "3. 可根据实际需求选择合适的定位模式\n" +
                     "4. 省电模式适合长时间使用，性能模式适合需要高精确度的场景",
             fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = Color(0xFFBDBDBD),
             lineHeight = 18.sp
         )
     }

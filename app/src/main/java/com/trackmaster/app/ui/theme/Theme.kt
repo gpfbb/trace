@@ -1,19 +1,12 @@
 package com.trackmaster.app.ui.theme
 
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+// 新复古液态玻璃拟态主题的主题色定义
+// 颜色引用自Color.kt以避免重复声明
+val Primary = NeonCoral
+val Accent = NeonAmber
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
-
-val Primary = Color(0xFF2196F3)
-val PrimaryDark = Color(0xFF1976D2)
-val Accent = Color(0xFF4CAF50)
-val Success = Color(0xFF4CAF50)
-val Warning = Color(0xFFFF9800)
-val Danger = Color(0xFFF44336)
-val Info = Color(0xFF03A9F4)
+// 玻璃效果参数
+val GlassBlurRadius = 20.dp
+val GlassSaturation = 1.8f

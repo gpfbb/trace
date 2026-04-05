@@ -1,10 +1,12 @@
 package com.trackmaster.app
 
-import androidx.compose.foundation.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Add
@@ -12,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,6 +29,7 @@ import java.io.InputStream
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import com.trackmaster.app.ui.theme.*
 
 @Composable
 fun DataManagementScreen(
@@ -99,13 +103,14 @@ fun DataManagementScreen(
         refreshData()
     }
     
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
                 "数据与日志管理",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = NeonCoral
             )
         },
         text = {
@@ -120,7 +125,7 @@ fun DataManagementScreen(
                     storageInfo = storageInfo
                 )
                 
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0x30FFFFFF))
                 
                 ExportSection(
                     onExportAll = {
@@ -136,7 +141,7 @@ fun DataManagementScreen(
                     importMessage = importMessage
                 )
                 
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0x30FFFFFF))
                 
                 DeleteSection(
                     onDeleteAll = {
@@ -144,7 +149,7 @@ fun DataManagementScreen(
                     }
                 )
                 
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0x30FFFFFF))
                 
                 ExportedFilesSection(
                     files = exportFiles,
@@ -185,8 +190,8 @@ fun DataManagementScreen(
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) {
-                Text("关闭")
+            GlassButton(onClick = onDismiss) {
+                Text("关闭", color = Color.White)
             }
         }
     )
@@ -250,18 +255,19 @@ fun DataManagementScreen(
     }
     
     if (showSuccessDialog) {
-        AlertDialog(
+        GlassDialog(
             onDismissRequest = { showSuccessDialog = false },
-            title = { Text("操作完成") },
+            title = { Text("操作完成", color = NeonCoral) },
             text = { 
                 Text(
                     successMessage,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFFE0E0E0)
                 )
             },
             confirmButton = {
-                Button(onClick = { showSuccessDialog = false }) {
-                    Text("确定")
+                GlassButton(onClick = { showSuccessDialog = false }) {
+                    Text("确定", color = Color.White)
                 }
             }
         )
@@ -273,8 +279,10 @@ fun StorageInfoCard(storageInfo: StorageInfo) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+            containerColor = Color(0x4D000000)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -283,7 +291,8 @@ fun StorageInfoCard(storageInfo: StorageInfo) {
             Text(
                 "存储状态",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = NeonCoral
             )
             
             Row(
@@ -326,12 +335,12 @@ fun StorageStatItem(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            color = NeonCoral
         )
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = Color(0xFFBDBDBD)
         )
     }
 }
@@ -352,15 +361,18 @@ fun ExportSection(
         Text(
             "数据导出与导入",
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            color = NeonCoral
         )
         
         if (isExporting) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                )
+                    containerColor = Color(0x33FF7F50)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(0.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -368,12 +380,13 @@ fun ExportSection(
                 ) {
                     LinearProgressIndicator(
                         progress = { exportProgress / 100f },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        color = NeonCoral
                     )
                     Text(
                         text = exportMessage,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFFE0E0E0)
                     )
                 }
             }
@@ -381,20 +394,23 @@ fun ExportSection(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-                )
+                    containerColor = Color(0x33FFBF00)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(0.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        color = NeonAmber
                     )
                     Text(
                         text = importMessage,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFFE0E0E0)
                     )
                 }
             }
@@ -403,27 +419,24 @@ fun ExportSection(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(
+                GlassButton(
                     onClick = onExportAll,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("导出")
+                    Text("导出", color = Color.White)
                 }
-                Button(
+                GlassButton(
                     onClick = onImportFile,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
+                    modifier = Modifier.weight(1f)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
+                        tint = Color.White
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("选择文件")
+                    Text("选择文件", color = Color.White)
                 }
             }
         }
@@ -463,18 +476,15 @@ fun DeleteSection(
         Text(
             "数据删除",
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            color = NeonCoral
         )
         
-        Button(
+        GlassButton(
             onClick = onDeleteAll,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer
-            )
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("删除历史数据")
+            Text("删除历史数据", color = Color.White)
         }
     }
 }
@@ -491,14 +501,15 @@ fun ExportedFilesSection(
         Text(
             "已导出文件（点击文件名导入）",
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            color = NeonCoral
         )
         
         if (files.isEmpty()) {
             Text(
                 "暂无导出文件",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Color(0xFFBDBDBD)
             )
         } else {
             files.take(5).forEach { file ->
@@ -525,8 +536,10 @@ fun FileItem(
             .fillMaxWidth()
             .clickable { onImport() },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
+            containerColor = Color(0x4D2A221C)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Row(
             modifier = Modifier
@@ -542,17 +555,18 @@ fun FileItem(
                 Text(
                     text = file.name,
                     style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFE0E0E0)
                 )
                 Text(
                     text = "${dateFormat.format(Date(file.lastModified()))} · ${file.length() / 1024} KB",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color(0xFFBDBDBD)
                 )
                 Text(
                     text = "点击导入",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
+                    color = NeonCoral
                 )
             }
             
@@ -560,7 +574,7 @@ fun FileItem(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "删除文件",
-                    tint = MaterialTheme.colorScheme.error
+                    tint = Danger
                 )
             }
         }
@@ -576,9 +590,9 @@ fun ExportOptionsDialog(
     var useBeforeDate by remember { mutableStateOf(false) }
     var beforeDate by remember { mutableStateOf(Date()) }
     
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("导出选项") },
+        title = { Text("导出选项", color = NeonCoral) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -591,9 +605,10 @@ fun ExportOptionsDialog(
                         onCheckedChange = { 
                             exportAll = it
                             if (it) useBeforeDate = false
-                        }
+                        },
+                        colors = CheckboxDefaults.colors(checkedColor = NeonCoral)
                     )
-                    Text("导出全部数据")
+                    Text("导出全部数据", color = Color(0xFFE0E0E0))
                 }
                 
                 if (!exportAll) {
@@ -602,15 +617,16 @@ fun ExportOptionsDialog(
                     ) {
                         Checkbox(
                             checked = useBeforeDate,
-                            onCheckedChange = { useBeforeDate = it }
+                            onCheckedChange = { useBeforeDate = it },
+                            colors = CheckboxDefaults.colors(checkedColor = NeonCoral)
                         )
-                        Text("导出指定日期之前的数据")
+                        Text("导出指定日期之前的数据", color = Color(0xFFE0E0E0))
                     }
                 }
             }
         },
         confirmButton = {
-            Button(
+            GlassButton(
                 onClick = {
                     val options = DataExportOptions(
                         exportAll = exportAll,
@@ -619,12 +635,12 @@ fun ExportOptionsDialog(
                     onConfirm(options)
                 }
             ) {
-                Text("开始导出")
+                Text("开始导出", color = Color.White)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+            GlassButton(onClick = onDismiss) {
+                Text("取消", color = Color.White)
             }
         }
     )
@@ -642,16 +658,16 @@ fun DeleteOptionsDialog(
     calendar.add(Calendar.MONTH, -1)
     val oneMonthAgo = calendar.time
     
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("删除选项") },
+        title = { Text("删除选项", color = NeonCoral) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
                     "警告：删除操作不可恢复！",
-                    color = MaterialTheme.colorScheme.error,
+                    color = Danger,
                     fontWeight = FontWeight.Bold
                 )
                 
@@ -663,9 +679,10 @@ fun DeleteOptionsDialog(
                         onCheckedChange = { 
                             deleteAll = it
                             if (it) deleteBefore = false
-                        }
+                        },
+                        colors = CheckboxDefaults.colors(checkedColor = NeonCoral)
                     )
-                    Text("删除全部历史数据")
+                    Text("删除全部历史数据", color = Color(0xFFE0E0E0))
                 }
                 
                 Row(
@@ -676,14 +693,15 @@ fun DeleteOptionsDialog(
                         onCheckedChange = { 
                             deleteBefore = it
                             if (it) deleteAll = false
-                        }
+                        },
+                        colors = CheckboxDefaults.colors(checkedColor = NeonCoral)
                     )
-                    Text("删除1个月前的数据")
+                    Text("删除1个月前的数据", color = Color(0xFFE0E0E0))
                 }
             }
         },
         confirmButton = {
-            Button(
+            GlassButton(
                 onClick = {
                     val before = when {
                         deleteAll -> null
@@ -691,18 +709,14 @@ fun DeleteOptionsDialog(
                         else -> null
                     }
                     onConfirm(before)
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                )
+                }
             ) {
-                Text("确认删除")
+                Text("确认删除", color = Color.White)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+            GlassButton(onClick = onDismiss) {
+                Text("取消", color = Color.White)
             }
         }
     )

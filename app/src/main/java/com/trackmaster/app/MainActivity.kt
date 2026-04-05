@@ -58,7 +58,7 @@ import com.amap.api.maps.model.MarkerOptions
 import com.amap.api.maps.model.MyLocationStyle
 import com.amap.api.maps.model.Polygon
 import com.amap.api.maps.model.PolygonOptions
-import com.trackmaster.app.ui.theme.TrackMasterTheme
+import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.ui.HeatmapOverlay
 import android.content.SharedPreferences
 import java.util.*
@@ -691,24 +691,38 @@ fun AMapView(
 fun RadioButtonWithLabel(
     selected: Boolean,
     label: String,
+    description: String? = null,
     onSelected: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 8.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
             .clickable { onSelected() },
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = selected,
-            onClick = onSelected
+            onClick = onSelected,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = NeonCoral,
+                unselectedColor = TextSecondary
+            )
         )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(start = 8.dp)
-        )
+        Column(modifier = Modifier.padding(start = 10.dp)) {
+            ResponsiveSubtitleText(
+                text = label,
+                priority = if (selected) TextPriority.PRIMARY else TextPriority.SECONDARY,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+            )
+            if (description != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                ResponsiveLabelText(
+                    text = description,
+                    priority = TextPriority.TERTIARY
+                )
+            }
+        }
     }
 }
 
@@ -755,9 +769,14 @@ fun FenceItem(fence: GeoFence, mainActivity: MainActivity) {
                 }
                 IconButton(
                     onClick = { mainActivity.deleteGeoFence(fence.id) },
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    Text("×", color = MaterialTheme.colorScheme.error)
+                    Icon(
+                        Icons.Default.DeleteForever,
+                        contentDescription = "删除围栏",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
             }
             Text(
@@ -788,34 +807,29 @@ fun FenceItemWithMove(
             animationSpec = tween(300)
         )
     ) {
-        Card(
+        GlassCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp, horizontal = 4.dp)
+                .padding(vertical = 6.dp, horizontal = 6.dp)
                 .clickable {
                     mainActivity.highlightGeoFence(fence.id)
-                },
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-            ),
-            shape = RoundedCornerShape(6.dp),
-            elevation = CardDefaults.cardElevation(1.dp)
+                }
         ) {
-            Column(modifier = Modifier.padding(8.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
+                    ResponsiveSubtitleText(
                         text = fence.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
+                        priority = TextPriority.PRIMARY,
+                        fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
-                    Badge(
+                    GlassBadge(
                         containerColor = when (fence.type) {
-                            GeoFenceType.CIRCLE -> MaterialTheme.colorScheme.primary
-                            GeoFenceType.POLYGON -> MaterialTheme.colorScheme.secondary
+                            GeoFenceType.CIRCLE -> NeonCoral
+                            GeoFenceType.POLYGON -> NeonAmber
                         }
                     ) {
                         Text(
@@ -824,36 +838,46 @@ fun FenceItemWithMove(
                                 GeoFenceType.POLYGON -> "多边形"
                             },
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(
-                        onClick = onMove,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.SwapHoriz, 
-                            contentDescription = "移动围栏",
-                            tint = MaterialTheme.colorScheme.primary
+                            color = if (fence.type == GeoFenceType.POLYGON) Color.Black else Color.White,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = { onDeleteClick(fence) },
-                        modifier = Modifier.size(28.dp)
+                    
+                    // 移动围栏按钮 - 使用更直观的图标
+                    GlassFloatingActionButton(
+                        onClick = onMove,
+                        modifier = Modifier.size(48.dp),
+                        containerColor = NeonCoral.copy(alpha = 0.4f)
                     ) {
                         Icon(
-                            Icons.Default.Delete, 
+                            Icons.Default.EditLocation, 
+                            contentDescription = "移动/编辑围栏",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    // 删除围栏按钮 - 使用更鲜明的红色
+                    GlassFloatingActionButton(
+                        onClick = { onDeleteClick(fence) },
+                        modifier = Modifier.size(48.dp),
+                        containerColor = Danger.copy(alpha = 0.4f)
+                    ) {
+                        Icon(
+                            Icons.Default.DeleteForever, 
                             contentDescription = "删除围栏",
-                            tint = MaterialTheme.colorScheme.error
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 }
-                Text(
+                Spacer(modifier = Modifier.height(6.dp))
+                ResponsiveLabelText(
                     text = "创建时间: ${fence.createdAt}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    priority = TextPriority.TERTIARY,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
@@ -931,14 +955,170 @@ fun MainScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        floatingActionButton = {
+    val isBottomSheetExpanded = remember { mutableStateOf(false) }
+    
+    // 全屏一体化布局
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // 地图作为全屏底色 (z-index: 1)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (isBottomSheetExpanded.value) {
+                        Modifier.blur(radius = 8.dp)
+                    } else {
+                        Modifier
+                    }
+                )
+        ) {
+            AMapView(
+                currentLocation = currentLocation,
+                isDrawingMode = isDrawingFence.value,
+                drawingPoints = drawingPoints.toList(),
+                onMapClick = { latLng ->
+                    if (isDrawingFence.value) {
+                        drawingPoints.add(GeoFencePoint(latLng.latitude, latLng.longitude))
+                    }
+                }
+            )
+            // 深色叠加层，让地图更安静
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(color = Color(0x33000000)) // rgba(0, 0, 0, 0.2)
+            )
+        }
+
+        // SnackbarHost
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = if (isBottomSheetExpanded.value) 400.dp else 200.dp)
+        )
+
+        // 顶部悬浮卡片 (z-index: 10)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .align(Alignment.TopCenter)
+        ) {
+            GlassTopCard {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "轨迹大师",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = NeonCoral,
+                            modifier = Modifier.weight(1f)
+                        )
+                        
+                        // 添加分类按钮 - 始终显示，使用图标 + 文字
+                        GlassButton(
+                            onClick = { showCategoryManagerDialog.value = true },
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "添加分类",
+                                    fontSize = 12.sp,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        GlassBadge(
+                            containerColor = when {
+                                locationStatus.contains("成功") -> Success
+                                locationStatus.contains("失败") || locationStatus.contains("拒绝") -> Danger
+                                else -> Color(0xFF757575)
+                            }
+                        ) {
+                            Text(
+                                text = locationStatus,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp)) // 增加间距
+
+                    if (currentLocation != null && currentLocation.errorCode == 0) {
+                        Text(
+                            text = "经纬度: ${String.format("%.6f", currentLocation.longitude)}, ${String.format("%.6f", currentLocation.latitude)} | 精度: ${currentLocation.accuracy.toInt()}m",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NeonCoral.copy(alpha = 0.9f)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+
+                    // 显示当前在哪些围栏内
+                    val currentFences = mainActivity.getCurrentFences()
+                    if (currentFences.isNotEmpty()) {
+                        Text(
+                            text = "当前在: ${currentFences.joinToString { it.name }}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NeonAmber.copy(alpha = 0.9f),
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+
+                    // 显示绘制状态
+                    if (isDrawingFence.value) {
+                        Text(
+                            text = "绘制模式: ${drawingPoints.size}/3 点",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Info,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+
+                    if (locationError != null) {
+                        Text(
+                            text = locationError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Danger
+                        )
+                    }
+                }
+            }
+        }
+
+        // 右侧浮动操作按钮 (z-index: 15)
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 10.dp, bottom = 180.dp)
+        ) {
             if (isDrawingFence.value) {
-                // 绘制模式下的按钮
                 Column {
-                    FloatingActionButton(
+                    GlassFloatingActionButton(
                         onClick = {
                             if (drawingPoints.size >= 3) {
                                 if (fenceName.value.isNotEmpty()) {
@@ -946,271 +1126,95 @@ fun MainScreen(
                                         name = fenceName.value,
                                         points = drawingPoints.toList()
                                     )
-                                    mainActivity.clearDrawingMarkers() // 清除临时标记
+                                    mainActivity.clearDrawingMarkers()
                                     isDrawingFence.value = false
                                     drawingPoints.clear()
                                     fenceName.value = ""
                                 } else {
-                                    // 显示一个简单的提示，要求输入围栏名称
                                     showGeoFenceDialog.value = true
                                 }
                             }
                         },
-                        containerColor = MaterialTheme.colorScheme.primary
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = "完成")
+                        Icon(Icons.Default.Check, contentDescription = "完成", tint = Color.Black, modifier = Modifier.size(20.dp))
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    FloatingActionButton(
+                    GlassFloatingActionButton(
                         onClick = {
-                            mainActivity.clearDrawingMarkers() // 清除临时标记
+                            mainActivity.clearDrawingMarkers()
                             isDrawingFence.value = false
                             drawingPoints.clear()
                         },
-                        containerColor = MaterialTheme.colorScheme.error
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "取消", tint = androidx.compose.ui.graphics.Color.White)
+                        Icon(Icons.Default.Close, contentDescription = "取消", tint = Color.Black, modifier = Modifier.size(20.dp))
                     }
                 }
             } else {
-                // 正常模式下的可收起菜单
                 Column {
-                    if (isMenuExpanded.value) {
-                        // 展开状态下的按钮
-                        FloatingActionButton(
-                            onClick = { showGeoFenceDialog.value = true },
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "添加围栏")
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FloatingActionButton(
-                            onClick = { showClearConfirmation.value = true },
-                            containerColor = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "删除所有")
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FloatingActionButton(
-                            onClick = { showLayerDialog.value = true },
-                            containerColor = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(Icons.Default.Layers, contentDescription = "图层设置")
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FloatingActionButton(
-                            onClick = { showHistoryDialog.value = true },
-                            containerColor = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(Icons.Default.History, contentDescription = "历史记录")
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FloatingActionButton(
-                            onClick = { showSettingsDialog.value = true },
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "设置")
+                    AnimatedVisibility(
+                        visible = isMenuExpanded.value,
+                        enter = fadeIn(animationSpec = tween(200)) + scaleIn(initialScale = 0.85f),
+                        exit = fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.85f)
+                    ) {
+                        Column {
+                            GlassFloatingActionButton(
+                                onClick = { showGeoFenceDialog.value = true },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "添加围栏", tint = Color.Black, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            GlassFloatingActionButton(
+                                onClick = { showLayerDialog.value = true },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(Icons.Default.Layers, contentDescription = "图层", tint = Color.Black, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            GlassFloatingActionButton(
+                                onClick = { showHistoryDialog.value = true },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(Icons.Default.History, contentDescription = "历史", tint = Color.Black, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            GlassFloatingActionButton(
+                                onClick = { showSettingsDialog.value = true },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(Icons.Default.Settings, contentDescription = "设置", tint = Color.Black, modifier = Modifier.size(20.dp))
+                            }
                         }
                     }
-                    // 主按钮
-                    FloatingActionButton(
+                    Spacer(modifier = Modifier.height(8.dp))
+                    GlassFloatingActionButton(
                         onClick = { isMenuExpanded.value = !isMenuExpanded.value },
-                        containerColor = if (isMenuExpanded.value) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                        modifier = Modifier.size(50.dp)
                     ) {
                         Icon(
                             if (isMenuExpanded.value) Icons.Default.ExpandLess else Icons.Default.Menu,
-                            contentDescription = if (isMenuExpanded.value) "收起菜单" else "展开菜单"
+                            contentDescription = if (isMenuExpanded.value) "收起" else "菜单",
+                            tint = Color.Black,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
             }
         }
-    ) {
+
+        // 底部一体化悬浮卡片 (z-index: 10)
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(it),
-            contentAlignment = Alignment.TopCenter
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp)
-                        .shadow(elevation = 4.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(if (isSmallScreen) 8.dp else 12.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = if (isSmallScreen) 4.dp else 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "轨迹大师",
-                                style = if (isSmallScreen) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            
-                            if (!isSmallScreen) {
-                                Button(
-                                    onClick = { showCategoryManagerDialog.value = true },
-                                    modifier = Modifier.height(36.dp)
-                                ) {
-                                    Text("添加分类", fontSize = 12.sp)
-                                }
-                                
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-
-                            Badge(
-                                containerColor = when {
-                                    locationStatus.contains("成功") -> MaterialTheme.colorScheme.primary
-                                    locationStatus.contains("失败") || locationStatus.contains("拒绝") -> MaterialTheme.colorScheme.error
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            ) {
-                                Text(
-                                    text = locationStatus,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
-                        }
-
-                        if (locationError != null) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f))
-                                    .padding(8.dp)
-                                    .border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                            ) {
-                                Text(
-                                    text = locationError,
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-
-                        if (currentLocation != null && currentLocation.errorCode == 0) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))
-                                    .padding(8.dp)
-                                    .border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                            ) {
-                                Text(
-                                    text = "经纬度: ${String.format("%.6f", currentLocation.longitude)}, ${String.format("%.6f", currentLocation.latitude)} | 精度: ${currentLocation.accuracy.toInt()}m",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-
-                        // 显示当前在哪些围栏内
-                        val currentFences = mainActivity.getCurrentFences()
-                        if (currentFences.isNotEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f))
-                                    .padding(8.dp)
-                                    .border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                            ) {
-                                Text(
-                                    text = "当前在围栏内: ${currentFences.joinToString { it.name }}",
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-
-                        // 显示绘制状态
-                        if (isDrawingFence.value) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f))
-                                    .padding(8.dp)
-                                    .border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                            ) {
-                                Text(
-                                    text = "绘制模式：已点击 ${drawingPoints.size} 个点（至少需要3个点）",
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    AMapView(
-                        currentLocation = currentLocation,
-                        isDrawingMode = isDrawingFence.value,
-                        drawingPoints = drawingPoints.toList(),
-                        onMapClick = { latLng ->
-                            if (isDrawingFence.value) {
-                                drawingPoints.add(GeoFencePoint(latLng.latitude, latLng.longitude))
-                            }
-                        }
-                    )
-                }
-
-                // 地理围栏列表（分类展示）
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp)
-                        .heightIn(
-                            min = if (isSmallScreen) 80.dp else 100.dp,
-                            max = (screenHeightDp * if (isLargeScreen) 0.45 else 0.4).dp
-                        )
-                        .shadow(elevation = 4.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
+            GlassBottomSheetCard(
+                isExpanded = isBottomSheetExpanded.value,
+                onExpandChange = { isBottomSheetExpanded.value = it },
+                peekHeight = 0.15f
+            ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1220,7 +1224,7 @@ fun MainScreen(
                                 text = "地理围栏",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = NeonCoral
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
@@ -1238,10 +1242,10 @@ fun MainScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(20.dp)
-                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                                    .background(GlassPanelRich)
                                     .border(
                                         width = 1.dp,
-                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                        color = GlassBorder,
                                         shape = RoundedCornerShape(8.dp)
                                     ),
                                 contentAlignment = Alignment.Center
@@ -1249,7 +1253,7 @@ fun MainScreen(
                                 Text(
                                     text = "暂无围栏",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color(0xFFBDBDBD)
                                 )
                             }
                         } else {
@@ -1270,10 +1274,10 @@ fun MainScreen(
                                                 }
                                             },
                                         colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                            containerColor = GlassPanelRich
                                         ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        elevation = CardDefaults.cardElevation(2.dp)
+                                        shape = RoundedCornerShape(10.dp),
+                                        elevation = CardDefaults.cardElevation(0.dp)
                                     ) {
                                         Column(modifier = Modifier.padding(10.dp)) {
                                             Row(
@@ -1284,18 +1288,19 @@ fun MainScreen(
                                                     text = "全部分类",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary,
+                                                    color = NeonCoral,
                                                     modifier = Modifier.weight(1f)
                                                 )
                                                 Text(
                                                     text = "${allFences.size} 个",
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    color = Color(0xFFBDBDBD)
                                                 )
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
                                                     text = if (isExpanded) "▲" else "▼",
-                                                    fontSize = 14.sp
+                                                    fontSize = 14.sp,
+                                                    color = NeonCoral
                                                 )
                                             }
                                             if (isExpanded) {
@@ -1317,10 +1322,10 @@ fun MainScreen(
                                                                 }
                                                             },
                                                         colors = CardDefaults.cardColors(
-                                                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                                                            containerColor = GlassPanelLightRich
                                                         ),
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        elevation = CardDefaults.cardElevation(1.dp)
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        elevation = CardDefaults.cardElevation(0.dp)
                                                     ) {
                                                         Column(modifier = Modifier.padding(8.dp)) {
                                                             Row(
@@ -1336,18 +1341,19 @@ fun MainScreen(
                                                                     text = category.name,
                                                                     style = MaterialTheme.typography.bodySmall,
                                                                     fontWeight = FontWeight.Medium,
-                                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                                    color = Color(0xFFE0E0E0),
                                                                     modifier = Modifier.weight(1f)
                                                                 )
                                                                 Text(
                                                                     text = "${fencesInCategory.size} 个",
                                                                     style = MaterialTheme.typography.labelSmall,
-                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                    color = Color(0xFFBDBDBD)
                                                                 )
                                                                 Spacer(modifier = Modifier.width(4.dp))
                                                                 Text(
                                                                     text = if (categoryExpanded) "▲" else "▼",
-                                                                    fontSize = 12.sp
+                                                                    fontSize = 12.sp,
+                                                                    color = NeonAmber
                                                                 )
                                                             }
                                                             if (categoryExpanded) {
@@ -1362,7 +1368,7 @@ fun MainScreen(
                                                                         Text(
                                                                             text = "该分类暂无围栏",
                                                                             style = MaterialTheme.typography.bodySmall,
-                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                            color = Color(0xFF9E9E9E)
                                                                         )
                                                                     }
                                                                 } else {
@@ -1388,14 +1394,13 @@ fun MainScreen(
                             }
                         }
                     }
-                }
             }
         }
     }
 
     // 创建地理围栏对话框
     if (showGeoFenceDialog.value) {
-        AlertDialog(
+        GlassDialog(
             onDismissRequest = { 
                 showGeoFenceDialog.value = false
                 if (!isDrawingFence.value) {
@@ -1409,55 +1414,137 @@ fun MainScreen(
                         Text(
                             text = "已点击 ${drawingPoints.size} 个点（至少需要3个点）",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = NeonCoral
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
+                        GlassTextField(
                             value = fenceName.value,
                             onValueChange = { fenceName.value = it },
-                            label = { Text("围栏名称") },
-                            modifier = Modifier.fillMaxWidth()
+                            label = { Text("围栏名称") }
                         )
                     } else {
-                        OutlinedTextField(
+                        GlassTextField(
                             value = fenceName.value,
                             onValueChange = { fenceName.value = it },
-                            label = { Text("围栏名称") },
-                            modifier = Modifier.fillMaxWidth()
+                            label = { Text("围栏名称") }
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row {
-                            RadioButton(
-                                selected = selectedFenceType.value == GeoFenceType.CIRCLE,
-                                onClick = { selectedFenceType.value = GeoFenceType.CIRCLE }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // 滑动标签切换器
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .background(
+                                    color = Color(0x4D2A221C),
+                                    shape = RoundedCornerShape(22.dp)
+                                )
+                        ) {
+                            // 滑动背景指示器 - 始终可见，只是位置变化
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(0.5f)
+                                    .align(
+                                        if (selectedFenceType.value == GeoFenceType.CIRCLE) 
+                                            Alignment.CenterStart 
+                                        else 
+                                            Alignment.CenterEnd
+                                    )
+                                    .padding(2.dp)
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(NeonCoral, NeonAmber),
+                                            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                            end = androidx.compose.ui.geometry.Offset(100f, 100f)
+                                        ),
+                                        shape = RoundedCornerShape(20.dp)
+                                    )
+                                    .animateContentSize()
                             )
-                            Text("圆形围栏")
-                            Spacer(modifier = Modifier.width(16.dp))
-                            RadioButton(
-                                selected = selectedFenceType.value == GeoFenceType.POLYGON,
-                                onClick = { selectedFenceType.value = GeoFenceType.POLYGON }
-                            )
-                            Text("多边形围栏")
+                            
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clickable {
+                                            selectedFenceType.value = GeoFenceType.CIRCLE
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "圆形围栏",
+                                        color = if (selectedFenceType.value == GeoFenceType.CIRCLE) 
+                                            Color.White 
+                                            else 
+                                            Color(0xFFBDBDBD),
+                                        fontWeight = if (selectedFenceType.value == GeoFenceType.CIRCLE) 
+                                            FontWeight.Bold 
+                                            else 
+                                            FontWeight.Normal
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clickable {
+                                            selectedFenceType.value = GeoFenceType.POLYGON
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "多边形围栏",
+                                        color = if (selectedFenceType.value == GeoFenceType.POLYGON) 
+                                            Color.White 
+                                            else 
+                                            Color(0xFFBDBDBD),
+                                        fontWeight = if (selectedFenceType.value == GeoFenceType.POLYGON) 
+                                            FontWeight.Bold 
+                                            else 
+                                            FontWeight.Normal
+                                    )
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (selectedFenceType.value == GeoFenceType.CIRCLE) {
-                            OutlinedTextField(
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // 半径输入框 - 带透明度动画
+                        AnimatedVisibility(
+                            visible = selectedFenceType.value == GeoFenceType.CIRCLE,
+                            enter = fadeIn() + scaleIn(),
+                            exit = fadeOut() + scaleOut()
+                        ) {
+                            GlassTextField(
                                 value = fenceRadius.value.toString(),
                                 onValueChange = { fenceRadius.value = it.toFloatOrNull() ?: 100f },
-                                label = { Text("半径 (米)") },
-                                modifier = Modifier.fillMaxWidth()
+                                label = { Text("半径 (米)") }
                             )
                         }
-                        if (selectedFenceType.value == GeoFenceType.POLYGON) {
-                            Button(
-                                onClick = { 
-                                    isDrawingFence.value = true
-                                    drawingPoints.clear()
-                                    showGeoFenceDialog.value = false // 关闭对话框，让用户能在地图上点击
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("开始绘制多边形围栏")
+                        
+                        // 绘制按钮 - 带透明度动画
+                        AnimatedVisibility(
+                            visible = selectedFenceType.value == GeoFenceType.POLYGON,
+                            enter = fadeIn() + scaleIn(),
+                            exit = fadeOut() + scaleOut()
+                        ) {
+                            Column {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                GlassButton(
+                                    onClick = { 
+                                        isDrawingFence.value = true
+                                        drawingPoints.clear()
+                                        showGeoFenceDialog.value = false // 关闭对话框，让用户能在地图上点击
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("开始绘制多边形围栏", color = Color.White)
+                                }
                             }
                         }
                     }
@@ -1465,7 +1552,7 @@ fun MainScreen(
             },
             confirmButton = {
                 if (isDrawingFence.value) {
-                    Button(onClick = {
+                    GlassButton(onClick = {
                         if (drawingPoints.size >= 3 && fenceName.value.isNotEmpty()) {
                             mainActivity.createPolygonGeoFence(
                                 name = fenceName.value,
@@ -1484,10 +1571,10 @@ fun MainScreen(
                             }
                         }
                     }) {
-                        Text("完成")
+                        Text("完成", color = Color.White)
                     }
                 } else if (selectedFenceType.value == GeoFenceType.CIRCLE) {
-                    Button(onClick = {
+                    GlassButton(onClick = {
                         if (fenceName.value.isNotEmpty() && currentLocation != null) {
                             mainActivity.createCircleGeoFence(
                                 name = fenceName.value,
@@ -1505,31 +1592,31 @@ fun MainScreen(
                             }
                         }
                     }) {
-                        Text("创建")
+                        Text("创建", color = Color.White)
                     }
                 } else {
-                    Button(onClick = {
+                    GlassButton(onClick = {
                         showGeoFenceDialog.value = false
                     }) {
-                        Text("关闭")
+                        Text("关闭", color = Color.White)
                     }
                 }
             },
             dismissButton = {
                 if (isDrawingFence.value) {
-                    Button(onClick = {
+                    GlassButton(onClick = {
                         mainActivity.clearDrawingMarkers() // 清除临时标记
                         showGeoFenceDialog.value = false
                         isDrawingFence.value = false
                         drawingPoints.clear()
                     }) {
-                        Text("取消")
+                        Text("取消", color = Color.White)
                     }
                 } else {
-                    Button(onClick = {
+                    GlassButton(onClick = {
                         showGeoFenceDialog.value = false
                     }) {
-                        Text("取消")
+                        Text("取消", color = Color.White)
                     }
                 }
             }
@@ -1541,67 +1628,141 @@ fun MainScreen(
         val mapType = remember { mutableStateOf(mainActivity.getSavedMapType()) }
         val showTraffic = remember { mutableStateOf(mainActivity.getSavedTrafficEnabled()) }
         
-        AlertDialog(
+        GlassDialog(
             onDismissRequest = { showLayerDialog.value = false },
-            title = { Text("选择地图图层") },
+            title = { 
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Layers, contentDescription = "图层", tint = NeonCoral)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    ResponsiveTitleText(text = "选择地图图层", priority = TextPriority.PRIMARY)
+                }
+            },
             text = {
-                Column {
-                    RadioButtonWithLabel(
-                        selected = mapType.value == AMap.MAP_TYPE_NORMAL,
-                        label = "白昼地图",
-                        onSelected = { mapType.value = AMap.MAP_TYPE_NORMAL }
-                    )
-                    RadioButtonWithLabel(
-                        selected = mapType.value == AMap.MAP_TYPE_NIGHT,
-                        label = "夜景地图",
-                        onSelected = { mapType.value = AMap.MAP_TYPE_NIGHT }
-                    )
-                    RadioButtonWithLabel(
-                        selected = mapType.value == AMap.MAP_TYPE_SATELLITE,
-                        label = "卫星地图",
-                        onSelected = { mapType.value = AMap.MAP_TYPE_SATELLITE }
-                    )
-                    RadioButtonWithLabel(
-                        selected = mapType.value == AMap.MAP_TYPE_NAVI,
-                        label = "导航地图",
-                        onSelected = { mapType.value = AMap.MAP_TYPE_NAVI }
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // 地图类型选择
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = "路况图层",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = showTraffic.value,
-                            onCheckedChange = { showTraffic.value = it }
-                        )
+                        Column {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Map, contentDescription = "地图", tint = NeonCoral)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                ResponsiveSubtitleText(text = "地图类型", priority = TextPriority.ACCENT, fontWeight = FontWeight.Bold)
+                            }
+                            
+                            RadioButtonWithLabel(
+                                selected = mapType.value == AMap.MAP_TYPE_NORMAL,
+                                label = "白昼地图",
+                                description = "标准矢量地图，适合日间使用",
+                                onSelected = { mapType.value = AMap.MAP_TYPE_NORMAL }
+                            )
+                            RadioButtonWithLabel(
+                                selected = mapType.value == AMap.MAP_TYPE_NIGHT,
+                                label = "夜景地图",
+                                description = "深色地图，保护夜间视力",
+                                onSelected = { mapType.value = AMap.MAP_TYPE_NIGHT }
+                            )
+                            RadioButtonWithLabel(
+                                selected = mapType.value == AMap.MAP_TYPE_SATELLITE,
+                                label = "卫星地图",
+                                description = "真实卫星影像，查看地表细节",
+                                onSelected = { mapType.value = AMap.MAP_TYPE_SATELLITE }
+                            )
+                            RadioButtonWithLabel(
+                                selected = mapType.value == AMap.MAP_TYPE_NAVI,
+                                label = "导航地图",
+                                description = "简化地图，专注导航信息",
+                                onSelected = { mapType.value = AMap.MAP_TYPE_NAVI }
+                            )
+                        }
                     }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // 高级图层开关
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = "热力图",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = heatmapEnabled.value,
-                            onCheckedChange = { heatmapEnabled.value = it }
-                        )
+                        Column {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Tune, contentDescription = "高级", tint = NeonAmber)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                ResponsiveSubtitleText(text = "高级图层", priority = TextPriority.PRIMARY, fontWeight = FontWeight.Bold)
+                            }
+                            
+                            // 路况图层
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Traffic, contentDescription = "路况", tint = NeonCoral)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        ResponsiveSubtitleText(text = "路况图层", priority = TextPriority.PRIMARY)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    ResponsiveLabelText(
+                                        text = "实时显示道路交通拥堵情况",
+                                        priority = TextPriority.TERTIARY
+                                    )
+                                }
+                                Switch(
+                                    checked = showTraffic.value,
+                                    onCheckedChange = { showTraffic.value = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = NeonCoral,
+                                        checkedTrackColor = NeonCoral.copy(alpha = 0.5f),
+                                        uncheckedThumbColor = TextSecondary,
+                                        uncheckedTrackColor = TextTertiary.copy(alpha = 0.3f)
+                                    )
+                                )
+                            }
+                            
+                            // 热力图层
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Whatshot, contentDescription = "热力图", tint = Danger)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        ResponsiveSubtitleText(text = "热力图", priority = TextPriority.PRIMARY)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    ResponsiveLabelText(
+                                        text = "显示围栏访问热度，颜色越深越频繁",
+                                        priority = TextPriority.TERTIARY
+                                    )
+                                }
+                                Switch(
+                                    checked = heatmapEnabled.value,
+                                    onCheckedChange = { heatmapEnabled.value = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Danger,
+                                        checkedTrackColor = Danger.copy(alpha = 0.5f),
+                                        uncheckedThumbColor = TextSecondary,
+                                        uncheckedTrackColor = TextTertiary.copy(alpha = 0.3f)
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
             },
             confirmButton = {
-                Button(onClick = {
+                GlassButton(onClick = {
                     // 应用图层设置
                     val aMap = mainActivity.getCurrentMap()
                     mainActivity.setMapType(aMap, mapType.value)
@@ -1638,14 +1799,14 @@ fun MainScreen(
                     }
                     showLayerDialog.value = false
                 }) {
-                    Text("确定")
+                    Text("确定", color = Color.White)
                 }
             },
             dismissButton = {
-                Button(onClick = {
+                GlassButton(onClick = {
                     showLayerDialog.value = false
                 }) {
-                    Text("取消")
+                    Text("取消", color = Color.White)
                 }
             }
         )
@@ -1653,11 +1814,11 @@ fun MainScreen(
 
     // 删除确认对话框
     if (showClearConfirmation.value) {
-        AlertDialog(
+        GlassDialog(
             onDismissRequest = { showClearConfirmation.value = false },
             title = { 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Warning, contentDescription = "警告", tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Warning, contentDescription = "警告", tint = Danger)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("警告")
                 }
@@ -1670,19 +1831,18 @@ fun MainScreen(
                 }
             },
             confirmButton = {
-                Button(
+                GlassButton(
                     onClick = { 
                         showClearConfirmation.value = false 
                         mainActivity.clearAllGeoFences() 
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    }
                 ) {
-                    Text("确认删除")
+                    Text("确认删除", color = Color.White)
                 }
             },
             dismissButton = {
-                Button(onClick = { showClearConfirmation.value = false }) {
-                    Text("取消")
+                GlassButton(onClick = { showClearConfirmation.value = false }) {
+                    Text("取消", color = Color.White)
                 }
             }
         )
@@ -1750,14 +1910,14 @@ fun MainScreen(
 
     // 删除围栏确认对话框
     showDeleteConfirmDialog?.let { fence ->
-        AlertDialog(
+        GlassDialog(
             onDismissRequest = { showDeleteConfirmDialog = null },
             title = { Text("删除围栏") },
             text = {
                 Text("确定要删除「${fence.name}」吗？")
             },
             confirmButton = {
-                Button(
+                GlassButton(
                     onClick = {
                         val fenceNameToDelete = fence.name
                         mainActivity.deleteGeoFence(fence.id)
@@ -1770,17 +1930,14 @@ fun MainScreen(
                                 duration = SnackbarDuration.Short
                             )
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
+                    }
                 ) {
-                    Text("确认")
+                    Text("确认", color = Color.White)
                 }
             },
             dismissButton = {
-                Button(onClick = { showDeleteConfirmDialog = null }) {
-                    Text("取消")
+                GlassButton(onClick = { showDeleteConfirmDialog = null }) {
+                    Text("取消", color = Color.White)
                 }
             }
         )

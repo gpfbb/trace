@@ -1,5 +1,7 @@
 package com.trackmaster.app
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -12,12 +14,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
+import com.trackmaster.app.ui.theme.*
 
 val chartColors = listOf(
     Color(0xFF6366F1),
@@ -96,7 +100,7 @@ fun StatisticsScreen(
         TimeDimension.YEAR -> yearFormat.format(calendar.time)
     }
     
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
         title = {
             Column(
@@ -105,7 +109,8 @@ fun StatisticsScreen(
                 Text(
                     "统计数据可视化",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = NeonCoral
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -115,18 +120,19 @@ fun StatisticsScreen(
                     Text(
                         displayDate,
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = NeonCoral
                     )
-                    Button(
+                    GlassButton(
                         onClick = {
                             when (selectedTimeDimension) {
                                 TimeDimension.DAY -> showDatePicker = true
                                 TimeDimension.MONTH -> showMonthPicker = true
                                 TimeDimension.YEAR -> showYearPicker = true
                             }
-                        }
+                        },
+                        modifier = Modifier.height(32.dp)
                     ) {
-                        Text("选择日期")
+                        Text("选择日期", fontSize = 11.sp, color = Color.White)
                     }
                 }
             }
@@ -151,7 +157,7 @@ fun StatisticsScreen(
                             .height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = NeonCoral)
                     }
                 } else if (statistics.isEmpty()) {
                     Box(
@@ -163,7 +169,7 @@ fun StatisticsScreen(
                         Text(
                             "暂无统计数据",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color(0xFFBDBDBD)
                         )
                     }
                 } else {
@@ -188,8 +194,8 @@ fun StatisticsScreen(
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) {
-                Text("关闭")
+            GlassButton(onClick = onDismiss) {
+                Text("关闭", color = Color.White)
             }
         }
     )
@@ -255,9 +261,9 @@ fun DatePickerDialog(
         day = maxDay
     }
     
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择日期") },
+        title = { Text("选择日期", color = NeonCoral) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -291,13 +297,13 @@ fun DatePickerDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onDateSelected(year, month, day) }) {
-                Text("确定")
+            GlassButton(onClick = { onDateSelected(year, month, day) }) {
+                Text("确定", color = Color.White)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+            GlassButton(onClick = onDismiss) {
+                Text("取消", color = Color.White)
             }
         }
     )
@@ -313,9 +319,9 @@ fun MonthPickerDialog(
     var year by remember { mutableStateOf(initialYear) }
     var month by remember { mutableStateOf(initialMonth) }
     
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择月份") },
+        title = { Text("选择月份", color = NeonCoral) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -342,13 +348,13 @@ fun MonthPickerDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onMonthSelected(year, month) }) {
-                Text("确定")
+            GlassButton(onClick = { onMonthSelected(year, month) }) {
+                Text("确定", color = Color.White)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+            GlassButton(onClick = onDismiss) {
+                Text("取消", color = Color.White)
             }
         }
     )
@@ -362,9 +368,9 @@ fun YearPickerDialog(
 ) {
     var year by remember { mutableStateOf(initialYear) }
     
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择年份") },
+        title = { Text("选择年份", color = NeonCoral) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -378,13 +384,13 @@ fun YearPickerDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onYearSelected(year) }) {
-                Text("确定")
+            GlassButton(onClick = { onYearSelected(year) }) {
+                Text("确定", color = Color.White)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+            GlassButton(onClick = onDismiss) {
+                Text("取消", color = Color.White)
             }
         }
     )
@@ -401,8 +407,10 @@ fun NumberPicker(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+            containerColor = Color(0x4D000000)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -417,16 +425,18 @@ fun NumberPicker(
                 },
                 enabled = value < range.last
             ) {
-                Text("▲", fontSize = 18.sp)
+                Text("▲", fontSize = 18.sp, color = NeonCoral)
             }
             Text(
                 text = value.toString(),
                 style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = NeonCoral
             )
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFBDBDBD)
             )
             IconButton(
                 onClick = {
@@ -436,7 +446,7 @@ fun NumberPicker(
                 },
                 enabled = value > range.first
             ) {
-                Text("▼", fontSize = 18.sp)
+                Text("▼", fontSize = 18.sp, color = NeonCoral)
             }
         }
     }
@@ -447,40 +457,72 @@ fun TimeDimensionSelector(
     selectedDimension: TimeDimension,
     onDimensionSelected: (TimeDimension) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                "时间维度",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .background(
+                color = Color(0x4D2A221C),
+                shape = RoundedCornerShape(24.dp)
             )
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TimeDimension.values().forEach { dimension ->
-                    FilterChip(
-                        selected = selectedDimension == dimension,
-                        onClick = { onDimensionSelected(dimension) },
-                        label = {
-                            Text(
-                                text = when (dimension) {
-                                    TimeDimension.DAY -> "日"
-                                    TimeDimension.MONTH -> "月"
-                                    TimeDimension.YEAR -> "年"
-                                }
-                            )
+    ) {
+        // 滑动背景指示器
+        AnimatedVisibility(
+            visible = true,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(1f / 3f)
+                    .align(
+                        when (selectedDimension) {
+                            TimeDimension.DAY -> Alignment.CenterStart
+                            TimeDimension.MONTH -> Alignment.Center
+                            TimeDimension.YEAR -> Alignment.CenterEnd
+                        }
+                    )
+                    .padding(2.dp)
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(NeonCoral, NeonAmber),
+                            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                            end = androidx.compose.ui.geometry.Offset(100f, 100f)
+                        ),
+                        shape = RoundedCornerShape(22.dp)
+                    )
+            )
+        }
+        
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TimeDimension.values().forEach { dimension ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable {
+                            onDimensionSelected(dimension)
                         },
-                        modifier = Modifier.weight(1f)
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = when (dimension) {
+                            TimeDimension.DAY -> "日"
+                            TimeDimension.MONTH -> "月"
+                            TimeDimension.YEAR -> "年"
+                        },
+                        color = if (selectedDimension == dimension) 
+                            Color.White 
+                            else 
+                            Color(0xFFBDBDBD),
+                        fontWeight = if (selectedDimension == dimension) 
+                            FontWeight.Bold 
+                            else 
+                            FontWeight.Normal
                     )
                 }
             }
@@ -504,8 +546,10 @@ fun PieChartSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
+            containerColor = Color(0x4D000000)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -514,7 +558,8 @@ fun PieChartSection(
             Text(
                 "停留时长占比",
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = NeonCoral
             )
             
             Row(
@@ -551,7 +596,6 @@ fun PieChart(
     modifier: Modifier = Modifier
 ) {
     val total = data.sumOf { it.value }
-    val surfaceColor = MaterialTheme.colorScheme.surface
     var startAngle = -90f
     
     Canvas(modifier = modifier) {
@@ -569,7 +613,7 @@ fun PieChart(
             }
             
             drawCircle(
-                color = surfaceColor,
+                color = GlassPanelRich,
                 radius = size.minDimension * 0.3f,
                 center = Offset(size.width / 2, size.height / 2)
             )
@@ -597,12 +641,14 @@ fun LegendItem(
         Text(
             text = label.take(8) + if (label.length > 8) "…" else "",
             style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFFE0E0E0),
             modifier = Modifier.weight(1f)
         )
         Text(
             text = percentage,
             style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            color = NeonCoral
         )
     }
 }
@@ -618,8 +664,10 @@ fun BarChartSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
+            containerColor = Color(0x4D000000)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -628,7 +676,8 @@ fun BarChartSection(
             Text(
                 "停留时长对比",
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = NeonCoral
             )
             
             Row(
@@ -647,7 +696,8 @@ fun BarChartSection(
                         Text(
                             text = statisticsManager.formatDuration(stat.totalDurationSeconds),
                             style = MaterialTheme.typography.labelSmall,
-                            fontSize = 9.sp
+                            fontSize = 9.sp,
+                            color = Color(0xFFBDBDBD)
                         )
                         Box(
                             modifier = Modifier
@@ -658,7 +708,8 @@ fun BarChartSection(
                         )
                         Text(
                             text = stat.fenceName.take(4),
-                            style = MaterialTheme.typography.labelSmall
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFBDBDBD)
                         )
                     }
                 }
@@ -677,8 +728,10 @@ fun LeaderboardSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
+            containerColor = Color(0x4D000000)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -687,7 +740,8 @@ fun LeaderboardSection(
             Text(
                 "停留时长排行榜",
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = NeonCoral
             )
             
             statistics.take(10).forEachIndexed { index, stat ->
@@ -718,15 +772,16 @@ fun LeaderboardItem(
         colors = CardDefaults.cardColors(
             containerColor = if (isTop3) {
                 when (rank) {
-                    1 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                    2 -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
-                    3 -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
-                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    1 -> NeonCoral.copy(alpha = 0.2f)
+                    2 -> NeonAmber.copy(alpha = 0.2f)
+                    3 -> Color(0xFF8B5CF6).copy(alpha = 0.2f)
+                    else -> Color(0x332A221C)
                 }
             } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                Color(0x332A221C)
             }
         ),
+        shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(if (isTop3) 2.dp else 0.dp)
     ) {
         Row(
@@ -743,7 +798,7 @@ fun LeaderboardItem(
                             1 -> Color(0xFFFFD700)
                             2 -> Color(0xFFC0C0C0)
                             3 -> Color(0xFFCD7F32)
-                            else -> MaterialTheme.colorScheme.surfaceVariant
+                            else -> Color(0x4D2A221C)
                         }
                     ),
                 contentAlignment = Alignment.Center
@@ -752,7 +807,7 @@ fun LeaderboardItem(
                     text = rank.toString(),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (rank <= 3) Color.Black else MaterialTheme.colorScheme.onSurface
+                    color = if (rank <= 3) Color.Black else Color(0xFFBDBDBD)
                 )
             }
             
@@ -760,6 +815,7 @@ fun LeaderboardItem(
                 text = name,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
+                color = Color(0xFFE0E0E0),
                 modifier = Modifier.weight(1f)
             )
             
@@ -770,12 +826,13 @@ fun LeaderboardItem(
                 Text(
                     text = duration,
                     style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = NeonCoral
                 )
                 Text(
                     text = percentage,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color(0xFFBDBDBD)
                 )
             }
         }
