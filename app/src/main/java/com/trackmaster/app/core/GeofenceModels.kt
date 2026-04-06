@@ -58,6 +58,8 @@ data class LocationFix(
     val accuracy: Float,
     /** 事件时间戳（Unix ms） */
     val timestamp: Long,
+    /** 速度（米/秒），可为 null */
+    val speed: Float? = null,
 )
 
 /** 加速度传感器数据 */

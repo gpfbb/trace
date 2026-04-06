@@ -12,9 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
@@ -931,6 +928,8 @@ fun MainScreen(
     val showDataManagementDialog = remember { mutableStateOf(false) }
     // 热力图开关
     val heatmapEnabled = remember { mutableStateOf(false) }
+    // 保存热力图覆盖层引用（避免每次创建新实例）
+    var heatmapOverlay by remember { mutableStateOf<com.trackmaster.app.ui.HeatmapOverlay?>(null) }
 
     // 分类相关状态
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
@@ -1106,6 +1105,14 @@ fun MainScreen(
                             fontWeight = FontWeight.Medium
                         )
                         Spacer(modifier = Modifier.height(6.dp))
+                        
+                        // 绘制指导提示
+                        Text(
+                            text = "💡 建议：为应对定位偏移，请确保绘制范围大于实际需要范围的 1.2 倍",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFBBDEFB)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
                     }
 
                     if (locationError != null) {
@@ -1134,8 +1141,10 @@ fun MainScreen(
                                 drawingPoints.removeLast()
                                 mainActivity.clearDrawingMarkers()
                                 // 重新添加剩余的标记
-                                drawingPoints.forEachIndexed { index, point ->
-                                    mainActivity.addDrawingMarker(mainActivity.getCurrentMap()!!, point, index)
+                                mainActivity.getCurrentMap()?.let { map ->
+                                    drawingPoints.forEachIndexed { index, point ->
+                                        mainActivity.addDrawingMarker(map, point, index)
+                                    }
                                 }
                             },
                             modifier = Modifier.size(44.dp)
@@ -1886,14 +1895,18 @@ fun MainScreen(
                     mainActivity.setTrafficEnabled(aMap, showTraffic.value)
                     // 应用热力图
                     if (aMap != null) {
-                        val overlay = HeatmapOverlay(aMap)
+                        // 确保有热力图覆盖层引用
+                        if (heatmapOverlay == null) {
+                            heatmapOverlay = com.trackmaster.app.ui.HeatmapOverlay(aMap)
+                        }
+                        
                         if (heatmapEnabled.value) {
                             scope.launch {
                                 val summaries = try {
                                     val today = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                                     app.aggregator.aggregate(today)
                                 } catch (_: Exception) { emptyList() }
-                                overlay.update(app.geoFences.mapNotNull { f ->
+                                heatmapOverlay?.update(app.geoFences.mapNotNull { f ->
                                     try {
                                         com.trackmaster.app.core.Geofence(
                                             id = f.id, name = f.name,
@@ -1912,7 +1925,8 @@ fun MainScreen(
                                 }, summaries)
                             }
                         } else {
-                            overlay.clear()
+                            // 关闭热力图时清除
+                            heatmapOverlay?.clear()
                         }
                     }
                     showLayerDialog.value = false

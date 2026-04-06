@@ -233,12 +233,13 @@ class DataManager(private val context: Context) {
             val eventsArray = json.optJSONArray("events") ?: JSONArray()
             for (i in 0 until eventsArray.length()) {
                 val eventJson = eventsArray.getJSONObject(i)
+                val time = dateTimeFormat.parse(eventJson.getString("time")) ?: Date()
                 val event = GeoFenceEvent(
                     id = eventJson.optString("id", UUID.randomUUID().toString()),
                     fenceId = eventJson.getString("fenceId"),
                     fenceName = eventJson.getString("fenceName"),
                     action = GeoFenceAction.valueOf(eventJson.getString("action")),
-                    time = dateTimeFormat.parse(eventJson.getString("time"))!!,
+                    time = time,
                     latitude = eventJson.getDouble("latitude"),
                     longitude = eventJson.getDouble("longitude"),
                     accuracy = eventJson.getDouble("accuracy").toFloat(),
@@ -251,10 +252,11 @@ class DataManager(private val context: Context) {
             val staysArray = json.optJSONArray("stays") ?: JSONArray()
             for (i in 0 until staysArray.length()) {
                 val stayJson = staysArray.getJSONObject(i)
+                val enterTime = dateTimeFormat.parse(stayJson.getString("enterTime")) ?: Date()
                 val stay = FenceStayRecord(
                     fenceId = stayJson.getString("fenceId"),
                     fenceName = stayJson.getString("fenceName"),
-                    enterTime = dateTimeFormat.parse(stayJson.getString("enterTime"))!!,
+                    enterTime = enterTime,
                     exitTime = stayJson.optString("exitTime").takeIf { it.isNotEmpty() }?.let { 
                         dateTimeFormat.parse(it) 
                     },

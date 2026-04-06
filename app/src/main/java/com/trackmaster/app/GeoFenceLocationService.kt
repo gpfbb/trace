@@ -265,6 +265,14 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             locationCount = serviceState.locationCount + 1
         )
 
+        // 更新省电统计 - 记录每个定位请求
+        (application as? TrackMasterApplication)?.let { app ->
+            // 先让 Engine 处理位置，看看是否被处理
+            app.checkGeoFences(location)
+            // 假设每次定位都算实际请求（简化处理）
+            app.appPreferences.incrementLocations(shouldProcess = true)
+        }
+
         // 更新通知显示最新位置信息
         updateNotification()
 
@@ -278,9 +286,6 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 startContinuousLocation()
             }, 1000)
         }
-
-        // 围栏检测委托给 Engine
-        (application as? TrackMasterApplication)?.checkGeoFences(location)
     }
 
     /**

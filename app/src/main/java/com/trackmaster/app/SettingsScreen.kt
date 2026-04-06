@@ -33,12 +33,36 @@ fun SettingsScreen(
     onOpenDataManagement: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val app = context.applicationContext as TrackMasterApplication
+    val prefs = app.appPreferences
     val permissionManager = remember { PermissionManager(context) }
     var permissionStatus by remember { mutableStateOf(permissionManager.checkPermissions()) }
-    var selectedMode by remember { mutableStateOf(PowerMode.BALANCED) }
+    var selectedMode by remember { mutableStateOf(prefs.powerMode) }
+    
+    // 高级设置状态
+    var showAdvancedSettings by remember { mutableStateOf(false) }
+    var stationaryThreshold by remember { mutableStateOf(prefs.stationaryThreshold) }
+    var boundaryBuffer by remember { mutableStateOf(prefs.boundaryBuffer) }
+    var driftThreshold by remember { mutableStateOf(prefs.driftThreshold) }
+    
+    // 省电统计状态
+    var showPowerSavingStats by remember { mutableStateOf(false) }
+    
+    // 实时更新省电统计
+    var totalLocations by remember { mutableStateOf(prefs.totalLocations) }
+    var processedLocations by remember { mutableStateOf(prefs.processedLocations) }
 
     LaunchedEffect(Unit) {
         permissionStatus = permissionManager.checkPermissions()
+    }
+    
+    // 定期刷新省电统计
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000) // 每秒刷新
+            totalLocations = prefs.totalLocations
+            processedLocations = prefs.processedLocations
+        }
     }
 
     GlassDialog(
@@ -76,9 +100,8 @@ fun SettingsScreen(
                     selectedMode = selectedMode,
                     onModeSelected = { mode ->
                         selectedMode = mode
-                        (context.applicationContext as? TrackMasterApplication)?.let { app ->
-                            app.getLocationService()?.setPowerMode(mode)
-                        }
+                        prefs.powerMode = mode
+                        app.getLocationService()?.setPowerMode(mode)
                     }
                 )
 
@@ -132,6 +155,138 @@ fun SettingsScreen(
 
                     HorizontalDivider(color = Color(0x30FFFFFF))
                 }
+
+                // 省电效果统计
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showPowerSavingStats = !showPowerSavingStats },
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0x4D000000)
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BatterySaver,
+                                contentDescription = "省电统计",
+                                tint = Success,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "省电效果统计",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFFE0E0E0)
+                                )
+                                Text(
+                                    "查看定位请求次数和省电效果",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFBDBDBD)
+                                )
+                            }
+                            Icon(
+                                imageVector = if (showPowerSavingStats) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (showPowerSavingStats) "收起" else "展开",
+                                tint = Color(0xFFBDBDBD),
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        
+                        if (showPowerSavingStats) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            PowerSavingStatsSection(
+                                totalLocations = totalLocations,
+                                processedLocations = processedLocations,
+                                prefs = prefs,
+                                onReset = {
+                                    prefs.resetStats()
+                                    totalLocations = 0
+                                    processedLocations = 0
+                                }
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color(0x30FFFFFF))
+
+                // 高级设置
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showAdvancedSettings = !showAdvancedSettings },
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0x4D000000)
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = "高级设置",
+                                tint = NeonCoral,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "高级设置",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFFE0E0E0)
+                                )
+                                Text(
+                                    "调整定位算法参数",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFBDBDBD)
+                                )
+                            }
+                            Icon(
+                                imageVector = if (showAdvancedSettings) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (showAdvancedSettings) "收起" else "展开",
+                                tint = Color(0xFFBDBDBD),
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        
+                        if (showAdvancedSettings) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            AdvancedSettingsSection(
+                                stationaryThreshold = stationaryThreshold,
+                                onStationaryThresholdChange = { value ->
+                                    stationaryThreshold = value
+                                    prefs.stationaryThreshold = value
+                                    app.updateEngineConfig()
+                                },
+                                boundaryBuffer = boundaryBuffer,
+                                onBoundaryBufferChange = { value ->
+                                    boundaryBuffer = value
+                                    prefs.boundaryBuffer = value
+                                    app.updateEngineConfig()
+                                },
+                                driftThreshold = driftThreshold,
+                                onDriftThresholdChange = { value ->
+                                    driftThreshold = value
+                                    prefs.driftThreshold = value
+                                    app.updateEngineConfig()
+                                }
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color(0x30FFFFFF))
 
                 InfoSection()
             }
@@ -394,5 +549,270 @@ fun InfoSection() {
             color = Color(0xFFBDBDBD),
             lineHeight = 18.sp
         )
+    }
+}
+
+@Composable
+fun PowerSavingStatsSection(
+    totalLocations: Int,
+    processedLocations: Int,
+    prefs: AppPreferences,
+    onReset: () -> Unit
+) {
+    val savedPercentage = prefs.getSavedPercentage()
+    val performanceModeTotal = prefs.getPerformanceModeEstimate()
+    
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 今日定位请求统计
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0x4D2A221C)
+            ),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(0.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    "今日定位请求",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = NeonCoral
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            "实际请求",
+                            fontSize = 12.sp,
+                            color = Color(0xFFBDBDBD)
+                        )
+                        Text(
+                            "%,d 次".format(processedLocations),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Success
+                        )
+                    }
+                    Column {
+                        Text(
+                            "性能模式",
+                            fontSize = 12.sp,
+                            color = Color(0xFFBDBDBD)
+                        )
+                        Text(
+                            "%,d 次".format(performanceModeTotal),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Danger
+                        )
+                    }
+                    Column {
+                        Text(
+                            "节省",
+                            fontSize = 12.sp,
+                            color = Color(0xFFBDBDBD)
+                        )
+                        Text(
+                            "%.1f%%".format(savedPercentage),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Info
+                        )
+                    }
+                }
+            }
+        }
+        
+        // 重置按钮
+        GlassButton(
+            onClick = onReset,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("重置统计", color = Color.White)
+        }
+        
+        // 省电效果说明
+        Text(
+            "💡 说明：基于使用时间计算省电百分比。性能模式假设每 2 秒定位一次。重置后将重新开始计数。",
+            fontSize = 12.sp,
+            color = Color(0xFFBBDEFB),
+            lineHeight = 16.sp
+        )
+    }
+}
+
+@Composable
+fun AdvancedSettingsSection(
+    stationaryThreshold: Double,
+    onStationaryThresholdChange: (Double) -> Unit,
+    boundaryBuffer: Double,
+    onBoundaryBufferChange: (Double) -> Unit,
+    driftThreshold: Double,
+    onDriftThresholdChange: (Double) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // 默认参数推荐卡片
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0x4D1B5E20)
+            ),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(0.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "推荐",
+                        tint = Color(0xFF81C784),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "推荐默认配置",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color(0xFF81C784)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "• 静止判定: 30m (平衡省电和响应)\n" +
+                            "• 边界缓冲: 200m (减少误判)\n" +
+                            "• 漂移检测: 50m/s (过滤异常点)",
+                    fontSize = 12.sp,
+                    color = Color(0xFFC8E6C9),
+                    lineHeight = 18.sp
+                )
+            }
+        }
+        
+        // 重置按钮
+        GlassButton(
+            onClick = {
+                onStationaryThresholdChange(30.0)
+                onBoundaryBufferChange(200.0)
+                onDriftThresholdChange(50.0)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("恢复默认设置", color = Color.White)
+        }
+        
+        // 静止判定阈值
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "静止判定阈值",
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
+                    color = Color(0xFFE0E0E0)
+                )
+                Text(
+                    "${stationaryThreshold.toInt()}m",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = NeonCoral
+                )
+            }
+            Slider(
+                value = stationaryThreshold.toFloat(),
+                onValueChange = { onStationaryThresholdChange(it.toDouble()) },
+                valueRange = 10f..100f,
+                steps = 8,
+                colors = SliderDefaults.colors(
+                    thumbColor = NeonCoral,
+                    activeTrackColor = NeonCoral,
+                    inactiveTrackColor = Color(0x4DFFFFFF)
+                )
+            )
+            Text(
+                "设置用户静止时的距离判定阈值。值越大越容易判定为静止，越省电。",
+                fontSize = 11.sp,
+                color = Color(0xFF9E9E9E)
+            )
+        }
+        
+        // 边界缓冲距离
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "边界缓冲距离",
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
+                    color = Color(0xFFE0E0E0)
+                )
+                Text(
+                    "${boundaryBuffer.toInt()}m",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = NeonCoral
+                )
+            }
+            Slider(
+                value = boundaryBuffer.toFloat(),
+                onValueChange = { onBoundaryBufferChange(it.toDouble()) },
+                valueRange = 50f..500f,
+                steps = 8,
+                colors = SliderDefaults.colors(
+                    thumbColor = NeonCoral,
+                    activeTrackColor = NeonCoral,
+                    inactiveTrackColor = Color(0x4DFFFFFF)
+                )
+            )
+            Text(
+                "围栏边界缓冲区大小。值越大边界误判率越低，但可能导致延迟检测。",
+                fontSize = 11.sp,
+                color = Color(0xFF9E9E9E)
+            )
+        }
+        
+        // 漂移检测阈值
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "漂移检测阈值",
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
+                    color = Color(0xFFE0E0E0)
+                )
+                Text(
+                    "${driftThreshold.toInt()}m/s",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = NeonCoral
+                )
+            }
+            Slider(
+                value = driftThreshold.toFloat(),
+                onValueChange = { onDriftThresholdChange(it.toDouble()) },
+                valueRange = 10f..100f,
+                steps = 8,
+                colors = SliderDefaults.colors(
+                    thumbColor = NeonCoral,
+                    activeTrackColor = NeonCoral,
+                    inactiveTrackColor = Color(0x4DFFFFFF)
+                )
+            )
+            Text(
+                "定位漂移判定的速度阈值。值越大越不容易误判为漂移，但可能错过真实漂移。",
+                fontSize = 11.sp,
+                color = Color(0xFF9E9E9E)
+            )
+        }
     }
 }

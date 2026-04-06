@@ -31,7 +31,7 @@ class StayDurationManager(private val context: Context) {
         }
 
         fun formatDate(date: Date): String {
-            return DATE_FORMAT_THREAD_LOCAL.get()!!.format(date)
+            return DATE_FORMAT_THREAD_LOCAL.get()?.format(date) ?: ""
         }
     }
 

@@ -23,6 +23,7 @@ import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import com.trackmaster.app.FenceActiveSession
+import com.trackmaster.app.throttle.ThrottleConfig
 
 class TrackMasterApplication : Application() {
 
@@ -61,6 +62,9 @@ class TrackMasterApplication : Application() {
 
     lateinit var persistentStateManager: PersistentStateManager
         private set
+        
+    lateinit var appPreferences: AppPreferences
+        private set
 
     private var locationService: GeoFenceLocationService? = null
     private var serviceBound = false
@@ -98,6 +102,7 @@ class TrackMasterApplication : Application() {
         dataManager = DataManager(this)
         stayDurationManager = StayDurationManager(this)
         persistentStateManager = PersistentStateManager(this)
+        appPreferences = AppPreferences(this)
         Log.d(TAG, "应用创建，初始化数据库")
 
         loadDataFromDatabase()
@@ -107,7 +112,10 @@ class TrackMasterApplication : Application() {
         val coreFences = fenceTreeManager.loadFenceTree(geoFences)
         val storageAdapter = SqliteStorageAdapter(dbHelper)
         repository = Repository(storageAdapter)
-        engine = Engine(coreFences, repository)
+        
+        // 从 AppPreferences 创建配置
+        val throttleConfig = createThrottleConfigFromPreferences()
+        engine = Engine(coreFences, repository, throttleConfig)
         aggregator = Aggregator(coreFences, repository)
         Log.d(TAG, "引擎初始化完成: ${coreFences.size} 个核心围栏")
 
@@ -488,6 +496,26 @@ class TrackMasterApplication : Application() {
      */
     fun getLastExitFence(): PersistentStateManager.LastExitState? {
         return persistentStateManager.getLastExitState()
+    }
+    
+    /**
+     * 从 AppPreferences 创建 ThrottleConfig
+     */
+    private fun createThrottleConfigFromPreferences(): ThrottleConfig {
+        return ThrottleConfig(
+            driftThresholdM = appPreferences.driftThreshold,
+            stationaryMinDistanceM = appPreferences.stationaryThreshold,
+            boundaryBufferM = appPreferences.boundaryBuffer
+        )
+    }
+    
+    /**
+     * 更新引擎配置（当用户在设置中修改参数时调用）
+     */
+    fun updateEngineConfig() {
+        val newConfig = createThrottleConfigFromPreferences()
+        engine.getScheduler().updateConfig(newConfig)
+        Log.d(TAG, "引擎配置已更新")
     }
 
 }
