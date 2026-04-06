@@ -194,7 +194,6 @@ fun GlassBottomSheetCard(
     val screenHeight = configuration.screenHeightDp.dp
     val maxHeight = screenHeight * 0.50f // 最大高度 50%（半屏）
     val minHeight = screenHeight * peekHeight
-    val midHeight = (minHeight + maxHeight) / 2
 
     // 直接使用 isExpanded 控制高度，不再需要拖拽状态
     val targetHeight = if (isExpanded) maxHeight else minHeight
@@ -441,8 +440,8 @@ fun GlassFloatingActionButton(
             .shadow(
                 elevation = if (isPressed) 12.dp else 18.dp,
                 shape = RoundedCornerShape(50),
-                ambientColor = NeonCoral.copy(alpha = glowPulse),
-                spotColor = NeonCoral.copy(alpha = glowPulse * 0.85f)
+                ambientColor = containerColor.copy(alpha = glowPulse),
+                spotColor = containerColor.copy(alpha = glowPulse * 0.85f)
             )
             .clip(RoundedCornerShape(50))
             .border(
@@ -458,8 +457,8 @@ fun GlassFloatingActionButton(
             .background(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        NeonCoral,
-                        NeonCoral.copy(alpha = 0.9f)
+                        containerColor,
+                        containerColor.copy(alpha = 0.9f)
                     )
                 )
             )

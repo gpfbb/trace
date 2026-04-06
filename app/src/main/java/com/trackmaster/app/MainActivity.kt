@@ -286,8 +286,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // 移除定位服务监听器
+
+        // 保存应用关闭时的状态
         val app = application as TrackMasterApplication
+        app.saveStateOnAppClose()
+
+        // 移除定位服务监听器
         val service = app.getLocationService()
         locationServiceListener?.let { listener ->
             service?.removeStateListener(listener)

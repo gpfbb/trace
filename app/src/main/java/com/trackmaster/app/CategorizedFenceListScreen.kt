@@ -198,6 +198,12 @@ fun CategoryHeader(
     totalDuration: Long,
     onToggle: () -> Unit
 ) {
+    fun formatDuration(seconds: Long): String {
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        return String.format("%02d:%02d", hours, minutes)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -270,6 +276,12 @@ fun FenceItem(
     duration: Long,
     onMove: () -> Unit
 ) {
+    fun formatDuration(seconds: Long): String {
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        return String.format("%02d:%02d", hours, minutes)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -377,8 +389,3 @@ fun MoveFenceDialog(
     )
 }
 
-fun formatDuration(seconds: Long): String {
-    val hours = seconds / 3600
-    val minutes = (seconds % 3600) / 60
-    return String.format("%02d:%02d", hours, minutes)
-}

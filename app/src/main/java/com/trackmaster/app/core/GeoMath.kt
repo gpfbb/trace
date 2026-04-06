@@ -159,7 +159,7 @@ object GeoMath {
             val dLng = (p2.lng - p1.lng) * DEG
             val dLat = (p2.lat - p1.lat) * DEG
 
-            area += dLng * EARTH_R * EARTH_R * cos(latRad)
+            area += dLng * EARTH_R * EARTH_R * cos(latRad) * dLat
         }
 
         return Math.abs(area) / 2

@@ -35,7 +35,7 @@ fun CategorizedFenceListScreen(
     fences: List<GeoFence>,
     treeManager: FenceTreeManager,
     onFenceClick: (GeoFence) -> Unit = {},
-    onSetParent: (fenceId: String, parentId: String?) -> Unit = { _, _ -> },
+    @Suppress("UNUSED_PARAMETER") _onSetParent: (fenceId: String, parentId: String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     // 构建围栏树
@@ -286,7 +286,7 @@ private fun FenceTreeNode(
 fun SetParentDialog(
     fence: Geofence,
     allFences: List<Geofence>,
-    treeManager: FenceTreeManager,
+    @Suppress("UNUSED_PARAMETER") _treeManager: FenceTreeManager,
     onConfirm: (parentId: String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -330,7 +330,7 @@ fun SetParentDialog(
                     Text("顶级（无父级）", modifier = Modifier.padding(start = 8.dp))
                 }
 
-                Divider()
+                HorizontalDivider()
 
                 // 候选父级列表
                 LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {

@@ -268,10 +268,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         // 更新通知显示最新位置信息
         updateNotification()
 
-        // 如果是首次定位成功，切换到连续定位模式
+        // 如果是首次定位成功，处理持久化状态恢复
         if (serviceState.isFirstLocation) {
-            Log.d(TAG, "首次定位成功，准备切换到连续定位")
-            // 延迟1秒后切换，让用户看到首次定位结果
+            Log.d(TAG, "首次定位成功，处理持久化状态恢复")
+            (application as? TrackMasterApplication)?.handleFirstLocationAfterRestore(location)
+
+            // 延迟1秒后切换到连续定位模式
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 startContinuousLocation()
             }, 1000)

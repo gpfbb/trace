@@ -37,7 +37,7 @@ class StayDurationManager(private val context: Context) {
 
     private val dbHelper = (context.applicationContext as TrackMasterApplication).dbHelper
 
-    private val activeSessions = ConcurrentHashMap<String, FenceActiveSession>()
+    public val activeSessions: ConcurrentHashMap<String, FenceActiveSession> = ConcurrentHashMap()
     private val dailyCache = ConcurrentHashMap<String, MutableMap<String, DailyStayRecord>>()
 
     init {
@@ -256,7 +256,7 @@ class StayDurationManager(private val context: Context) {
         return dbHelper.getDailyStayRecordsByDate(dateKey)
     }
 
-    private fun loadActiveSessionsFromDatabase() {
+    public fun loadActiveSessionsFromDatabase() {
         val openStays = dbHelper.getOpenStayRecords()
         for (stay in openStays) {
             val session = FenceActiveSession(

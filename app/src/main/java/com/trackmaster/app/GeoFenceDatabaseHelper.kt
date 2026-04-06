@@ -454,7 +454,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                     sortOrder = sortOrder,
                     createdAt = createdAt
                 )
-                category?.let { categoryCache[it.id] = it }
+                categoryCache[category.id] = category
             }
         } finally {
             cursor.close()

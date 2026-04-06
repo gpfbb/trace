@@ -161,7 +161,7 @@ class Engine(
     // 内部
     // ============================================================
 
-    /** 
+    /**
      * BBox 快速排除 → 精确 point-in-polygon，返回所有命中的围栏
      * 包括嵌套的父级和子级围栏，按面积升序排列（面积最小的在前）
      */
@@ -175,9 +175,22 @@ class Engine(
                 matched.add(fence)
             }
         }
-        
+
         // 按面积升序排列（面积最小的在前，优先识别小围栏）
         return matched.sortedBy { GeoMath.calculateFenceArea(it) }
+    }
+
+    /**
+     * 检查位置是否在围栏内（不更新状态）
+     *
+     * 用于应用启动时的状态恢复，检查用户当前位置是否在持久化的围栏内
+     *
+     * @param fix 位置信息
+     * @return 命中的围栏 ID 列表（按深度降序排列，最深在前）
+     */
+    fun checkFenceMatch(fix: LocationFix): List<String> {
+        val matched = findAllMatchedFences(fix)
+        return matched.map { it.id }
     }
 
     /** BBox 快速排除 → 精确 point-in-polygon，返回最深叶子 */
