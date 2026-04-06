@@ -420,6 +420,33 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         return result
     }
 
+    /**
+     * 更新围栏信息（名称、中心点、半径、多边形点）
+     * @param fence 更新后的围栏对象，ID必须保持不变
+     * @return 更新的行数
+     */
+    fun updateFence(fence: GeoFence): Int {
+        val db = writableDatabase
+        val values = ContentValues()
+        values.put(KEY_NAME, fence.name)
+        values.put(KEY_TYPE, fence.type.name)
+        values.put(KEY_CENTER_LAT, fence.center?.latitude)
+        values.put(KEY_CENTER_LNG, fence.center?.longitude)
+        values.put(KEY_RADIUS, fence.radius)
+        values.put(KEY_POINTS, fence.points?.let { pointsToJson(it) })
+        values.put(KEY_CATEGORY_ID, fence.categoryId)
+        // 注意：不更新CREATED_AT字段，保持原始创建时间
+
+        val result = db.update(
+            TABLE_FENCES,
+            values,
+            "$KEY_ID = ?",
+            arrayOf(fence.id)
+        )
+        invalidateFenceCache()
+        return result
+    }
+
     fun getCategoryByName(name: String): Category? {
         categoryCache.values.find { it.name == name }?.let { return it }
 

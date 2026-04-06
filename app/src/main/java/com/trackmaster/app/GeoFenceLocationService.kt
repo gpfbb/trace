@@ -267,10 +267,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
 
         // 更新省电统计 - 记录每个定位请求
         (application as? TrackMasterApplication)?.let { app ->
-            // 先让 Engine 处理位置，看看是否被处理
+            // 让 Engine 处理位置，统计回调会自动更新 AppPreferences
             app.checkGeoFences(location)
-            // 假设每次定位都算实际请求（简化处理）
-            app.appPreferences.incrementLocations(shouldProcess = true)
         }
 
         // 更新通知显示最新位置信息

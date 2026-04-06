@@ -59,7 +59,7 @@ class AppPreferences(context: Context) {
         set(value) = prefs.edit().putInt(KEY_PROCESSED_LOCATIONS, value).apply()
     
     var lastResetDate: Long
-        get() = prefs.getLong(KEY_LAST_RESET_DATE, System.currentTimeMillis())
+        get() = prefs.getLong(KEY_LAST_RESET_DATE, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_RESET_DATE, value).apply()
     
     fun incrementLocations(shouldProcess: Boolean) {
@@ -78,18 +78,21 @@ class AppPreferences(context: Context) {
     }
     
     fun getSavedPercentage(): Double {
+        // 如果从未重置过，返回0%
+        if (lastResetDate == 0L) return 0.0
+
         return if (totalLocations > 0) {
             // 性能模式假设：每 2 秒一次定位（43200 次/12小时）
             // 计算从上次重置到现在的时间，估算性能模式会有多少次请求
             val elapsedMs = System.currentTimeMillis() - lastResetDate
             val elapsedHours = elapsedMs / (1000.0 * 60 * 60)
-            val performanceModeEstimate = (elapsedHours * 1800).toInt() // 1800次/小时 = 每2秒1次
-            
+            val performanceModeEstimate = (elapsedHours * 1800).toLong() // 1800次/小时 = 每2秒1次
+
             // 如果估算值小于实际处理次数，使用实际处理次数作为基准
-            val performanceTotal = performanceModeEstimate.coerceAtLeast(processedLocations)
-            
+            val performanceTotal = performanceModeEstimate.coerceAtLeast(processedLocations.toLong())
+
             if (performanceTotal > 0) {
-                val saved = performanceTotal - processedLocations
+                val saved = performanceTotal - processedLocations.toLong()
                 (saved.toDouble() / performanceTotal * 100).coerceIn(0.0, 100.0)
             } else {
                 0.0
@@ -102,9 +105,12 @@ class AppPreferences(context: Context) {
     /**
      * 获取性能模式估算的请求次数
      */
-    fun getPerformanceModeEstimate(): Int {
+    fun getPerformanceModeEstimate(): Long {
+        // 如果从未重置过，返回实际处理次数
+        if (lastResetDate == 0L) return processedLocations.toLong()
+
         val elapsedMs = System.currentTimeMillis() - lastResetDate
         val elapsedHours = elapsedMs / (1000.0 * 60 * 60)
-        return (elapsedHours * 1800).toInt().coerceAtLeast(processedLocations)
+        return (elapsedHours * 1800).toLong().coerceAtLeast(processedLocations.toLong())
     }
 }

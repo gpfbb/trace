@@ -1,5 +1,6 @@
 package com.trackmaster.app.core
 
+import android.util.Log
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -16,6 +17,8 @@ import kotlin.math.pow
  * - 圆形围栏判断
  * - 围栏树构建
  */
+internal const val TAG = "GeoMath"
+
 object GeoMath {
 
     private const val EARTH_R = 6_371_000.0
@@ -130,21 +133,90 @@ object GeoMath {
     fun pointInBBox(lat: Double, lng: Double, bbox: BBox): Boolean =
         lng >= bbox.minLng && lng <= bbox.maxLng && lat >= bbox.minLat && lat <= bbox.maxLat
 
+    // ============================================================
+    // 圆形多边形缓存
+    // ============================================================
+
+    /** 圆形多边形缓存，键格式: "lat,lng,radius,sides" */
+    private val circlePolygonCache = mutableMapOf<String, List<GeoPoint>>()
+    private var cacheHits = 0L
+    private var cacheMisses = 0L
+
+    /** 生成缓存键 */
+    private fun circlePolygonCacheKey(center: GeoPoint, radiusM: Double, sides: Int): String {
+        return "${center.lat},${center.lng},$radiusM,$sides"
+    }
+
+    /** 清除圆形多边形缓存 */
+    fun clearCirclePolygonCache() {
+        synchronized(circlePolygonCache) {
+            val size = circlePolygonCache.size
+            circlePolygonCache.clear()
+            cacheHits = 0L
+            cacheMisses = 0L
+            Log.d(TAG, "缓存已清除: 清除了 $size 个缓存条目")
+        }
+    }
+
+    /** 获取当前缓存大小 */
+    fun getCirclePolygonCacheSize(): Int = circlePolygonCache.size
+
+    /** 获取缓存命中率统计 */
+    data class CacheStats(
+        val hits: Long,
+        val misses: Long,
+        val totalRequests: Long,
+        val hitRate: Double,
+        val cacheSize: Int
+    )
+
+    /** 获取缓存统计信息 */
+    fun getCacheStats(): CacheStats = synchronized(circlePolygonCache) {
+        val total = cacheHits + cacheMisses
+        val hitRate = if (total > 0) cacheHits.toDouble() / total else 0.0
+        CacheStats(
+            hits = cacheHits,
+            misses = cacheMisses,
+            totalRequests = total,
+            hitRate = hitRate,
+            cacheSize = circlePolygonCache.size
+        )
+    }
+
     /** 将 CIRCLE 转为近似多边形（32 边形） */
     fun circleToPolygon(center: GeoPoint, radiusM: Double, sides: Int = 32): List<GeoPoint> {
-        val dLat = radiusM / 111_320.0
-        val dLng = radiusM / (111_320.0 * cos(center.lat * DEG))
-        val points = mutableListOf<GeoPoint>()
-        for (i in 0 until sides) {
-            val angle = (i.toDouble() / sides) * Math.PI * 2
-            points.add(GeoPoint(
-                center.lat + dLat * sin(angle),
-                center.lng + dLng * cos(angle),
-            ))
+        val cacheKey = circlePolygonCacheKey(center, radiusM, sides)
+
+        // 同步计算并缓存（包含双检查）
+        return synchronized(circlePolygonCache) {
+            // 双检查：先检查缓存是否已存在
+            circlePolygonCache[cacheKey]?.let {
+                cacheHits++
+                Log.d(TAG, "缓存命中: key=$cacheKey, 命中次数=$cacheHits")
+                return@synchronized it
+            }
+
+            cacheMisses++
+            Log.d(TAG, "缓存未命中: key=$cacheKey, 未命中次数=$cacheMisses, 计算并缓存")
+
+            val dLat = radiusM / 111_320.0
+            val dLng = radiusM / (111_320.0 * cos(center.lat * DEG))
+            val points = mutableListOf<GeoPoint>()
+            for (i in 0 until sides) {
+                val angle = (i.toDouble() / sides) * Math.PI * 2
+                points.add(GeoPoint(
+                    center.lat + dLat * sin(angle),
+                    center.lng + dLng * cos(angle),
+                ))
+            }
+            // 闭合多边形：首尾相连
+            points.add(points[0])
+
+            val result = points.toList() // 转为不可变列表
+            circlePolygonCache[cacheKey] = result
+            Log.d(TAG, "缓存新条目: key=$cacheKey, 缓存大小=${circlePolygonCache.size}")
+            result
         }
-        // 闭合多边形：首尾相连
-        points.add(points[0])
-        return points
     }
 
     // ============================================================
@@ -448,8 +520,100 @@ data class FenceTreeResult(
     val leavesByDepth: List<Geofence>,
 )
 
+/**
+ * 验证围栏树的完整性
+ * @return 验证结果，包含错误列表
+ */
+data class TreeValidationResult(
+    val isValid: Boolean,
+    val errors: List<String> = emptyList()
+)
+
+/** 验证围栏树完整性 */
+fun validateFenceTree(fences: List<Geofence>): TreeValidationResult {
+    val errors = mutableListOf<String>()
+    val fenceMap = fences.associateBy { it.id }
+
+    // 检查循环引用
+    val visitedGlobal = mutableSetOf<String>()
+
+    for (fence in fences) {
+        val visited = mutableSetOf<String>()
+        var currentId: String? = fence.id
+
+        // 沿着父链向上检查
+        while (currentId != null) {
+            if (!visited.add(currentId)) {
+                errors.add("循环引用检测到: 围栏 $currentId 在父链中重复出现")
+                break
+            }
+
+            val currentFence = fenceMap[currentId]
+            if (currentFence == null) {
+                errors.add("引用不存在的围栏: $currentId")
+                break
+            }
+
+            currentId = currentFence.parentId
+        }
+
+        // 检查父级是否存在（如果指定了父级）
+        if (fence.parentId != null && fenceMap[fence.parentId] == null) {
+            errors.add("围栏 ${fence.id} 引用了不存在的父级 ${fence.parentId}")
+        }
+
+        // 检查自引用
+        if (fence.parentId == fence.id) {
+            errors.add("围栏 ${fence.id} 引用了自身作为父级")
+        }
+    }
+
+    // 检查深度一致性
+    val depths = mutableMapOf<String, Int>()
+    fun calculateDepth(fenceId: String): Int {
+        if (fenceId in depths) return depths[fenceId]!!
+
+        val fence = fenceMap[fenceId] ?: return 0
+        if (fence.parentId == null) {
+            depths[fenceId] = 0
+            return 0
+        }
+
+        val parentDepth = calculateDepth(fence.parentId)
+        val depth = parentDepth + 1
+        depths[fenceId] = depth
+        return depth
+    }
+
+    for (fence in fences) {
+        calculateDepth(fence.id)
+    }
+
+    // 检查深度字段是否与计算一致
+    for (fence in fences) {
+        val calculatedDepth = depths[fence.id] ?: 0
+        if (fence.depth != calculatedDepth) {
+            errors.add("围栏 ${fence.id} 的深度字段不一致: 存储=${fence.depth}, 计算=$calculatedDepth")
+        }
+    }
+
+    return TreeValidationResult(errors.isEmpty(), errors)
+}
+
 /** 构建围栏父子映射 */
-fun buildFenceTree(fences: List<Geofence>): FenceTreeResult {
+fun buildFenceTree(fences: List<Geofence>, validate: Boolean = true): FenceTreeResult {
+    val startTime = System.currentTimeMillis()
+
+    // 可选验证
+    if (validate) {
+        val validation = validateFenceTree(fences)
+        if (!validation.isValid) {
+            Log.w(TAG, "围栏树验证失败，但继续构建: ${validation.errors.joinToString(", ")}")
+        } else {
+            Log.d(TAG, "围栏树验证通过: ${fences.size} 个围栏")
+        }
+    }
+
     val fenceMap = fences.associateBy { it.id }
     val childrenMap = mutableMapOf<String, MutableList<Geofence>>()
 
@@ -463,6 +627,18 @@ fun buildFenceTree(fences: List<Geofence>): FenceTreeResult {
     // 叶子 = 没有子级的围栏
     val leafFences = fences.filter { it.id !in childrenMap }
     val leavesByDepth = leafFences.sortedByDescending { it.depth }
+
+    // 收集统计信息
+    val maxDepth = leavesByDepth.firstOrNull()?.depth ?: 0
+    val avgChildren = if (childrenMap.isNotEmpty()) {
+        childrenMap.values.sumOf { it.size }.toDouble() / childrenMap.size
+    } else 0.0
+    val leafCount = leafFences.size
+    val totalWithParent = fences.count { it.parentId != null }
+
+    val buildTime = System.currentTimeMillis() - startTime
+
+    Log.d(TAG, "围栏树构建完成: 总数=${fences.size}, 叶子=$leafCount, 最大深度=$maxDepth, 平均子节点数=${"%.2f".format(avgChildren)}, 有父级的围栏=$totalWithParent, 耗时=${buildTime}ms")
 
     return FenceTreeResult(
         fenceMap = fenceMap,

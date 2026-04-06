@@ -113,7 +113,13 @@ class SmartScheduler(
         private set
     
     fun updateConfig(newConfig: ThrottleConfig) {
+        val bufferChanged = newConfig.boundaryBufferM != config.boundaryBufferM
         this.config = newConfig
+
+        if (bufferChanged) {
+            // 边界缓冲区大小变化，重新预计算扩展 BBox
+            precomputeExpandedBBoxes(newConfig.boundaryBufferM)
+        }
     }
 
     private val fenceMap: Map<String, Geofence>
@@ -161,6 +167,9 @@ class SmartScheduler(
         for (f in leavesByDepth) {
             f.bbox?.let { bboxCache[f.id] = it }
         }
+
+        // 预计算扩展 BBox
+        precomputeExpandedBBoxes(config.boundaryBufferM)
     }
 
     // ============================================================
@@ -511,16 +520,40 @@ class SmartScheduler(
         return steps[level.coerceAtMost(steps.size - 1)].intervalMs
     }
 
+    /** 计算扩展的 BBox（基于围栏中心纬度） */
+    private fun computeExpandedBBox(bbox: BBox, bufferM: Double): BBox {
+        // 使用 BBox 中心纬度进行计算，使扩展 BBox 固定
+        val centerLat = (bbox.minLat + bbox.maxLat) / 2.0
+        val dLat = bufferM / 111_320.0
+        val dLng = bufferM / (111_320.0 * cos(centerLat * PI / 180.0))
+        return BBox(
+            bbox.minLng - dLng, bbox.minLat - dLat,
+            bbox.maxLng + dLng, bbox.maxLat + dLat,
+        )
+    }
+
+    /** 预计算所有叶子围栏的扩展 BBox */
+    private fun precomputeExpandedBBoxes(bufferM: Double) {
+        expandedBBoxCache.clear()
+        for (leaf in leavesByDepth) {
+            val bbox = bboxCache[leaf.id] ?: continue
+            expandedBBoxCache[leaf.id] = computeExpandedBBox(bbox, bufferM)
+        }
+        lastBufferM = bufferM
+        // 清空最近检查点缓存，因为扩展 BBox 可能已变化
+        lastBoundaryCheckPoint = null
+        lastBoundaryCheckResult = false
+    }
+
     /** 检查点是否在任何叶子围栏的边界 Buffer 区内 */
     private fun checkBoundaryBuffer(point: GeoPoint): Boolean {
         val bufferM = config.boundaryBufferM
-        
-        // 如果 bufferM 变化，清空缓存
+
+        // 如果 bufferM 变化，重新预计算所有扩展 BBox
         if (bufferM != lastBufferM) {
-            expandedBBoxCache.clear()
-            lastBufferM = bufferM
+            precomputeExpandedBBoxes(bufferM)
         }
-        
+
         // 如果点距离上次检查的点很近，直接复用上次结果
         lastBoundaryCheckPoint?.let { lastPoint ->
             if (GeoMath.haversine(point, lastPoint) < 5.0) {
@@ -534,15 +567,8 @@ class SmartScheduler(
             // 围栏内不算 Buffer
             if (GeoMath.pointInPolygon(point.lat, point.lng, leaf.polygon)) continue
 
-            // 尝试从缓存获取扩展的 BBox，如果没有则计算并缓存
-            val expanded = expandedBBoxCache.getOrPut(leaf.id) {
-                val dLat = bufferM / 111_320.0
-                val dLng = bufferM / (111_320.0 * cos(point.lat * PI / 180.0))
-                BBox(
-                    bbox.minLng - dLng, bbox.minLat - dLat,
-                    bbox.maxLng + dLng, bbox.maxLat + dLat,
-                )
-            }
+            // 获取预计算的扩展 BBox（应该已存在）
+            val expanded = expandedBBoxCache[leaf.id] ?: computeExpandedBBox(bbox, bufferM)
 
             if (GeoMath.pointInBBox(point.lat, point.lng, expanded)) {
                 lastBoundaryCheckPoint = point
@@ -550,7 +576,7 @@ class SmartScheduler(
                 return true
             }
         }
-        
+
         lastBoundaryCheckPoint = point
         lastBoundaryCheckResult = false
         return false

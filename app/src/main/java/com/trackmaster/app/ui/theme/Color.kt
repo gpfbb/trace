@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 // 主色调 - 霓虹珊瑚橙
 val NeonCoral = Color(0xFFFF7F50)
 val NeonAmber = Color(0xFFFFBF00)
+val NeonBlue = Color(0xFF2196F3)
 
 // 背景色 - 深巧克力棕
 val DeepChocolate = Color(0xFF1A120B)

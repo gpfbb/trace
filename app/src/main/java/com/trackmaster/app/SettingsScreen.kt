@@ -5,9 +5,12 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.trackmaster.app.core.PowerMode
+import com.trackmaster.app.core.GeoMath
+import com.trackmaster.app.throttle.PowerSavingStats
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -15,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.ui.theme.*
+import kotlinx.coroutines.delay
 
 @Composable
 fun SettingsScreen(
@@ -52,6 +58,13 @@ fun SettingsScreen(
     var totalLocations by remember { mutableStateOf(prefs.totalLocations) }
     var processedLocations by remember { mutableStateOf(prefs.processedLocations) }
 
+    // 缓存统计状态
+    var cacheStats by remember { mutableStateOf<GeoMath.CacheStats?>(null) }
+
+    // 省电算法统计
+    var powerSavingStats: PowerSavingStats? by remember { mutableStateOf(null) }
+
+
     LaunchedEffect(Unit) {
         permissionStatus = permissionManager.checkPermissions()
     }
@@ -59,9 +72,13 @@ fun SettingsScreen(
     // 定期刷新省电统计
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(1000) // 每秒刷新
+            kotlinx.coroutines.delay(2000) // 每2秒刷新
             totalLocations = prefs.totalLocations
             processedLocations = prefs.processedLocations
+            // 更新缓存统计
+            cacheStats = GeoMath.getCacheStats()
+            // 更新省电算法统计
+            powerSavingStats = app.engine?.getScheduler()?.stats
         }
     }
 
@@ -204,12 +221,18 @@ fun SettingsScreen(
                             PowerSavingStatsSection(
                                 totalLocations = totalLocations,
                                 processedLocations = processedLocations,
+                                cacheStats = cacheStats,
                                 prefs = prefs,
                                 onReset = {
                                     prefs.resetStats()
                                     totalLocations = 0
                                     processedLocations = 0
-                                }
+                                },
+                                onClearCache = {
+                                    GeoMath.clearCirclePolygonCache()
+                                    cacheStats = GeoMath.getCacheStats()  // 立即更新统计
+                                },
+                                stats = powerSavingStats
                             )
                         }
                     }
@@ -556,8 +579,11 @@ fun InfoSection() {
 fun PowerSavingStatsSection(
     totalLocations: Int,
     processedLocations: Int,
+    cacheStats: GeoMath.CacheStats?,
     prefs: AppPreferences,
-    onReset: () -> Unit
+    onReset: () -> Unit,
+    onClearCache: () -> Unit,
+    stats: PowerSavingStats? = null
 ) {
     val savedPercentage = prefs.getSavedPercentage()
     val performanceModeTotal = prefs.getPerformanceModeEstimate()
@@ -627,14 +653,140 @@ fun PowerSavingStatsSection(
             }
         }
         
-        // 重置按钮
-        GlassButton(
-            onClick = onReset,
-            modifier = Modifier.fillMaxWidth()
+        // 缓存性能统计
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0x4D1B5E20)
+            ),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(0.dp)
         ) {
-            Text("重置统计", color = Color.White)
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    "圆形围栏缓存性能",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Color(0xFF81C784)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (cacheStats != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                "缓存命中率",
+                                fontSize = 12.sp,
+                                color = Color(0xFFBDBDBD)
+                            )
+                            Text(
+                                "%.1f%%".format(cacheStats.hitRate * 100),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = when {
+                                    cacheStats.totalRequests == 0L -> Info  // 没有数据，中性颜色
+                                    cacheStats.hitRate >= 0.8 -> Success    // 高命中率
+                                    else -> Warning                         // 低命中率
+                                }
+                            )
+                        }
+                        Column {
+                            Text(
+                                "缓存大小",
+                                fontSize = 12.sp,
+                                color = Color(0xFFBDBDBD)
+                            )
+                            Text(
+                                "%,d 项".format(cacheStats.cacheSize),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Info
+                            )
+                        }
+                        Column {
+                            Text(
+                                "总请求",
+                                fontSize = 12.sp,
+                                color = Color(0xFFBDBDBD)
+                            )
+                            Text(
+                                "%,d 次".format(cacheStats.totalRequests),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NeonCoral
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                "命中次数",
+                                fontSize = 11.sp,
+                                color = Color(0xFF9E9E9E)
+                            )
+                            Text(
+                                "%,d".format(cacheStats.hits),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Success
+                            )
+                        }
+                        Column {
+                            Text(
+                                "未命中次数",
+                                fontSize = 11.sp,
+                                color = Color(0xFF9E9E9E)
+                            )
+                            Text(
+                                "%,d".format(cacheStats.misses),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Danger
+                            )
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "等待缓存数据...",
+                            fontSize = 14.sp,
+                            color = Color(0xFF9E9E9E),
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                    }
+                }
+            }
         }
-        
+
+
+        // 操作按钮行
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            GlassButton(
+                onClick = onReset,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("重置统计", color = Color.White)
+            }
+            GlassButton(
+                onClick = onClearCache,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("清除缓存", color = Color(0xFF81C784))
+            }
+        }
+
         // 省电效果说明
         Text(
             "💡 说明：基于使用时间计算省电百分比。性能模式假设每 2 秒定位一次。重置后将重新开始计数。",

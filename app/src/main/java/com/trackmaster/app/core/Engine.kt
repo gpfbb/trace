@@ -4,6 +4,7 @@ import android.util.Log
 import com.trackmaster.app.storage.Repository
 import com.trackmaster.app.throttle.SmartScheduler
 import com.trackmaster.app.throttle.ThrottleConfig
+import com.trackmaster.app.core.GeoMath.FenceState
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -20,6 +21,8 @@ class Engine(
     fences: List<Geofence>,
     private val repo: Repository,
     throttleConfig: ThrottleConfig = ThrottleConfig(),
+    private val useSpatialIndex: Boolean = true,
+    private val useDynamicBuffer: Boolean = true,
 ) {
     companion object { private const val TAG = "Engine" }
 
@@ -27,6 +30,13 @@ class Engine(
     private val fenceMap: Map<String, Geofence>
     private val leafFences: List<Geofence>
     private val allFences: List<Geofence>
+    private val spatialIndex: SpatialIndex?
+    private var queryCount: Int = 0
+    private val bufferManager: DynamicBufferManager?
+    private val fencePreviousStates = mutableMapOf<String, FenceState>()
+
+    /** 位置处理统计回调 */
+    var onLocationProcessed: ((Boolean) -> Unit)? = null
 
     /** 当前命中的叶子围栏 ID */
     @Volatile var currentLeafId: String? = null
@@ -40,6 +50,10 @@ class Engine(
     @Volatile var currentEnterTs = 0L
         private set
 
+    /** 当前电源模式 */
+    @Volatile var currentPowerMode: PowerMode = PowerMode.BALANCED
+        private set
+
     private val segCounter = AtomicInteger(0)
 
     init {
@@ -47,6 +61,27 @@ class Engine(
         fenceMap = tree.fenceMap
         leafFences = tree.leavesByDepth
         allFences = fences
+
+        // 初始化空间索引（如果启用）
+        spatialIndex = if (useSpatialIndex && fences.isNotEmpty()) {
+            val index = GridSpatialIndex()
+            index.build(fences)
+            Log.d(TAG, "空间索引已构建: ${fences.size} 个围栏")
+            index
+        } else {
+            Log.d(TAG, "空间索引未启用或围栏为空")
+            null
+        }
+
+        // 初始化动态缓冲区管理器（如果启用）
+        bufferManager = if (useDynamicBuffer) {
+            val manager = DynamicBufferManager()
+            Log.d(TAG, "动态缓冲区管理器已初始化")
+            manager
+        } else {
+            Log.d(TAG, "动态缓冲区管理器未启用")
+            null
+        }
     }
 
     // ============================================================
@@ -86,13 +121,31 @@ class Engine(
     ): StaySegment? {
         // 1. SmartScheduler 评估
         val decision = scheduler.evaluate(fix, accel)
+        // 统计回调
+        onLocationProcessed?.invoke(decision.shouldProcess)
         if (!decision.shouldProcess) return null
 
-        // 2. 漂移过滤
-        if (fix.accuracy > 50f) return null
+        // 2. 漂移过滤（与SmartScheduler保持一致）
+        if (fix.accuracy > scheduler.config.driftThresholdM.toFloat()) return null
+
+        // 2.5 更新动态缓冲区配置
+        var currentBufferSize = 0.0
+        var considerBufferAsInside = true
+
+        if (bufferManager != null) {
+            val speedMps = fix.speed?.toDouble()
+            val bufferState = bufferManager.update(
+                accuracyM = fix.accuracy.toDouble(),
+                speedMps = speedMps,
+                powerMode = currentPowerMode
+            )
+            currentBufferSize = bufferState.bufferSizeM
+            considerBufferAsInside = true // 将缓冲区视为内部以减少抖动
+            Log.d(TAG, "动态缓冲区: ${"%.1f".format(currentBufferSize)}m")
+        }
 
         // 3. 查找所有命中的围栏（包括嵌套的父级和子级）
-        val allMatched = findAllMatchedFences(fix)
+        val allMatched = findAllMatchedFences(fix, currentBufferSize, considerBufferAsInside)
         
         // 4. 更新当前命中的所有围栏列表（按深度降序排列）
         currentMatchedFenceIds = allMatched.map { it.id }
@@ -125,6 +178,8 @@ class Engine(
     /** 设置电源模式 */
     fun setPowerMode(mode: PowerMode) {
         scheduler.setMode(mode)
+        currentPowerMode = mode
+        Log.d(TAG, "电源模式已设置为: $mode")
     }
 
     fun shouldRegisterSLC(): Boolean = scheduler.shouldRegisterSLC()
@@ -164,17 +219,56 @@ class Engine(
     /**
      * BBox 快速排除 → 精确 point-in-polygon，返回所有命中的围栏
      * 包括嵌套的父级和子级围栏，按面积升序排列（面积最小的在前）
+     *
+     * @param bufferM 缓冲区大小（米），0表示不使用缓冲区
+     * @param considerBufferAsInside 是否将缓冲区视为"内部"
      */
-    private fun findAllMatchedFences(fix: LocationFix): List<Geofence> {
+    private fun findAllMatchedFences(
+        fix: LocationFix,
+        bufferM: Double = 0.0,
+        considerBufferAsInside: Boolean = false
+    ): List<Geofence> {
         val matched = mutableListOf<Geofence>()
+        val point = GeoPoint(fix.lat, fix.lng)
 
-        for (fence in allFences) {
-            val bbox = fence.bbox ?: continue
-            if (!GeoMath.pointInBBox(fix.lat, fix.lng, bbox)) continue
-            if (GeoMath.pointInFence(GeoPoint(fix.lat, fix.lng), fence)) {
-                matched.add(fence)
+        val startTime = System.currentTimeMillis()
+        val candidateCount: Int
+
+        if (spatialIndex != null) {
+            // 使用空间索引获取候选围栏
+            val candidateIds = spatialIndex.query(point)
+            candidateCount = candidateIds.size
+
+            for (fenceId in candidateIds) {
+                val fence = fenceMap[fenceId] ?: continue
+                val bbox = fence.bbox ?: continue
+                if (!GeoMath.pointInBBox(fix.lat, fix.lng, bbox)) continue
+                if (GeoMath.pointInFence(point, fence, bufferM, considerBufferAsInside)) {
+                    matched.add(fence)
+                }
+            }
+        } else {
+            // 回退：遍历所有围栏
+            candidateCount = allFences.size
+
+            for (fence in allFences) {
+                val bbox = fence.bbox ?: continue
+                if (!GeoMath.pointInBBox(fix.lat, fix.lng, bbox)) continue
+                if (GeoMath.pointInFence(point, fence, bufferM, considerBufferAsInside)) {
+                    matched.add(fence)
+                }
             }
         }
+
+        val queryTime = System.currentTimeMillis() - startTime
+
+        // 每100次查询记录一次性能统计
+        if (queryCount % 100 == 0) {
+            val hitCount = matched.size
+            Log.d(TAG, "空间查询统计: 候选数=$candidateCount, 命中数=$hitCount, 耗时=${queryTime}ms, " +
+                    "索引=${if (spatialIndex != null) "启用" else "禁用"}")
+        }
+        queryCount++
 
         // 按面积升序排列（面积最小的在前，优先识别小围栏）
         return matched.sortedBy { GeoMath.calculateFenceArea(it) }
@@ -184,12 +278,13 @@ class Engine(
      * 检查位置是否在围栏内（不更新状态）
      *
      * 用于应用启动时的状态恢复，检查用户当前位置是否在持久化的围栏内
+     * 注意：状态恢复使用精确检测（无缓冲区），避免错误恢复
      *
      * @param fix 位置信息
      * @return 命中的围栏 ID 列表（按深度降序排列，最深在前）
      */
     fun checkFenceMatch(fix: LocationFix): List<String> {
-        val matched = findAllMatchedFences(fix)
+        val matched = findAllMatchedFences(fix, bufferM = 0.0, considerBufferAsInside = false)
         return matched.map { it.id }
     }
 
@@ -247,4 +342,101 @@ class Engine(
     }
 
     private fun formatDateKey(ts: Long): String = Repository.formatDateKey(ts)
+
+    /**
+     * 带位置验证的状态恢复结果
+     */
+    data class RestoreResult(
+        /** 是否需要恢复围栏计时（用户仍在围栏内） */
+        val shouldRestore: Boolean,
+        /** 需要恢复的围栏ID（如果shouldRestore=true） */
+        val fenceId: String? = null,
+        /** 进入时间戳（如果shouldRestore=true） */
+        val enterTs: Long = 0L,
+        /** 关闭的Segment（如果用户已经离开） */
+        val closedSegment: StaySegment? = null,
+        /** 真空期时长（ms） */
+        val vacuumDurationMs: Long = 0L,
+    )
+
+    /**
+     * 带位置验证的状态恢复
+     *
+     * 应用重启后首次获取定位时调用，用于验证用户是否仍在之前的围栏内
+     * 处理真空期：如果用户已经离开，则关闭之前的Segment
+     *
+     * @param fix 首次定位信息
+     * @param vacuumStartTs 真空期开始时间戳（应用被关闭的时间）
+     * @return 恢复结果
+     */
+    suspend fun initWithLocation(fix: LocationFix, vacuumStartTs: Long? = null): RestoreResult {
+        val open = repo.getOpenSegments()
+        if (open.isEmpty()) {
+            Log.d(TAG, "没有未关闭的Segment需要恢复")
+            return RestoreResult(shouldRestore = false)
+        }
+
+        val latest = open.last()
+        Log.d(TAG, "恢复未关闭Segment: ${latest.leafGeofenceId}, 进入时间=${latest.startTs}")
+
+        // 检查当前位置是否还在该围栏内
+        val matchedFenceIds = checkFenceMatch(fix)
+        val isStillInFence = matchedFenceIds.contains(latest.leafGeofenceId)
+
+        // 计算真空期时长
+        val vacuumDuration = vacuumStartTs?.let { fix.timestamp - it } ?: 0L
+
+        if (isStillInFence) {
+            // 用户仍在围栏内，继续计时
+            currentLeafId = latest.leafGeofenceId
+            currentEnterTs = latest.startTs
+            Log.d(TAG, "用户仍在围栏 ${latest.leafGeofenceId} 内，继续计时")
+
+            // 如果有真空期，记录日志但不调整时间
+            if (vacuumDuration > 0) {
+                Log.d(TAG, "真空期时长: ${vacuumDuration}ms (不计算)")
+            }
+
+            return RestoreResult(
+                shouldRestore = true,
+                fenceId = latest.leafGeofenceId,
+                enterTs = latest.startTs,
+                closedSegment = null,
+                vacuumDurationMs = vacuumDuration
+            )
+        } else {
+            // 用户已经离开围栏，关闭Segment
+            Log.d(TAG, "用户已离开围栏 ${latest.leafGeofenceId}，关闭Segment")
+
+            // 使用真空期开始时间或当前位置时间作为离开时间
+            val exitTs = vacuumStartTs ?: fix.timestamp
+
+            val closedSeg = StaySegment(
+                id = "seg_${segCounter.incrementAndGet()}_${latest.startTs}",
+                leafGeofenceId = latest.leafGeofenceId,
+                startTs = latest.startTs,
+                endTs = exitTs,
+                status = SegmentStatus.COMPLETED,
+            )
+
+            try {
+                repo.enqueueSegment(closedSeg)
+                Log.d(TAG, "真空期关闭Segment: ${latest.leafGeofenceId}, 离开时间=$exitTs")
+            } catch (e: Exception) {
+                Log.e(TAG, "真空期Segment关闭错误", e)
+            }
+
+            // 清除当前状态
+            currentLeafId = null
+            currentEnterTs = 0L
+
+            return RestoreResult(
+                shouldRestore = false,
+                fenceId = null,
+                enterTs = 0L,
+                closedSegment = closedSeg,
+                vacuumDurationMs = vacuumDuration
+            )
+        }
+    }
 }

@@ -148,6 +148,8 @@ class MainActivity : ComponentActivity() {
     private val circleOverlays = mutableMapOf<String, Circle>() // fenceId to Circle
     private val polygonOverlays = mutableMapOf<String, Polygon>() // fenceId to Polygon
     private val tempDrawingMarkers = mutableListOf<Marker>() // 临时绘制标记
+    private var editingCircleOverlay: Circle? = null // 编辑模式下的圆形覆盖层
+    private var editingPolygonOverlay: Polygon? = null // 编辑模式下的多边形覆盖层
 
     private val currentLocation = mutableStateOf<AMapLocation?>(null)
     private val locationStatus = mutableStateOf("正在初始化...")
@@ -332,6 +334,39 @@ class MainActivity : ComponentActivity() {
         geoFences.add(fence)
         dbHelper.insertFence(fence)
         Log.d("TrackMaster", "创建多边形围栏: $name, 顶点数: ${points.size}")
+    }
+
+    // 更新地理围栏
+    fun updateGeoFence(fence: GeoFence): Boolean {
+        val existingFence = geoFences.find { it.id == fence.id }
+        if (existingFence == null) {
+            Log.e("TrackMaster", "找不到要更新的围栏: ${fence.id}")
+            return false
+        }
+
+        // 更新数据库
+        val rowsUpdated = dbHelper.updateFence(fence)
+        if (rowsUpdated <= 0) {
+            Log.e("TrackMaster", "数据库更新失败: ${fence.id}")
+            return false
+        }
+
+        // 更新内存中的列表
+        val index = geoFences.indexOf(existingFence)
+        if (index >= 0) {
+            geoFences[index] = fence
+        }
+
+        // 更新地图上的覆盖物
+        // 先移除旧的覆盖物
+        circleOverlays[fence.id]?.remove()
+        circleOverlays.remove(fence.id)
+        polygonOverlays[fence.id]?.remove()
+        polygonOverlays.remove(fence.id)
+
+        // 添加新的覆盖物（地图控件会在下次刷新时重新绘制）
+        Log.d("TrackMaster", "更新围栏: ${fence.name} (${fence.id})")
+        return true
     }
 
     // 删除地理围栏
@@ -537,8 +572,14 @@ fun AMapView(
     currentLocation: AMapLocation?,
     isDrawingMode: Boolean = false,
     drawingPoints: List<GeoFencePoint> = emptyList(),
+    isEditingMode: Boolean = false,
+    editingPoints: List<GeoFencePoint> = emptyList(),
+    editingVersion: Int = 0,
+    editingFenceType: GeoFenceType? = null,
+    editingFenceRadius: Float? = null,
     onMapReady: (AMap) -> Unit = {},
-    onMapClick: (LatLng) -> Unit = {}
+    onMapClick: (LatLng) -> Unit = {},
+    refreshDataTrigger: Int = 0
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -556,6 +597,10 @@ fun AMapView(
 
     val hasMovedCamera = remember { mutableStateOf(false) }
     val lastDrawingPointsSize = remember { mutableStateOf(0) }
+    val lastEditingPointsSize = remember { mutableStateOf(0) }
+    val editingMarkers = remember { mutableListOf<Marker>() }
+    var editingCircleOverlay by remember { mutableStateOf<Circle?>(null) }
+    var editingPolygonOverlay by remember { mutableStateOf<Polygon?>(null) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -642,7 +687,7 @@ fun AMapView(
         }
     }
 
-    LaunchedEffect(mainActivity.getGeoFences().size, mapView) {
+    LaunchedEffect(mainActivity.getGeoFences().size, refreshDataTrigger, mapView) {
         val aMap = mapView.map
         if (aMap != null) {
             mainActivity.updateGeoFenceOverlays(aMap)
@@ -673,6 +718,90 @@ fun AMapView(
                 if (lastDrawingPointsSize.value > 0) {
                     mainActivity.clearDrawingMarkers()
                     lastDrawingPointsSize.value = 0
+                }
+            }
+        }
+    }
+
+    // 处理编辑模式下的顶点标记和围栏覆盖层
+    LaunchedEffect(editingPoints.size, isEditingMode, mapView, editingVersion, editingFenceType, editingFenceRadius) {
+        val aMap = mapView.map
+        if (aMap != null) {
+            if (isEditingMode) {
+                // 清除之前的编辑标记
+                editingMarkers.forEach { it.remove() }
+                editingMarkers.clear()
+
+                // 清除之前的编辑覆盖层
+                editingCircleOverlay?.remove()
+                editingCircleOverlay = null
+                editingPolygonOverlay?.remove()
+                editingPolygonOverlay = null
+
+                // 根据围栏类型添加覆盖层
+                when (editingFenceType) {
+                    GeoFenceType.POLYGON -> {
+                        // 添加多边形覆盖层
+                        if (editingPoints.isNotEmpty()) {
+                            val points = editingPoints.map { LatLng(it.latitude, it.longitude) }
+                            val polygonOptions = PolygonOptions()
+                                .addAll(points)
+                                .strokeColor(AndroidColor.parseColor("#00FF00"))
+                                .fillColor(AndroidColor.argb(80, 0, 255, 0))
+                                .strokeWidth(3f)
+                            editingPolygonOverlay = aMap.addPolygon(polygonOptions)
+
+                            // 添加顶点标记
+                            editingPoints.forEachIndexed { index, point ->
+                                val markerOptions = MarkerOptions()
+                                    .position(LatLng(point.latitude, point.longitude))
+                                    .title("顶点 ${index + 1}")
+                                    .snippet("${point.latitude}, ${point.longitude}")
+                                    .draggable(true)
+                                val marker = aMap.addMarker(markerOptions)
+                                if (marker != null) {
+                                    editingMarkers.add(marker)
+                                }
+                            }
+                        }
+                    }
+                    GeoFenceType.CIRCLE -> {
+                        // 添加圆形覆盖层
+                        if (editingPoints.isNotEmpty() && editingFenceRadius != null) {
+                            val center = editingPoints.first()
+                            val circleOptions = CircleOptions()
+                                .center(LatLng(center.latitude, center.longitude))
+                                .radius(editingFenceRadius.toDouble())
+                                .strokeColor(AndroidColor.parseColor("#00FF00"))
+                                .fillColor(AndroidColor.argb(80, 0, 255, 0))
+                                .strokeWidth(3f)
+                            editingCircleOverlay = aMap.addCircle(circleOptions)
+
+                            // 添加圆心标记
+                            val markerOptions = MarkerOptions()
+                                .position(LatLng(center.latitude, center.longitude))
+                                .title("圆心")
+                                .snippet("${center.latitude}, ${center.longitude}")
+                                .draggable(true)
+                            val marker = aMap.addMarker(markerOptions)
+                            if (marker != null) {
+                                editingMarkers.add(marker)
+                            }
+                        }
+                    }
+                    else -> {}
+                }
+                lastEditingPointsSize.value = editingPoints.size
+            } else {
+                // 退出编辑模式，清除所有编辑标记和覆盖层
+                if (lastEditingPointsSize.value > 0) {
+                    editingMarkers.forEach { it.remove() }
+                    editingMarkers.clear()
+                    editingCircleOverlay?.remove()
+                    editingCircleOverlay = null
+                    editingPolygonOverlay?.remove()
+                    editingPolygonOverlay = null
+                    lastEditingPointsSize.value = 0
                 }
             }
         }
@@ -800,9 +929,10 @@ fun FenceItem(fence: GeoFence, mainActivity: MainActivity) {
 
 @Composable
 fun FenceItemWithMove(
-    fence: GeoFence, 
+    fence: GeoFence,
     mainActivity: MainActivity,
-    onMove: () -> Unit,
+    onEditClick: () -> Unit,
+    onCategoryClick: () -> Unit,
     onDeleteClick: (GeoFence) -> Unit
 ) {
     AnimatedVisibility(
@@ -853,22 +983,38 @@ fun FenceItemWithMove(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     
-                    // 移动围栏按钮 - 使用更直观的图标
+                    // 分类按钮 - 移动围栏到分类
                     GlassFloatingActionButton(
-                        onClick = onMove,
+                        onClick = onCategoryClick,
                         modifier = Modifier.size(48.dp),
-                        containerColor = NeonCoral.copy(alpha = 0.4f)
+                        containerColor = NeonBlue.copy(alpha = 0.4f)
                     ) {
                         Icon(
-                            Icons.Default.EditLocation, 
-                            contentDescription = "移动/编辑围栏",
+                            Icons.Default.Category,
+                            contentDescription = "移动围栏到分类",
                             tint = Color.White,
                             modifier = Modifier.size(28.dp)
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.width(8.dp))
-                    
+
+                    // 编辑围栏按钮 - 编辑围栏形状
+                    GlassFloatingActionButton(
+                        onClick = onEditClick,
+                        modifier = Modifier.size(48.dp),
+                        containerColor = NeonCoral.copy(alpha = 0.4f)
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "编辑围栏",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     // 删除围栏按钮 - 使用更鲜明的红色
                     GlassFloatingActionButton(
                         onClick = { onDeleteClick(fence) },
@@ -876,7 +1022,7 @@ fun FenceItemWithMove(
                         containerColor = Danger.copy(alpha = 0.4f)
                     ) {
                         Icon(
-                            Icons.Default.DeleteForever, 
+                            Icons.Default.DeleteForever,
                             contentDescription = "删除围栏",
                             tint = Color.White,
                             modifier = Modifier.size(28.dp)
@@ -938,6 +1084,13 @@ fun MainScreen(
     var showMoveFenceDialog by remember { mutableStateOf<GeoFence?>(null) }
     var refreshDataTrigger by remember { mutableStateOf(0) }
     var showDeleteConfirmDialog by remember { mutableStateOf<GeoFence?>(null) }
+    var showEditFenceDialog by remember { mutableStateOf<GeoFence?>(null) }
+
+    // 围栏编辑模式状态
+    var isEditingFence by remember { mutableStateOf(false) }
+    var editingFence by remember { mutableStateOf<GeoFence?>(null) }
+    val editingPoints = remember { mutableStateListOf<GeoFencePoint>() }
+    var editingVersion by remember { mutableStateOf(0) } // 用于触发编辑模式重新渲染
 
     suspend fun loadCategories() {
         val userCategories = app.categoryManager.getAllCategories()
@@ -971,30 +1124,202 @@ fun MainScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(
-                    if (isBottomSheetExpanded.value) {
-                        Modifier.blur(radius = 8.dp)
-                    } else {
-                        Modifier
-                    }
-                )
+                // .then(
+                //     if (isBottomSheetExpanded.value) {
+                //         Modifier.blur(radius = 8.dp)
+                //     } else {
+                //         Modifier
+                //     }
+                // )
         ) {
             AMapView(
                 currentLocation = currentLocation,
                 isDrawingMode = isDrawingFence.value,
                 drawingPoints = drawingPoints.toList(),
+                isEditingMode = isEditingFence,
+                editingPoints = editingPoints.toList(),
+                editingVersion = editingVersion,
+                editingFenceType = editingFence?.type,
+                editingFenceRadius = editingFence?.radius,
                 onMapClick = { latLng ->
                     if (isDrawingFence.value) {
                         drawingPoints.add(GeoFencePoint(latLng.latitude, latLng.longitude))
+                    } else if (isEditingFence && editingFence != null) {
+                        when (editingFence!!.type) {
+                            GeoFenceType.POLYGON -> {
+                                editingPoints.add(GeoFencePoint(latLng.latitude, latLng.longitude))
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "已添加顶点 (${editingPoints.size})",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            }
+                            GeoFenceType.CIRCLE -> {
+                                // 更新圆形围栏的圆心位置
+                                val updatedFence = editingFence!!.copy(
+                                    center = GeoFencePoint(latLng.latitude, latLng.longitude)
+                                )
+                                editingFence = updatedFence
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "已更新圆心位置",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                refreshDataTrigger = refreshDataTrigger
+            )
+
+            // 深色叠加层 - 仅在非编辑模式下显示，让地图更安静
+            // if (!isEditingFence) {
+            //     Box(
+            //         modifier = Modifier
+            //             .fillMaxSize()
+            //             .background(color = Color(0x1A000000))
+            //     )
+            // }
+
+            // 编辑模式工具栏
+            AnimatedVisibility(
+                visible = isEditingFence && editingFence != null,
+                enter = fadeIn() + slideInVertically { -40 },
+                exit = fadeOut() + slideOutVertically { -40 }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 100.dp)
+                ) {
+                    GlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "编辑模式: ${editingFence?.name}",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = NeonBlue,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = when (editingFence?.type) {
+                                    GeoFenceType.POLYGON -> "点击地图添加顶点。当前顶点数: ${editingPoints.size}"
+                                    GeoFenceType.CIRCLE -> "点击地图设置新的圆心位置"
+                                    else -> ""
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                // 完成按钮
+                                GlassButton(
+                                    onClick = {
+                                        // 保存编辑结果
+                                        val fence = editingFence ?: return@GlassButton
+                                        val updatedFence = when (fence.type) {
+                                            GeoFenceType.POLYGON -> {
+                                                if (editingPoints.size < 3) {
+                                                    scope.launch {
+                                                        snackbarHostState.showSnackbar(
+                                                            message = "多边形需要至少3个顶点",
+                                                            duration = SnackbarDuration.Long
+                                                        )
+                                                    }
+                                                    return@GlassButton
+                                                }
+                                                fence.copy(points = editingPoints.toList())
+                                            }
+                                            GeoFenceType.CIRCLE -> fence // 圆心已实时更新
+                                        }
+                                        val success = mainActivity.updateGeoFence(updatedFence)
+                                        if (success) {
+                                            isEditingFence = false
+                                            editingFence = null
+                                            editingPoints.clear()
+                                            mainActivity.refreshGeoFences()
+                                            refreshDataTrigger++
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    message = "围栏「${fence.name}」已更新",
+                                                    duration = SnackbarDuration.Short
+                                                )
+                                            }
+                                        } else {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    message = "围栏更新失败",
+                                                    duration = SnackbarDuration.Long
+                                                )
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Check, contentDescription = "完成", tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("完成编辑", color = Color.White)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                // 取消按钮
+                                GlassButton(
+                                    onClick = {
+                                        isEditingFence = false
+                                        editingFence = null
+                                        editingPoints.clear()
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                message = "已取消编辑",
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "取消", tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("取消编辑", color = Color.White)
+                                }
+                            }
+                            // 多边形编辑：删除最后一个顶点按钮
+                            if (editingFence?.type == GeoFenceType.POLYGON && editingPoints.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                GlassButton(
+                                    onClick = {
+                                        if (editingPoints.isNotEmpty()) {
+                                            editingPoints.removeAt(editingPoints.size - 1)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    message = "已删除最后一个顶点 (剩余: ${editingPoints.size})",
+                                                    duration = SnackbarDuration.Short
+                                                )
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Undo, contentDescription = "删除最后一个顶点", tint = Danger)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("删除最后一个顶点", color = Danger)
+                                }
+                            }
+                        }
                     }
                 }
-            )
-            // 深色叠加层，让地图更安静
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(color = Color(0x33000000)) // rgba(0, 0, 0, 0.2)
-            )
+            }
         }
 
         // SnackbarHost
@@ -1005,8 +1330,11 @@ fun MainScreen(
                 .padding(bottom = if (isBottomSheetExpanded.value) 400.dp else 200.dp)
         )
 
-        // 顶部悬浮卡片 (z-index: 10)
-        Box(
+        // 顶部悬浮卡片 (z-index: 10) - 编辑模式下隐藏
+        AnimatedVisibility(
+            visible = !isEditingFence,
+            enter = fadeIn() + slideInVertically { -100 },
+            exit = fadeOut() + slideOutVertically { -100 },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 8.dp)
@@ -1241,8 +1569,11 @@ fun MainScreen(
             }
         }
 
-        // 底部一体化悬浮卡片 (z-index: 10)
-        Box(
+        // 底部一体化悬浮卡片 (z-index: 10) - 编辑模式下隐藏
+        AnimatedVisibility(
+            visible = !isEditingFence,
+            enter = fadeIn() + slideInVertically { 100 },
+            exit = fadeOut() + slideOutVertically { 100 },
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
@@ -1485,7 +1816,8 @@ fun MainScreen(
                                                                                     FenceItemWithMove(
                                                                                         fence = fence,
                                                                                         mainActivity = mainActivity,
-                                                                                        onMove = { showMoveFenceDialog = fence },
+                                                                                        onEditClick = { showEditFenceDialog = fence },
+                                                                                        onCategoryClick = { showMoveFenceDialog = fence },
                                                                                         onDeleteClick = { showDeleteConfirmDialog = it }
                                                                                     )
                                                                                 }
@@ -2023,18 +2355,58 @@ fun MainScreen(
 
     // 移动围栏对话框
     showMoveFenceDialog?.let { fence ->
-        MoveFenceDialog(
-            fence = fence,
-            categories = categories,
-            onDismiss = { showMoveFenceDialog = null },
-            onConfirm = { newCategoryId ->
-                scope.launch {
-                    val result = app.categoryManager.moveFenceToCategory(fence.id, newCategoryId)
-                    if (result.isSuccess) {
-                        showMoveFenceDialog = null
-                        mainActivity.refreshGeoFences()
-                        refreshDataTrigger++
+        var selectedCategoryId by remember {
+            mutableStateOf<String?>(if (fence.categoryId == Category.UNASSIGNED_ID) null else fence.categoryId)
+        }
+
+        AlertDialog(
+            onDismissRequest = { showMoveFenceDialog = null },
+            title = { Text("移动围栏到分类") },
+            text = {
+                Column {
+                    Text("将围栏「${fence.name}」移动到：", modifier = Modifier.padding(bottom = 8.dp))
+
+                    // 无分类选项
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = selectedCategoryId == null,
+                            onClick = { selectedCategoryId = null }
+                        )
+                        Text("无分类", modifier = Modifier.padding(start = 8.dp))
                     }
+
+                    // 分类选项
+                    categories.forEach { category ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = selectedCategoryId == category.id,
+                                onClick = { selectedCategoryId = category.id }
+                            )
+                            Text(category.name, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                GlassButton(
+                    onClick = {
+                        val normalizedSelected = selectedCategoryId ?: Category.UNASSIGNED_ID
+                        scope.launch {
+                            val result = app.categoryManager.moveFenceToCategory(fence.id, normalizedSelected)
+                            if (result.isSuccess) {
+                                showMoveFenceDialog = null
+                                mainActivity.refreshGeoFences()
+                                refreshDataTrigger++
+                            }
+                        }
+                    }
+                ) {
+                    Text("移动", color = Color.White)
+                }
+            },
+            dismissButton = {
+                GlassButton(onClick = { showMoveFenceDialog = null }) {
+                    Text("取消", color = Color.White)
                 }
             }
         )
@@ -2075,5 +2447,219 @@ fun MainScreen(
         )
     }
 
-    // 移除分类式围栏列表对话框（已不再需要）
+    // 编辑围栏对话框
+    showEditFenceDialog?.let { fence ->
+        var fenceName by remember { mutableStateOf(fence.name) }
+        var fenceRadius by remember { mutableStateOf(fence.radius ?: 100f) }
+        // 对于多边形围栏，使用可变的点列表
+        val fencePoints = remember { mutableStateListOf<GeoFencePoint>() }
+
+        // 初始化点列表
+        LaunchedEffect(fence) {
+            fencePoints.clear()
+            if (fence.type == GeoFenceType.POLYGON && fence.points != null) {
+                fencePoints.addAll(fence.points)
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { showEditFenceDialog = null },
+            title = { Text("编辑围栏") },
+            text = {
+                Column {
+                    // 围栏名称
+                    OutlinedTextField(
+                        value = fenceName,
+                        onValueChange = { fenceName = it },
+                        label = { Text("围栏名称") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCoral,
+                            unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 类型特定编辑
+                    when (fence.type) {
+                        GeoFenceType.CIRCLE -> {
+                            Text("圆形围栏半径", style = MaterialTheme.typography.labelMedium)
+                            Slider(
+                                value = fenceRadius,
+                                onValueChange = { fenceRadius = it },
+                                valueRange = 50f..500f,
+                                steps = 9,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text("${fenceRadius.toInt()} 米", style = MaterialTheme.typography.bodySmall)
+                        }
+                        GeoFenceType.POLYGON -> {
+                            Text("多边形围栏顶点编辑", style = MaterialTheme.typography.labelMedium)
+                            Text("当前顶点数: ${fencePoints.size}", style = MaterialTheme.typography.bodySmall)
+
+                            if (fencePoints.isEmpty()) {
+                                Text("没有顶点", style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray))
+                            } else {
+                                // 顶点列表
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .height(200.dp)
+                                        .fillMaxWidth()
+                                        .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                        .padding(4.dp)
+                                ) {
+                                    items(fencePoints) { point ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "(${String.format("%.6f", point.latitude)}, ${String.format("%.6f", point.longitude)})",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            IconButton(
+                                                onClick = {
+                                                    fencePoints.remove(point)
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Delete,
+                                                    contentDescription = "删除顶点",
+                                                    tint = Danger
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Text(
+                                    "提示: 点击删除按钮移除顶点。至少需要3个顶点才能构成多边形。",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray),
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                when (fence.type) {
+                                    GeoFenceType.POLYGON -> {
+                                        GlassButton(
+                                            onClick = {
+                                                // 进入地图编辑模式，保存当前更改
+                                                val updatedFence = fence.copy(
+                                                    name = fenceName,
+                                                    points = fencePoints.toList()
+                                                )
+                                                editingFence = updatedFence
+                                                editingPoints.clear()
+                                                editingPoints.addAll(fencePoints)
+                                                editingVersion++
+                                                isEditingFence = true
+                                                showEditFenceDialog = null
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(
+                                                Icons.Default.EditLocation,
+                                                contentDescription = "在地图上编辑顶点",
+                                                tint = NeonBlue,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("在地图上编辑顶点", color = NeonBlue)
+                                        }
+                                    }
+                                    GeoFenceType.CIRCLE -> {
+                                        GlassButton(
+                                            onClick = {
+                                                // 圆形围栏编辑：在地图上调整位置，保存当前更改
+                                                val updatedFence = fence.copy(
+                                                    name = fenceName,
+                                                    radius = fenceRadius
+                                                )
+                                                editingFence = updatedFence
+                                                editingVersion++
+                                                isEditingFence = true
+                                                showEditFenceDialog = null
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(
+                                                Icons.Default.EditLocation,
+                                                contentDescription = "在地图上调整位置",
+                                                tint = NeonBlue,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("在地图上调整位置", color = NeonBlue)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                GlassButton(
+                    onClick = {
+                        val updatedFence = when (fence.type) {
+                            GeoFenceType.CIRCLE -> fence.copy(
+                                name = fenceName,
+                                radius = fenceRadius
+                            )
+                            GeoFenceType.POLYGON -> {
+                                // 检查多边形是否至少有3个顶点
+                                if (fencePoints.size < 3) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            message = "多边形需要至少3个顶点",
+                                            duration = SnackbarDuration.Long
+                                        )
+                                    }
+                                    return@GlassButton
+                                }
+                                fence.copy(
+                                    name = fenceName,
+                                    points = fencePoints.toList()
+                                )
+                            }
+                        }
+
+                        val success = mainActivity.updateGeoFence(updatedFence)
+                        if (success) {
+                            showEditFenceDialog = null
+                            mainActivity.refreshGeoFences()
+                            refreshDataTrigger++
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = "围栏「${fenceName}」已更新",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+                        } else {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = "围栏更新失败",
+                                    duration = SnackbarDuration.Long
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    Text("保存", color = Color.White)
+                }
+            },
+            dismissButton = {
+                GlassButton(onClick = { showEditFenceDialog = null }) {
+                    Text("取消", color = Color.White)
+                }
+            }
+        )
+    }
+
 }
