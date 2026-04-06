@@ -193,7 +193,7 @@ fun GlassBottomSheetCard(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val maxHeight = screenHeight * 0.50f // 最大高度 50%（半屏）
-    val minHeight = screenHeight * peekHeight
+    val minHeight = 60.dp // 只显示顶部箭头按钮的高度
 
     // 直接使用 isExpanded 控制高度，不再需要拖拽状态
     val targetHeight = if (isExpanded) maxHeight else minHeight
@@ -245,18 +245,12 @@ fun GlassBottomSheetCard(
                     color = GlassInnerGlow,
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                 )
-                .border(
-                    width = 1.dp,
-                    color = GlassBorderLight,
-                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-                )
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
                             GlassPanelRich,
                             GlassPanelRichDark,
-                            GlassPanelRich,
-                            GlassPanelRich // 额外的一个颜色确保底部也有填充
+                            GlassPanelRich
                         )
                     )
                 ),

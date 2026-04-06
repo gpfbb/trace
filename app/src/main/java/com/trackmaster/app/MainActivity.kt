@@ -23,9 +23,11 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
@@ -981,51 +983,51 @@ fun FenceItemWithMove(
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     
                     // 分类按钮 - 移动围栏到分类
                     GlassFloatingActionButton(
                         onClick = onCategoryClick,
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(44.dp),
                         containerColor = NeonBlue.copy(alpha = 0.4f)
                     ) {
                         Icon(
                             Icons.Default.Category,
                             contentDescription = "移动围栏到分类",
                             tint = Color.White,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(40.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
 
                     // 编辑围栏按钮 - 编辑围栏形状
                     GlassFloatingActionButton(
                         onClick = onEditClick,
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(44.dp),
                         containerColor = NeonCoral.copy(alpha = 0.4f)
                     ) {
                         Icon(
                             Icons.Default.Edit,
                             contentDescription = "编辑围栏",
                             tint = Color.White,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(40.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
 
                     // 删除围栏按钮 - 使用更鲜明的红色
                     GlassFloatingActionButton(
                         onClick = { onDeleteClick(fence) },
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(44.dp),
                         containerColor = Danger.copy(alpha = 0.4f)
                     ) {
                         Icon(
                             Icons.Default.DeleteForever,
                             contentDescription = "删除围栏",
                             tint = Color.White,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(40.dp)
                         )
                     }
                 }
@@ -1060,6 +1062,8 @@ fun MainScreen(
 
     // 控制菜单展开状态
     val isMenuExpanded = remember { mutableStateOf(false) }
+    // 控制灵动岛展开状态
+    val isDynamicIslandExpanded = remember { mutableStateOf(false) }
     // 控制图层对话框显示
     val showLayerDialog = remember { mutableStateOf(false) }
     // 控制历史记录对话框显示
@@ -1076,6 +1080,9 @@ fun MainScreen(
     val heatmapEnabled = remember { mutableStateOf(false) }
     // 保存热力图覆盖层引用（避免每次创建新实例）
     var heatmapOverlay by remember { mutableStateOf<com.trackmaster.app.ui.HeatmapOverlay?>(null) }
+    // 围栏日志状态
+    val geoFenceEvents = remember { mutableStateOf<List<GeoFenceEvent>>(emptyList()) }
+    val refreshEventsTrigger = remember { mutableStateOf(0) }
 
     // 分类相关状态
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
@@ -1097,8 +1104,38 @@ fun MainScreen(
         categories = listOf(Category.UNASSIGNED) + userCategories
     }
 
+    suspend fun loadEvents() {
+        geoFenceEvents.value = mainActivity.getGeoFenceEvents()
+    }
+
+    fun calculateFenceArea(fence: GeoFence): Double {
+        return when (fence.type) {
+            GeoFenceType.CIRCLE -> {
+                val radius = fence.radius ?: 0f
+                Math.PI * radius * radius
+            }
+            GeoFenceType.POLYGON -> {
+                val points = fence.points ?: emptyList()
+                if (points.size < 3) return 0.0
+                var area = 0.0
+                for (i in points.indices) {
+                    val j = (i + 1) % points.size
+                    area += points[i].latitude * points[j].longitude
+                    area -= points[j].latitude * points[i].longitude
+                }
+                Math.abs(area) / 2.0
+            }
+        }
+    }
+
+    fun getSmallestFence(fences: List<GeoFence>): GeoFence? {
+        if (fences.isEmpty()) return null
+        return fences.minByOrNull { calculateFenceArea(it) }
+    }
+
     LaunchedEffect(Unit) {
         loadCategories()
+        loadEvents()
     }
     
     LaunchedEffect(categoryDialogClosed) {
@@ -1111,6 +1148,12 @@ fun MainScreen(
     LaunchedEffect(refreshDataTrigger) {
         if (refreshDataTrigger > 0) {
             loadCategories()
+        }
+    }
+
+    LaunchedEffect(refreshEventsTrigger) {
+        if (refreshEventsTrigger.value > 0) {
+            loadEvents()
         }
     }
 
@@ -1148,25 +1191,12 @@ fun MainScreen(
                         when (editingFence!!.type) {
                             GeoFenceType.POLYGON -> {
                                 editingPoints.add(GeoFencePoint(latLng.latitude, latLng.longitude))
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = "已添加顶点 (${editingPoints.size})",
-                                        duration = SnackbarDuration.Short
-                                    )
-                                }
                             }
                             GeoFenceType.CIRCLE -> {
-                                // 更新圆形围栏的圆心位置
                                 val updatedFence = editingFence!!.copy(
                                     center = GeoFencePoint(latLng.latitude, latLng.longitude)
                                 )
                                 editingFence = updatedFence
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = "已更新圆心位置",
-                                        duration = SnackbarDuration.Short
-                                    )
-                                }
                             }
                         }
                     }
@@ -1193,34 +1223,35 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 100.dp)
+                        .padding(bottom = 80.dp)
                 ) {
                     GlassCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = 12.dp)
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
                                 text = "编辑模式: ${editingFence?.name}",
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.labelMedium,
                                 color = NeonBlue,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = when (editingFence?.type) {
-                                    GeoFenceType.POLYGON -> "点击地图添加顶点。当前顶点数: ${editingPoints.size}"
+                                    GeoFenceType.POLYGON -> "点击地图添加顶点。当前: ${editingPoints.size}"
                                     GeoFenceType.CIRCLE -> "点击地图设置新的圆心位置"
                                     else -> ""
                                 },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White
+                                color = Color.White,
+                                fontSize = 13.sp
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -1267,11 +1298,11 @@ fun MainScreen(
                                             }
                                         }
                                     },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f).height(40.dp)
                                 ) {
-                                    Icon(Icons.Default.Check, contentDescription = "完成", tint = Color.White)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("完成编辑", color = Color.White)
+                                    Icon(Icons.Default.Check, contentDescription = "完成", tint = Color.White, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("完成", color = Color.White, fontSize = 13.sp)
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 // 取消按钮
@@ -1280,40 +1311,28 @@ fun MainScreen(
                                         isEditingFence = false
                                         editingFence = null
                                         editingPoints.clear()
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                message = "已取消编辑",
-                                                duration = SnackbarDuration.Short
-                                            )
-                                        }
                                     },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f).height(40.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, contentDescription = "取消", tint = Color.White)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("取消编辑", color = Color.White)
+                                    Icon(Icons.Default.Close, contentDescription = "取消", tint = Color.White, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("取消", color = Color.White, fontSize = 13.sp)
                                 }
                             }
                             // 多边形编辑：删除最后一个顶点按钮
                             if (editingFence?.type == GeoFenceType.POLYGON && editingPoints.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(6.dp))
                                 GlassButton(
                                     onClick = {
                                         if (editingPoints.isNotEmpty()) {
                                             editingPoints.removeAt(editingPoints.size - 1)
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    message = "已删除最后一个顶点 (剩余: ${editingPoints.size})",
-                                                    duration = SnackbarDuration.Short
-                                                )
-                                            }
                                         }
                                     },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth().height(40.dp)
                                 ) {
-                                    Icon(Icons.Default.Undo, contentDescription = "删除最后一个顶点", tint = Danger)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("删除最后一个顶点", color = Danger)
+                                    Icon(Icons.Default.Undo, contentDescription = "删除最后一个顶点", tint = Danger, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("删除最后一个顶点", color = Danger, fontSize = 13.sp)
                                 }
                             }
                         }
@@ -1330,124 +1349,322 @@ fun MainScreen(
                 .padding(bottom = if (isBottomSheetExpanded.value) 400.dp else 200.dp)
         )
 
-        // 顶部悬浮卡片 (z-index: 10) - 编辑模式下隐藏
+        // 灵动岛 (z-index: 10) - 编辑模式下隐藏
         AnimatedVisibility(
             visible = !isEditingFence,
             enter = fadeIn() + slideInVertically { -100 },
             exit = fadeOut() + slideOutVertically { -100 },
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .padding(top = 8.dp)
                 .align(Alignment.TopCenter)
         ) {
-            GlassTopCard {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "轨迹大师",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = NeonCoral,
-                            modifier = Modifier.weight(1f)
+            val config = androidx.compose.ui.platform.LocalConfiguration.current
+            val screenWidth = config.screenWidthDp.dp
+            val islandWidth by animateDpAsState(
+                targetValue = if (isDynamicIslandExpanded.value) screenWidth * 0.95f else 160.dp,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessLow
+                ),
+                label = "islandWidth"
+            )
+            val islandHeight by animateDpAsState(
+                targetValue = if (isDynamicIslandExpanded.value) 320.dp else 44.dp,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessLow
+                ),
+                label = "islandHeight"
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(islandWidth)
+                    .height(islandHeight)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF1A1A2E),
+                                Color(0xFF0F0F1A)
+                            )
                         )
-                        
-                        // 添加分类按钮 - 始终显示，使用图标 + 文字
-                        GlassButton(
-                            onClick = { showCategoryManagerDialog.value = true },
-                            modifier = Modifier
-                                .height(40.dp)
-                                .wrapContentWidth()
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = NeonCoral.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                    .clickable(
+                        onClick = {
+                            isDynamicIslandExpanded.value = !isDynamicIslandExpanded.value
+                        },
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    )
+            ) {
+                val currentFences = mainActivity.getCurrentFences()
+                val smallestFence = getSmallestFence(currentFences)
+                if (isDynamicIslandExpanded.value) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
+                            Text(
+                                text = "日志",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = NeonCoral
+                            )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.Add,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
                                 Text(
-                                    text = "添加分类",
-                                    fontSize = 12.sp,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Medium
+                                    text = "${geoFenceEvents.value.size}条",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.7f)
                                 )
+                                GlassBadge(
+                                    containerColor = when {
+                                        locationStatus.contains("成功") -> Success
+                                        locationStatus.contains("失败") || locationStatus.contains("拒绝") -> Danger
+                                        else -> Color(0xFF757575)
+                                    }
+                                ) {
+                                    Text(
+                                        text = locationStatus,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White
+                                    )
+                                }
                             }
                         }
 
-                        GlassBadge(
-                            containerColor = when {
-                                locationStatus.contains("成功") -> Success
-                                locationStatus.contains("失败") || locationStatus.contains("拒绝") -> Danger
-                                else -> Color(0xFF757575)
-                            }
-                        ) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (currentLocation != null && currentLocation.errorCode == 0) {
                             Text(
-                                text = locationStatus,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White
+                                text = "经纬度: ${String.format("%.6f", currentLocation.longitude)}, ${String.format("%.6f", currentLocation.latitude)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NeonCoral.copy(alpha = 0.9f)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "精度: ${currentLocation.accuracy.toInt()}m",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NeonCoral.copy(alpha = 0.7f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        if (smallestFence != null) {
+                            Text(
+                                text = "当前在: ${smallestFence.name}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NeonAmber.copy(alpha = 0.9f),
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        if (isDrawingFence.value) {
+                            Text(
+                                text = "绘制模式: 已选 ${drawingPoints.size} 个点",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Info,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        if (locationError != null) {
+                            Text(
+                                text = locationError,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Danger
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        if (geoFenceEvents.value.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "暂无日志",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.5f)
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(geoFenceEvents.value) { event ->
+                                    val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+                                    val timeStr = sdf.format(event.time)
+                                    val dateSdf = java.text.SimpleDateFormat("MM-dd", java.util.Locale.getDefault())
+                                    val dateStr = dateSdf.format(event.time)
+                                    
+                                    val eventColor = when (event.action) {
+                                        GeoFenceAction.ENTER -> Success
+                                        GeoFenceAction.EXIT -> Danger
+                                        GeoFenceAction.STAY -> Info
+                                    }
+                                    
+                                    val eventIcon = when (event.action) {
+                                        GeoFenceAction.ENTER -> Icons.Default.ArrowForward
+                                        GeoFenceAction.EXIT -> Icons.Default.ArrowBack
+                                        GeoFenceAction.STAY -> Icons.Default.AccessTime
+                                    }
+                                    
+                                    val eventText = when (event.action) {
+                                        GeoFenceAction.ENTER -> "进入"
+                                        GeoFenceAction.EXIT -> "离开"
+                                        GeoFenceAction.STAY -> "停留"
+                                    }
+
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = eventColor.copy(alpha = 0.15f)
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(32.dp)
+                                                    .clip(CircleShape)
+                                                    .background(eventColor),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = eventIcon,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                            
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                Text(
+                                                    text = "$eventText ${event.fenceName}",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                                Text(
+                                                    text = "$dateStr $timeStr",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Color.White.copy(alpha = 0.6f)
+                                                )
+                                            }
+
+                                            if (event.durationSeconds != null && event.action == GeoFenceAction.EXIT) {
+                                                val minutes = event.durationSeconds / 60
+                                                val seconds = event.durationSeconds % 60
+                                                GlassBadge(
+                                                    containerColor = NeonAmber
+                                                ) {
+                                                    Text(
+                                                        text = if (minutes > 0) "${minutes}分${seconds}秒" else "${seconds}秒",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color.White,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        GlassButton(
+                            onClick = { 
+                                refreshEventsTrigger.value = refreshEventsTrigger.value + 1
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "刷新日志",
+                                fontSize = 13.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(10.dp)) // 增加间距
-
-                    if (currentLocation != null && currentLocation.errorCode == 0) {
-                        Text(
-                            text = "经纬度: ${String.format("%.6f", currentLocation.longitude)}, ${String.format("%.6f", currentLocation.latitude)} | 精度: ${currentLocation.accuracy.toInt()}m",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = NeonCoral.copy(alpha = 0.9f)
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            NeonCoral,
+                                            NeonCoral.copy(alpha = 0f)
+                                        )
+                                    )
+                                )
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
-                    }
-
-                    // 显示当前在哪些围栏内
-                    val currentFences = mainActivity.getCurrentFences()
-                    if (currentFences.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "当前在: ${currentFences.joinToString { it.name }}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = NeonAmber.copy(alpha = 0.9f),
-                            fontWeight = FontWeight.Medium
+                            text = if (smallestFence != null) smallestFence.name else "无围栏",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
-                    }
-
-                    // 显示绘制状态
-                    if (isDrawingFence.value) {
-                        Text(
-                            text = "绘制模式: 已选 ${drawingPoints.size} 个点（至少3个）",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Info,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        
-                        // 绘制指导提示
-                        Text(
-                            text = "💡 建议：为应对定位偏移，请确保绘制范围大于实际需要范围的 1.2 倍",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFBBDEFB)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                    }
-
-                    if (locationError != null) {
-                        Text(
-                            text = locationError,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Danger
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            NeonCoral,
+                                            NeonCoral.copy(alpha = 0f)
+                                        )
+                                    )
+                                )
                         )
                     }
                 }
@@ -1520,8 +1737,35 @@ fun MainScreen(
                 Column {
                     AnimatedVisibility(
                         visible = isMenuExpanded.value,
-                        enter = fadeIn(animationSpec = tween(200)) + scaleIn(initialScale = 0.85f),
-                        exit = fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.85f)
+                        enter = fadeIn(animationSpec = tween(350, easing = FastOutSlowInEasing)) + 
+                                scaleIn(
+                                    initialScale = 0.6f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    )
+                                ) +
+                                slideInVertically(
+                                    initialOffsetY = { it / 2 },
+                                    animationSpec = tween(350, easing = FastOutSlowInEasing)
+                                ) +
+                                expandVertically(
+                                    expandFrom = Alignment.Bottom,
+                                    animationSpec = tween(350, easing = FastOutSlowInEasing)
+                                ),
+                        exit = fadeOut(animationSpec = tween(250, easing = FastOutSlowInEasing)) + 
+                                scaleOut(
+                                    targetScale = 0.6f,
+                                    animationSpec = tween(250, easing = FastOutSlowInEasing)
+                                ) +
+                                slideOutVertically(
+                                    targetOffsetY = { it / 2 },
+                                    animationSpec = tween(250, easing = FastOutSlowInEasing)
+                                ) +
+                                shrinkVertically(
+                                    shrinkTowards = Alignment.Bottom,
+                                    animationSpec = tween(250, easing = FastOutSlowInEasing)
+                                )
                     ) {
                         Column {
                             GlassFloatingActionButton(
@@ -2493,112 +2737,61 @@ fun MainScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Text("${fenceRadius.toInt()} 米", style = MaterialTheme.typography.bodySmall)
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            GlassButton(
+                                onClick = {
+                                    val updatedFence = fence.copy(
+                                        name = fenceName,
+                                        radius = fenceRadius
+                                    )
+                                    editingFence = updatedFence
+                                    editingVersion++
+                                    isEditingFence = true
+                                    showEditFenceDialog = null
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    Icons.Default.EditLocation,
+                                    contentDescription = "在地图上调整位置",
+                                    tint = NeonBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("在地图上调整位置", color = NeonBlue)
+                            }
                         }
                         GeoFenceType.POLYGON -> {
                             Text("多边形围栏顶点编辑", style = MaterialTheme.typography.labelMedium)
                             Text("当前顶点数: ${fencePoints.size}", style = MaterialTheme.typography.bodySmall)
 
-                            if (fencePoints.isEmpty()) {
-                                Text("没有顶点", style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray))
-                            } else {
-                                // 顶点列表
-                                LazyColumn(
-                                    modifier = Modifier
-                                        .height(200.dp)
-                                        .fillMaxWidth()
-                                        .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                                        .padding(4.dp)
-                                ) {
-                                    items(fencePoints) { point ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "(${String.format("%.6f", point.latitude)}, ${String.format("%.6f", point.longitude)})",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            IconButton(
-                                                onClick = {
-                                                    fencePoints.remove(point)
-                                                },
-                                                modifier = Modifier.size(24.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Delete,
-                                                    contentDescription = "删除顶点",
-                                                    tint = Danger
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                                Text(
-                                    "提示: 点击删除按钮移除顶点。至少需要3个顶点才能构成多边形。",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray),
-                                    modifier = Modifier.padding(top = 8.dp)
+                            GlassButton(
+                                onClick = {
+                                    val updatedFence = fence.copy(
+                                        name = fenceName,
+                                        points = fencePoints.toList()
+                                    )
+                                    editingFence = updatedFence
+                                    editingPoints.clear()
+                                    editingPoints.addAll(fencePoints)
+                                    editingVersion++
+                                    isEditingFence = true
+                                    showEditFenceDialog = null
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    Icons.Default.EditLocation,
+                                    contentDescription = "在地图上编辑顶点",
+                                    tint = NeonBlue,
+                                    modifier = Modifier.size(20.dp)
                                 )
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                when (fence.type) {
-                                    GeoFenceType.POLYGON -> {
-                                        GlassButton(
-                                            onClick = {
-                                                // 进入地图编辑模式，保存当前更改
-                                                val updatedFence = fence.copy(
-                                                    name = fenceName,
-                                                    points = fencePoints.toList()
-                                                )
-                                                editingFence = updatedFence
-                                                editingPoints.clear()
-                                                editingPoints.addAll(fencePoints)
-                                                editingVersion++
-                                                isEditingFence = true
-                                                showEditFenceDialog = null
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(
-                                                Icons.Default.EditLocation,
-                                                contentDescription = "在地图上编辑顶点",
-                                                tint = NeonBlue,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("在地图上编辑顶点", color = NeonBlue)
-                                        }
-                                    }
-                                    GeoFenceType.CIRCLE -> {
-                                        GlassButton(
-                                            onClick = {
-                                                // 圆形围栏编辑：在地图上调整位置，保存当前更改
-                                                val updatedFence = fence.copy(
-                                                    name = fenceName,
-                                                    radius = fenceRadius
-                                                )
-                                                editingFence = updatedFence
-                                                editingVersion++
-                                                isEditingFence = true
-                                                showEditFenceDialog = null
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(
-                                                Icons.Default.EditLocation,
-                                                contentDescription = "在地图上调整位置",
-                                                tint = NeonBlue,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("在地图上调整位置", color = NeonBlue)
-                                        }
-                                    }
-                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("在地图上编辑顶点", color = NeonBlue)
                             }
                         }
                     }
