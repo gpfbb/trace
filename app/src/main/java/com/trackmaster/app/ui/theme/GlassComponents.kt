@@ -186,7 +186,7 @@ fun GlassTopCard(
 fun GlassBottomSheetCard(
     isExpanded: Boolean,
     onExpandChange: (Boolean) -> Unit,
-    peekHeight: Float = 0.22f,
+    @Suppress("UNUSED_PARAMETER") peekHeight: Float = 0.22f,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {

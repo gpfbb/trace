@@ -150,11 +150,9 @@ object GeoMath {
     /** 清除圆形多边形缓存 */
     fun clearCirclePolygonCache() {
         synchronized(circlePolygonCache) {
-            val size = circlePolygonCache.size
             circlePolygonCache.clear()
             cacheHits = 0L
             cacheMisses = 0L
-            Log.d(TAG, "缓存已清除: 清除了 $size 个缓存条目")
         }
     }
 
@@ -192,12 +190,10 @@ object GeoMath {
             // 双检查：先检查缓存是否已存在
             circlePolygonCache[cacheKey]?.let {
                 cacheHits++
-                Log.d(TAG, "缓存命中: key=$cacheKey, 命中次数=$cacheHits")
                 return@synchronized it
             }
 
             cacheMisses++
-            Log.d(TAG, "缓存未命中: key=$cacheKey, 未命中次数=$cacheMisses, 计算并缓存")
 
             val dLat = radiusM / 111_320.0
             val dLng = radiusM / (111_320.0 * cos(center.lat * DEG))
@@ -214,7 +210,6 @@ object GeoMath {
 
             val result = points.toList() // 转为不可变列表
             circlePolygonCache[cacheKey] = result
-            Log.d(TAG, "缓存新条目: key=$cacheKey, 缓存大小=${circlePolygonCache.size}")
             result
         }
     }
@@ -304,7 +299,7 @@ object GeoMath {
     // 围栏树
     // ============================================================
 
-    /** 获取围栏深度（0 = 顶级） */
+    /** 获取围栏深度（0 = 顶级，基于parentId） */
     fun getFenceDepth(fenceId: String, fenceMap: Map<String, Geofence>): Int {
         var d = 0
         var cur = fenceMap[fenceId]
@@ -315,10 +310,104 @@ object GeoMath {
         return d
     }
 
-    /** 为围栏列表填充 depth 字段 */
+    /** 为围栏列表填充 depth 字段 - 自动计算嵌套关系 */
     fun populateDepth(fences: List<Geofence>): List<Geofence> {
+        if (fences.isEmpty()) return emptyList()
+
+        // 1. 首先用 parentId 计算已有的深度
         val map = fences.associateBy { it.id }
-        return fences.map { it.copy(depth = getFenceDepth(it.id, map)) }
+        val depthByParent = fences.associate { it.id to getFenceDepth(it.id, map) }
+
+        // 2. 自动计算几何嵌套：检查每个围栏是否被其他围栏包含
+        // 如果围栏A包含围栏B，则B的深度 = A的深度 + 1
+        val containmentDepth = calculateContainmentDepth(fences)
+
+        // 3. 取两者的最大值（parentId深度 和 几何嵌套深度）
+        // 几何嵌套优先级更高，因为用户可能没设置parent但围栏确实嵌套
+        return fences.map { fence ->
+            val parentDepth = depthByParent[fence.id] ?: 0
+            val containDepth = containmentDepth[fence.id] ?: 0
+            // 如果几何嵌套深度更大，覆盖parentId的深度
+            val finalDepth = if (containDepth > parentDepth) containDepth else parentDepth
+            fence.copy(depth = finalDepth)
+        }
+    }
+
+    /**
+     * 基于几何包含关系计算围栏深度
+     * 如果围栏A包含围栏B，则B的深度 = A的深度 + 1
+     * 叶子围栏（不被任何围栏包含）深度最大
+     */
+    private fun calculateContainmentDepth(fences: List<Geofence>): Map<String, Int> {
+        if (fences.isEmpty()) return emptyMap()
+
+        val result = mutableMapOf<String, Int>()
+
+        // 初始化：所有围栏深度为0
+        fences.forEach { result[it.id] = 0 }
+
+        // 比较每对围栏，检查是否有包含关系
+        for (fenceA in fences) {
+            for (fenceB in fences) {
+                if (fenceA.id == fenceB.id) continue
+
+                // 检查 B 是否在 A 内部
+                if (isFenceContainedByFence(fenceB, fenceA)) {
+                    // B 在 A 内部，所以 B 的深度应该 > A 的深度
+                    val currentBDepth = result[fenceB.id] ?: 0
+                    val currentADepth = result[fenceA.id] ?: 0
+                    // B 的深度至少是 A 的深度 + 1
+                    result[fenceB.id] = maxOf(currentBDepth, currentADepth + 1)
+                }
+            }
+        }
+
+        return result
+    }
+
+    /**
+     * 检查围栏inner是否完全包含在围栏outer内
+     */
+    private fun isFenceContainedByFence(inner: Geofence, outer: Geofence): Boolean {
+        return when {
+            // 圆形 vs 圆形
+            inner.type == GeoFenceType.CIRCLE && outer.type == GeoFenceType.CIRCLE -> {
+                val innerCenter = inner.center ?: return false
+                val innerRadius = inner.radius ?: return false
+                val outerCenter = outer.center ?: return false
+                val outerRadius = outer.radius ?: return false
+                val dist = haversine(innerCenter, outerCenter)
+                dist + innerRadius <= outerRadius
+            }
+            // 多边形 vs 多边形
+            inner.type == GeoFenceType.POLYGON && outer.type == GeoFenceType.POLYGON -> {
+                val innerPoly = inner.polygon
+                val outerPoly = outer.polygon
+                if (innerPoly.size < 3 || outerPoly.size < 3) return false
+                // 内多边形的所有顶点都在外多边形内
+                innerPoly.all { pointInPolygon(it.lat, it.lng, outerPoly) }
+            }
+            // 圆形 vs 多边形：圆的圆心在外多边形内，且圆上所有点到外多边形的最小距离 > 0（即完全在内）
+            inner.type == GeoFenceType.CIRCLE && outer.type == GeoFenceType.POLYGON -> {
+                val innerCenter = inner.center ?: return false
+                val innerRadius = inner.radius ?: return false
+                val outerPoly = outer.polygon
+                if (outerPoly.size < 3) return false
+                // 圆心在外多边形内，且圆上所有点到外多边形的最小距离 > 0（即完全在内）
+                pointInPolygon(innerCenter.lat, innerCenter.lng, outerPoly) &&
+                        outerPoly.all { pointInCircle(it, innerCenter, innerRadius) }
+            }
+            // 多边形 vs 圆形：多边形的所有顶点都在圆内
+            inner.type == GeoFenceType.POLYGON && outer.type == GeoFenceType.CIRCLE -> {
+                val innerPoly = inner.polygon
+                val outerCenter = outer.center ?: return false
+                val outerRadius = outer.radius ?: return false
+                if (innerPoly.size < 3) return false
+                // 所有顶点都在圆内
+                innerPoly.all { pointInCircle(it, outerCenter, outerRadius) }
+            }
+            else -> false
+        }
     }
 
     // ============================================================
@@ -535,8 +624,6 @@ fun validateFenceTree(fences: List<Geofence>): TreeValidationResult {
     val fenceMap = fences.associateBy { it.id }
 
     // 检查循环引用
-    val visitedGlobal = mutableSetOf<String>()
-
     for (fence in fences) {
         val visited = mutableSetOf<String>()
         var currentId: String? = fence.id

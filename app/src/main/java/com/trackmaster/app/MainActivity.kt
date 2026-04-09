@@ -2,6 +2,8 @@ package com.trackmaster.app
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
@@ -26,11 +28,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
@@ -66,8 +71,7 @@ import com.amap.api.maps.model.MyLocationStyle
 import com.amap.api.maps.model.Polygon
 import com.amap.api.maps.model.PolygonOptions
 import com.trackmaster.app.ui.theme.*
-import com.trackmaster.app.ui.HeatmapOverlay
-import android.content.SharedPreferences
+import com.trackmaster.app.ui.navigation.TrackMasterNavHost
 import java.util.*
 
 // 地理围栏相关数据结构
@@ -89,7 +93,9 @@ data class GeoFence(
     val radius: Float? = null, // 圆形围栏的半径（米）
     val points: List<GeoFencePoint>? = null, // 多边形围栏的顶点
     val categoryId: String = Category.UNASSIGNED_ID, // 所属分类ID
-    val createdAt: Date = Date()
+    val createdAt: Date = Date(),
+    val color: String = "#FF0000", // 围栏颜色，默认红色
+    val alpha: Float = 0.3f // 围栏透明度，默认30%
 )
 
 enum class GeoFenceAction {
@@ -111,6 +117,7 @@ data class GeoFenceEvent(
 )
 
 data class FenceStayRecord(
+    val id: String? = null,  // 可选，导入时用于去重
     val fenceId: String,
     val fenceName: String,
     val enterTime: Date,
@@ -133,6 +140,7 @@ class MainActivity : ComponentActivity() {
     private var aMap: AMap? = null
     private lateinit var dbHelper: GeoFenceDatabaseHelper
     private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var appPreferences: AppPreferences
 
     private val KEY_MAP_TYPE = "mapType"
     private val KEY_TRAFFIC_ENABLED = "trafficEnabled"
@@ -152,6 +160,7 @@ class MainActivity : ComponentActivity() {
     private val tempDrawingMarkers = mutableListOf<Marker>() // 临时绘制标记
     private var editingCircleOverlay: Circle? = null // 编辑模式下的圆形覆盖层
     private var editingPolygonOverlay: Polygon? = null // 编辑模式下的多边形覆盖层
+    private var highlightedFenceId: String? = null // 当前高亮的围栏ID
 
     private val currentLocation = mutableStateOf<AMapLocation?>(null)
     private val locationStatus = mutableStateOf("正在初始化...")
@@ -162,7 +171,8 @@ class MainActivity : ComponentActivity() {
     ) { permissions ->
         val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
         val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-        val granted = fineLocationGranted && coarseLocationGranted
+        // 只要任一定位权限被授予即可（精确定位优先，但模糊定位也可接受）
+        val granted = fineLocationGranted || coarseLocationGranted
         if (granted) {
             startLocation()
         } else {
@@ -177,6 +187,7 @@ class MainActivity : ComponentActivity() {
         val app = application as TrackMasterApplication
         dbHelper = app.dbHelper
         sharedPreferences = getSharedPreferences("TrackMaster", Context.MODE_PRIVATE)
+        appPreferences = AppPreferences(this)
 
         // 直接从数据库加载围栏数据，确保数据一致性
         geoFences.clear()
@@ -193,11 +204,34 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TrackMasterTheme {
-                MainScreen(
-                    currentLocation = currentLocation.value,
-                    locationStatus = locationStatus.value,
-                    locationError = locationError.value
-                )
+                // 使用新的导航结构
+                // 注意：MapScreen 中的 AMap 地图将在 Week 3 从 MainActivity 提取
+                TrackMasterNavHost()
+            }
+        }
+
+        // 限制帧率到 90fps，降低功耗 (Android 11+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val params = window.attributes
+            try {
+                // 尝试使用 setPreferredFrameRate (API 34+)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    val method = window.javaClass.getMethod(
+                        "setPreferredFrameRate",
+                        Float::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType
+                    )
+                    method.invoke(window, 90f, 1) // 1 = FRAME_RATE_PREFERENCE_FIXED_SOURCE
+                } else {
+                    // Android 11-12 使用 preferredDisplayModeId
+                    val mode = display?.supportedModes?.find { it.refreshRate <= 90f }
+                    if (mode != null) {
+                        params.preferredDisplayModeId = mode.modeId
+                        window.attributes = params
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("TrackMaster", "无法设置帧率限制: ${e.message}")
             }
         }
 
@@ -308,21 +342,25 @@ class MainActivity : ComponentActivity() {
     }
 
     // 创建圆形地理围栏
-    fun createCircleGeoFence(name: String, latitude: Double, longitude: Double, radius: Float) {
+    fun createCircleGeoFence(name: String, latitude: Double, longitude: Double, radius: Float, color: String = "#FF0000", alpha: Float = 0.3f) {
         val fence = GeoFence(
             id = UUID.randomUUID().toString(),
             name = name,
             type = GeoFenceType.CIRCLE,
             center = GeoFencePoint(latitude, longitude),
-            radius = radius
+            radius = radius,
+            color = color,
+            alpha = alpha
         )
         geoFences.add(fence)
         dbHelper.insertFence(fence)
-        Log.d("TrackMaster", "创建圆形围栏: $name, 半径: ${radius}米")
+        // 刷新引擎围栏数据，使新围栏立即生效
+        (application as TrackMasterApplication).refreshEngineFences()
+        Log.d("TrackMaster", "创建圆形围栏: $name, 半径: ${radius}米, 颜色: $color")
     }
 
     // 创建多边形地理围栏
-    fun createPolygonGeoFence(name: String, points: List<GeoFencePoint>) {
+    fun createPolygonGeoFence(name: String, points: List<GeoFencePoint>, color: String = "#FF0000", alpha: Float = 0.3f) {
         if (points.size < 3) {
             Log.e("TrackMaster", "多边形围栏至少需要3个点")
             return
@@ -331,11 +369,15 @@ class MainActivity : ComponentActivity() {
             id = UUID.randomUUID().toString(),
             name = name,
             type = GeoFenceType.POLYGON,
-            points = points
+            points = points,
+            color = color,
+            alpha = alpha
         )
         geoFences.add(fence)
         dbHelper.insertFence(fence)
-        Log.d("TrackMaster", "创建多边形围栏: $name, 顶点数: ${points.size}")
+        // 刷新引擎围栏数据，使新围栏立即生效
+        (application as TrackMasterApplication).refreshEngineFences()
+        Log.d("TrackMaster", "创建多边形围栏: $name, 顶点数: ${points.size}, 颜色: $color, 透明度: $alpha")
     }
 
     // 更新地理围栏
@@ -367,6 +409,8 @@ class MainActivity : ComponentActivity() {
         polygonOverlays.remove(fence.id)
 
         // 添加新的覆盖物（地图控件会在下次刷新时重新绘制）
+        // 刷新引擎围栏数据
+        (application as TrackMasterApplication).refreshEngineFences()
         Log.d("TrackMaster", "更新围栏: ${fence.name} (${fence.id})")
         return true
     }
@@ -377,13 +421,15 @@ class MainActivity : ComponentActivity() {
         if (fence != null) {
             geoFences.remove(fence)
             dbHelper.deleteFence(fenceId)
-            
+
             // 移除地图上的覆盖物
             circleOverlays[fenceId]?.remove()
             circleOverlays.remove(fenceId)
             polygonOverlays[fenceId]?.remove()
             polygonOverlays.remove(fenceId)
-            
+
+            // 刷新引擎围栏数据
+            (application as TrackMasterApplication).refreshEngineFences()
             Log.d("TrackMaster", "删除围栏: ${fence.name}")
         }
     }
@@ -392,13 +438,15 @@ class MainActivity : ComponentActivity() {
     fun clearAllGeoFences() {
         geoFences.clear()
         dbHelper.deleteAllFences()
-        
+
         // 清除所有地图覆盖物
         circleOverlays.values.forEach { it.remove() }
         circleOverlays.clear()
         polygonOverlays.values.forEach { it.remove() }
         polygonOverlays.clear()
-        
+
+        // 刷新引擎围栏数据
+        (application as TrackMasterApplication).refreshEngineFences()
         Log.d("TrackMaster", "清除所有围栏")
     }
 
@@ -406,12 +454,18 @@ class MainActivity : ComponentActivity() {
     fun getGeoFences(): List<GeoFence> {
         return geoFences.toList()
     }
-    
+
+    // 获取数据库帮助类（用于导入导出）
+    fun getDbHelper(): GeoFenceDatabaseHelper {
+        return dbHelper
+    }
+
     // 从数据库刷新围栏数据
     fun refreshGeoFences() {
+        val fencesFromDb = dbHelper.getAllFences()
         geoFences.clear()
-        geoFences.addAll(dbHelper.getAllFences())
-        Log.d("TrackMaster", "MainActivity刷新了 ${geoFences.size} 个围栏")
+        geoFences.addAll(fencesFromDb)
+        Log.d("TrackMaster", "MainActivity刷新了 ${geoFences.size} 个围栏（从数据库读取）")
     }
 
     // 获取地理围栏事件
@@ -422,8 +476,7 @@ class MainActivity : ComponentActivity() {
     // 获取用户当前在哪些围栏内
     fun getCurrentFences(): List<GeoFence> {
         val app = applicationContext as? TrackMasterApplication ?: return emptyList()
-        val leafId = app.engine.currentLeafId ?: return emptyList()
-        return geoFences.filter { it.id == leafId }
+        return app.currentMatchedFences.toList()
     }
 
     // 获取围栏停留记录
@@ -464,9 +517,11 @@ class MainActivity : ComponentActivity() {
             polygonOverlays[fenceId]?.remove()
             polygonOverlays.remove(fenceId)
         }
-        
+
         // 添加或更新围栏覆盖物
         geoFences.forEach { fence ->
+            val fenceColor = AndroidColor.parseColor(fence.color)
+            val fillColorWithAlpha = AndroidColor.argb((fence.alpha * 255).toInt(), AndroidColor.red(fenceColor), AndroidColor.green(fenceColor), AndroidColor.blue(fenceColor))
             when (fence.type) {
                 GeoFenceType.CIRCLE -> {
                     if (!circleOverlays.containsKey(fence.id)) {
@@ -475,12 +530,17 @@ class MainActivity : ComponentActivity() {
                                 val circleOptions = CircleOptions()
                                     .center(LatLng(center.latitude, center.longitude))
                                     .radius(radius.toDouble())
-                                    .strokeColor(AndroidColor.parseColor("#FF0000"))
-                                    .fillColor(AndroidColor.argb(50, 255, 0, 0))
+                                    .strokeColor(fenceColor)
+                                    .fillColor(fillColorWithAlpha)
                                     .strokeWidth(2f)
                                 val circle = aMap.addCircle(circleOptions)
                                 circleOverlays[fence.id] = circle
                             }
+                        }
+                    } else {
+                        // 更新已有圆形围栏的填充颜色
+                        circleOverlays[fence.id]?.let { circle ->
+                            circle.fillColor = fillColorWithAlpha
                         }
                     }
                 }
@@ -490,11 +550,16 @@ class MainActivity : ComponentActivity() {
                             val points = pointsList.map { LatLng(it.latitude, it.longitude) }
                             val polygonOptions = PolygonOptions()
                                 .addAll(points)
-                                .strokeColor(AndroidColor.parseColor("#FF0000"))
-                                .fillColor(AndroidColor.argb(50, 255, 0, 0))
+                                .strokeColor(fenceColor)
+                                .fillColor(fillColorWithAlpha)
                                 .strokeWidth(2f)
                             val polygon = aMap.addPolygon(polygonOptions)
                             polygonOverlays[fence.id] = polygon
+                        }
+                    } else {
+                        // 更新已有多边形围栏的填充颜色
+                        polygonOverlays[fence.id]?.let { polygon ->
+                            polygon.fillColor = fillColorWithAlpha
                         }
                     }
                 }
@@ -521,25 +586,53 @@ class MainActivity : ComponentActivity() {
         tempDrawingMarkers.clear()
     }
 
-    // 高亮显示指定围栏
+    // 高亮显示指定围栏（再次点击取消高亮）
     fun highlightGeoFence(fenceId: String) {
-        // 重置所有围栏的样式
-        circleOverlays.forEach { (_, circle) ->
-            circle.strokeColor = AndroidColor.parseColor("#FF0000")
+        // 如果点击的是同一个围栏，取消高亮
+        if (highlightedFenceId == fenceId) {
+            highlightedFenceId = null
+            // 重置所有围栏的样式
+            circleOverlays.forEach { (_, circle) ->
+                circle.strokeColor = AndroidColor.parseColor("#FF0000")
                 circle.strokeWidth = 2f
+            }
+            polygonOverlays.forEach { (_, polygon) ->
+                polygon.strokeColor = AndroidColor.parseColor("#FF0000")
+                polygon.strokeWidth = 2f
+            }
+            return
         }
-        polygonOverlays.forEach { (_, polygon) ->
-            polygon.strokeColor = AndroidColor.parseColor("#FF0000")
-            polygon.strokeWidth = 2f
+
+        // 取消之前的高亮，恢复围栏原始颜色
+        val oldId = highlightedFenceId
+        if (oldId != null) {
+            // 查找围栏原始颜色
+            val oldFence = geoFences.find { it.id == oldId }
+            val originalColor = oldFence?.color ?: "#FF0000"
+            val colorInt = AndroidColor.parseColor(originalColor)
+
+            if (circleOverlays.containsKey(oldId)) {
+                circleOverlays[oldId]?.apply {
+                    strokeColor = colorInt
+                    strokeWidth = 2f
+                }
+            } else if (polygonOverlays.containsKey(oldId)) {
+                polygonOverlays[oldId]?.apply {
+                    strokeColor = colorInt
+                    strokeWidth = 2f
+                }
+            }
         }
-        // 高亮选中的围栏
+
+        // 设置新的高亮（使用黄色高亮）
+        highlightedFenceId = fenceId
         if (circleOverlays.containsKey(fenceId)) {
             val circle = circleOverlays[fenceId]
-            circle?.strokeColor = AndroidColor.parseColor("#00FF00")
+            circle?.strokeColor = AndroidColor.parseColor("#FFFF00")
             circle?.strokeWidth = 4f
         } else if (polygonOverlays.containsKey(fenceId)) {
             val polygon = polygonOverlays[fenceId]
-            polygon?.strokeColor = AndroidColor.parseColor("#00FF00")
+            polygon?.strokeColor = AndroidColor.parseColor("#FFFF00")
             polygon?.strokeWidth = 4f
         }
     }
@@ -643,7 +736,8 @@ fun AMapView(
             try {
                 val myLocationStyle = MyLocationStyle()
                 myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE_NO_CENTER)
-                myLocationStyle.interval(2000)
+                // 地图蓝点定位间隔改为 10 秒，与 SmartScheduler 的基础间隔保持一致，省电
+                myLocationStyle.interval(10000)
                 myLocationStyle.strokeColor(AndroidColor.parseColor("#3D9BE9"))
                 myLocationStyle.radiusFillColor(AndroidColor.argb(50, 63, 155, 233))
                 myLocationStyle.strokeWidth(2f)
@@ -1049,6 +1143,7 @@ fun MainScreen(
     locationError: String?
 ) {
     val context = LocalContext.current
+    val appPreferences = remember { AppPreferences(context) }
     val mainActivity = context as MainActivity
     val app = context.applicationContext as TrackMasterApplication
     val scope = rememberCoroutineScope()
@@ -1057,8 +1152,26 @@ fun MainScreen(
     val fenceName = remember { mutableStateOf("") }
     val fenceRadius = remember { mutableStateOf(100f) }
     val selectedFenceType = remember { mutableStateOf(GeoFenceType.CIRCLE) }
+    val selectedFenceColor = remember { mutableStateOf("#FF0000") }
+    val fillAlpha = remember { mutableFloatStateOf(appPreferences.fillAlpha) }
     val isDrawingFence = remember { mutableStateOf(false) }
     val drawingPoints = remember { mutableStateListOf<GeoFencePoint>() }
+
+    // 围栏颜色选项
+    val fenceColorOptions = listOf(
+        "#FF0000", // 红色
+        "#E91E63", // 粉色
+        "#9C27B0", // 紫色
+        "#673AB7", // 深紫
+        "#3F51B5", // 靛蓝
+        "#2196F3", // 蓝色
+        "#00BCD4", // 青色
+        "#009688", // 蓝绿色
+        "#4CAF50", // 绿色
+        "#FF9800", // 橙色
+        "#FF5722", // 深橙
+        "#795548"  // 棕色
+    )
 
     // 控制菜单展开状态
     val isMenuExpanded = remember { mutableStateOf(false) }
@@ -1076,6 +1189,10 @@ fun MainScreen(
     val showCategoryManagerDialog = remember { mutableStateOf(false) }
     // 控制数据管理对话框显示
     val showDataManagementDialog = remember { mutableStateOf(false) }
+    // 控制围栏导出导入对话框显示
+    val showFenceExportImportDialog = remember { mutableStateOf(false) }
+    // 控制停留记录导出导入对话框显示
+    val showStatsExportImportDialog = remember { mutableStateOf(false) }
     // 热力图开关
     val heatmapEnabled = remember { mutableStateOf(false) }
     // 保存热力图覆盖层引用（避免每次创建新实例）
@@ -1330,7 +1447,7 @@ fun MainScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth().height(40.dp)
                                 ) {
-                                    Icon(Icons.Default.Undo, contentDescription = "删除最后一个顶点", tint = Danger, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "删除最后一个顶点", tint = Danger, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("删除最后一个顶点", color = Danger, fontSize = 13.sp)
                                 }
@@ -1403,6 +1520,9 @@ fun MainScreen(
                         indication = null
                     )
             ) {
+                // 观察围栏状态版本，触发 UI 刷新
+                @Suppress("UNUSED_VARIABLE")
+                val fenceVersion by app.fenceStateVersion.collectAsState()
                 val currentFences = mainActivity.getCurrentFences()
                 val smallestFence = getSmallestFence(currentFences)
                 if (isDynamicIslandExpanded.value) {
@@ -1526,8 +1646,8 @@ fun MainScreen(
                                     }
                                     
                                     val eventIcon = when (event.action) {
-                                        GeoFenceAction.ENTER -> Icons.Default.ArrowForward
-                                        GeoFenceAction.EXIT -> Icons.Default.ArrowBack
+                                        GeoFenceAction.ENTER -> Icons.AutoMirrored.Filled.ArrowForward
+                                        GeoFenceAction.EXIT -> Icons.AutoMirrored.Filled.ArrowBack
                                         GeoFenceAction.STAY -> Icons.Default.AccessTime
                                     }
                                     
@@ -1705,7 +1825,9 @@ fun MainScreen(
                                 if (fenceName.value.isNotEmpty()) {
                                     mainActivity.createPolygonGeoFence(
                                         name = fenceName.value,
-                                        points = drawingPoints.toList()
+                                        points = drawingPoints.toList(),
+                                        color = selectedFenceColor.value,
+                                        alpha = fillAlpha.value
                                     )
                                     mainActivity.clearDrawingMarkers()
                                     isDrawingFence.value = false
@@ -1830,20 +1952,37 @@ fun MainScreen(
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = "地理围栏",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = NeonCoral
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "${mainActivity.getGeoFences().size} 个",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "地理围栏",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NeonCoral
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${mainActivity.getGeoFences().size} 个",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            // 分类管理按钮
+                            IconButton(
+                                onClick = { showCategoryManagerDialog.value = true },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FolderOpen,
+                                    contentDescription = "分类管理",
+                                    tint = NeonCoral,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         
@@ -1880,8 +2019,10 @@ fun MainScreen(
                                             .padding(vertical = 4.dp)
                                             .clickable {
                                                 expandedCategories = if (isExpanded) {
-                                                    expandedCategories - "all"
+                                                    // 合上"全部分类"时，也要收起所有分类的折叠状态，避免下次打开卡顿
+                                                    emptySet()
                                                 } else {
+                                                    // 展开"全部分类"时，保持其他分类的展开状态
                                                     expandedCategories + "all"
                                                 }
                                             },
@@ -2055,8 +2196,13 @@ fun MainScreen(
                                                                                 )
                                                                             }
                                                                         } else {
-                                                                            Column {
-                                                                                fencesInCategory.forEach { fence ->
+                                                                            LazyColumn(
+                                                                                modifier = Modifier.heightIn(max = 300.dp)
+                                                                            ) {
+                                                                                items(
+                                                                                    items = fencesInCategory,
+                                                                                    key = { it.id }
+                                                                                ) { fence ->
                                                                                     FenceItemWithMove(
                                                                                         fence = fence,
                                                                                         mainActivity = mainActivity,
@@ -2087,11 +2233,16 @@ fun MainScreen(
     // 创建地理围栏对话框
     if (showGeoFenceDialog.value) {
         GlassDialog(
-            onDismissRequest = { 
+            onDismissRequest = {
+                // 关闭对话框时重置所有状态
                 showGeoFenceDialog.value = false
-                if (!isDrawingFence.value) {
+                if (isDrawingFence.value) {
+                    // 如果在绘制模式下关闭，也需要取消绘制状态
+                    isDrawingFence.value = false
                     drawingPoints.clear()
                 }
+                // 重置围栏名称
+                fenceName.value = ""
             },
             title = { Text(if (isDrawingFence.value) "完成绘制" else "创建地理围栏") },
             text = {
@@ -2115,7 +2266,53 @@ fun MainScreen(
                             label = { Text("围栏名称") }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
-                        
+
+                        // 颜色选择器（可横向滚动）
+                        Text(
+                            text = "选择颜色",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(fenceColorOptions) { color ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(android.graphics.Color.parseColor(color)))
+                                        .border(
+                                            width = if (selectedFenceColor.value == color) 3.dp else 0.dp,
+                                            color = if (selectedFenceColor.value == color) NeonCoral else Color.Transparent,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { selectedFenceColor.value = color }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // 透明度选择器
+                        Text(
+                            text = "填充透明度: ${(fillAlpha.value * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = fillAlpha.value,
+                            onValueChange = {
+                                fillAlpha.value = it
+                                appPreferences.fillAlpha = it
+                                refreshDataTrigger++
+                            },
+                            valueRange = 0.1f..0.8f,
+                            steps = 6,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         // 滑动标签切换器 - 优化状态管理
                         val isCircleSelected = selectedFenceType.value == GeoFenceType.CIRCLE
                         val isPolygonSelected = selectedFenceType.value == GeoFenceType.POLYGON
@@ -2258,7 +2455,8 @@ fun MainScreen(
                         if (drawingPoints.size >= 3 && fenceName.value.isNotEmpty()) {
                             mainActivity.createPolygonGeoFence(
                                 name = fenceName.value,
-                                points = drawingPoints.toList()
+                                points = drawingPoints.toList(),
+                                color = selectedFenceColor.value
                             )
                             mainActivity.clearDrawingMarkers() // 清除临时标记
                             showGeoFenceDialog.value = false
@@ -2282,7 +2480,9 @@ fun MainScreen(
                                 name = fenceName.value,
                                 latitude = currentLocation.latitude,
                                 longitude = currentLocation.longitude,
-                                radius = fenceRadius.value
+                                radius = fenceRadius.value,
+                                color = selectedFenceColor.value,
+                                alpha = fillAlpha.value
                             )
                             showGeoFenceDialog.value = false
                             fenceName.value = ""
@@ -2571,6 +2771,14 @@ fun MainScreen(
             onOpenDataManagement = {
                 showSettingsDialog.value = false
                 showDataManagementDialog.value = true
+            },
+            onOpenFenceExportImport = {
+                showSettingsDialog.value = false
+                showFenceExportImportDialog.value = true
+            },
+            onOpenStatsExportImport = {
+                showSettingsDialog.value = false
+                showStatsExportImportDialog.value = true
             }
         )
     }
@@ -2584,6 +2792,103 @@ fun MainScreen(
                 refreshDataTrigger++
             },
             dataManager = app.dataManager
+        )
+    }
+
+    // 围栏导出导入对话框
+    if (showFenceExportImportDialog.value) {
+        FenceExportImportDialog(
+            onDismiss = {
+                showFenceExportImportDialog.value = false
+            },
+            fences = mainActivity.getGeoFences(),
+            onExport = { selectedFences ->
+                val json = mainActivity.getDbHelper().generateFencesJson(selectedFences)
+                if (json != null) {
+                    try {
+                        val fileName = "TrackMaster_Fences_${java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())}.json"
+                        val file = java.io.File(context.getExternalFilesDir(null), fileName)
+                        file.writeText(json)
+
+                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            file
+                        )
+
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "application/json"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            putExtra(Intent.EXTRA_SUBJECT, "TrackMaster 围栏分享")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "分享围栏").apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = "分享失败",
+                                duration = SnackbarDuration.Long
+                            )
+                        }
+                    }
+                } else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = "导出失败",
+                            duration = SnackbarDuration.Long
+                        )
+                    }
+                }
+            },
+            onImport = { jsonContent ->
+                val count = mainActivity.getDbHelper().importFencesFromJson(jsonContent)
+                if (count >= 0) {
+                    Log.d("TrackMaster", "导入成功，准备刷新围栏...")
+                    mainActivity.refreshGeoFences()
+                    // 同步更新Application的围栏数据
+                    val trackMasterApp = mainActivity.application as TrackMasterApplication
+                    Log.d("TrackMaster", "刷新前 Application geoFences: ${trackMasterApp.geoFences.size}个")
+                    trackMasterApp.geoFences.clear()
+                    trackMasterApp.geoFences.addAll(mainActivity.getGeoFences())
+                    Log.d("TrackMaster", "刷新后 Application geoFences: ${trackMasterApp.geoFences.size}个")
+                    // 刷新Engine的围栏数据，使其包含新导入的围栏
+                    trackMasterApp.refreshEngineFences()
+
+                    // 导入后主动检查当前位置是否在围栏内
+                    trackMasterApp.checkAndUpdateFenceState()
+
+                    refreshDataTrigger++
+                    Log.d("TrackMaster", "导入完成，已触发刷新")
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = "成功导入${count}个围栏",
+                            duration = SnackbarDuration.Long
+                        )
+                    }
+                } else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = "导入失败：文件无效",
+                            duration = SnackbarDuration.Long
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    // 停留记录导出导入对话框
+    if (showStatsExportImportDialog.value) {
+        StatsExportImportScreen(
+            onDismiss = {
+                showStatsExportImportDialog.value = false
+            },
+            dataManager = app.dataManager,
+            stayDurationManager = app.stayDurationManager
         )
     }
 
@@ -2693,14 +2998,18 @@ fun MainScreen(
 
     // 编辑围栏对话框
     showEditFenceDialog?.let { fence ->
-        var fenceName by remember { mutableStateOf(fence.name) }
-        var fenceRadius by remember { mutableStateOf(fence.radius ?: 100f) }
+        var editedFenceName by remember { mutableStateOf(fence.name) }
+        var editedFenceRadius by remember { mutableStateOf(fence.radius ?: 100f) }
+        var fenceColor by remember { mutableStateOf(fence.color) }
+        var fenceAlpha by remember { mutableStateOf(fence.alpha) }
         // 对于多边形围栏，使用可变的点列表
         val fencePoints = remember { mutableStateListOf<GeoFencePoint>() }
 
         // 初始化点列表
         LaunchedEffect(fence) {
             fencePoints.clear()
+            fenceColor = fence.color
+            fenceAlpha = fence.alpha
             if (fence.type == GeoFenceType.POLYGON && fence.points != null) {
                 fencePoints.addAll(fence.points)
             }
@@ -2713,8 +3022,8 @@ fun MainScreen(
                 Column {
                     // 围栏名称
                     OutlinedTextField(
-                        value = fenceName,
-                        onValueChange = { fenceName = it },
+                        value = editedFenceName,
+                        onValueChange = { editedFenceName = it },
                         label = { Text("围栏名称") },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -2725,26 +3034,66 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // 颜色选择
+                    Text("围栏颜色", style = MaterialTheme.typography.labelMedium)
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        items(fenceColorOptions) { color ->
+                            val isSelected = fenceColor == color
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .border(
+                                        width = if (isSelected) 3.dp else 1.dp,
+                                        color = if (isSelected) Color.White else Color.Gray,
+                                        shape = CircleShape
+                                    )
+                                    .background(Color(android.graphics.Color.parseColor(color)))
+                                    .clickable { fenceColor = color }
+                            )
+                        }
+                    }
+
+                    // 透明度选择
+                    Text("填充透明度: ${(fenceAlpha * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = fenceAlpha,
+                        onValueChange = {
+                            fenceAlpha = it
+                            refreshDataTrigger++
+                        },
+                        valueRange = 0.1f..0.8f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // 类型特定编辑
                     when (fence.type) {
                         GeoFenceType.CIRCLE -> {
                             Text("圆形围栏半径", style = MaterialTheme.typography.labelMedium)
                             Slider(
-                                value = fenceRadius,
-                                onValueChange = { fenceRadius = it },
+                                value = editedFenceRadius,
+                                onValueChange = { editedFenceRadius = it },
                                 valueRange = 50f..500f,
                                 steps = 9,
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            Text("${fenceRadius.toInt()} 米", style = MaterialTheme.typography.bodySmall)
+                            Text("${editedFenceRadius.toInt()} 米", style = MaterialTheme.typography.bodySmall)
                             
                             Spacer(modifier = Modifier.height(16.dp))
                             
                             GlassButton(
                                 onClick = {
                                     val updatedFence = fence.copy(
-                                        name = fenceName,
-                                        radius = fenceRadius
+                                        name = editedFenceName,
+                                        radius = editedFenceRadius,
+                                        color = fenceColor,
+                                        alpha = fenceAlpha
                                     )
                                     editingFence = updatedFence
                                     editingVersion++
@@ -2772,8 +3121,10 @@ fun MainScreen(
                             GlassButton(
                                 onClick = {
                                     val updatedFence = fence.copy(
-                                        name = fenceName,
-                                        points = fencePoints.toList()
+                                        name = editedFenceName,
+                                        points = fencePoints.toList(),
+                                        color = fenceColor,
+                                        alpha = fenceAlpha
                                     )
                                     editingFence = updatedFence
                                     editingPoints.clear()
@@ -2802,8 +3153,10 @@ fun MainScreen(
                     onClick = {
                         val updatedFence = when (fence.type) {
                             GeoFenceType.CIRCLE -> fence.copy(
-                                name = fenceName,
-                                radius = fenceRadius
+                                name = editedFenceName,
+                                radius = editedFenceRadius,
+                                color = fenceColor,
+                                alpha = fenceAlpha
                             )
                             GeoFenceType.POLYGON -> {
                                 // 检查多边形是否至少有3个顶点
@@ -2817,8 +3170,10 @@ fun MainScreen(
                                     return@GlassButton
                                 }
                                 fence.copy(
-                                    name = fenceName,
-                                    points = fencePoints.toList()
+                                    name = editedFenceName,
+                                    points = fencePoints.toList(),
+                                    color = fenceColor,
+                                    alpha = fenceAlpha
                                 )
                             }
                         }
@@ -2830,7 +3185,7 @@ fun MainScreen(
                             refreshDataTrigger++
                             scope.launch {
                                 snackbarHostState.showSnackbar(
-                                    message = "围栏「${fenceName}」已更新",
+                                    message = "围栏「${editedFenceName}」已更新",
                                     duration = SnackbarDuration.Short
                                 )
                             }

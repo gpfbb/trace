@@ -1,11 +1,9 @@
 package com.trackmaster.app
 
-import android.Manifest
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
-import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.trackmaster.app.core.PowerMode
@@ -16,12 +14,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -31,12 +29,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.ui.theme.*
-import kotlinx.coroutines.delay
 
+// 独立的设置页面内容组件
 @Composable
-fun SettingsScreen(
-    onDismiss: () -> Unit,
-    onOpenDataManagement: (() -> Unit)? = null
+fun SettingsPage(
+    @Suppress("UNUSED_PARAMETER") onNavigateBack: (() -> Unit)? = null,
+    onOpenDataManagement: (() -> Unit)? = null,
+    onOpenFenceExportImport: (() -> Unit)? = null,
+    onOpenStatsExportImport: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as TrackMasterApplication
@@ -44,16 +44,16 @@ fun SettingsScreen(
     val permissionManager = remember { PermissionManager(context) }
     var permissionStatus by remember { mutableStateOf(permissionManager.checkPermissions()) }
     var selectedMode by remember { mutableStateOf(prefs.powerMode) }
-    
+
     // 高级设置状态
     var showAdvancedSettings by remember { mutableStateOf(false) }
     var stationaryThreshold by remember { mutableStateOf(prefs.stationaryThreshold) }
     var boundaryBuffer by remember { mutableStateOf(prefs.boundaryBuffer) }
     var driftThreshold by remember { mutableStateOf(prefs.driftThreshold) }
-    
+
     // 省电统计状态
     var showPowerSavingStats by remember { mutableStateOf(false) }
-    
+
     // 实时更新省电统计
     var totalLocations by remember { mutableStateOf(prefs.totalLocations) }
     var processedLocations by remember { mutableStateOf(prefs.processedLocations) }
@@ -64,21 +64,376 @@ fun SettingsScreen(
     // 省电算法统计
     var powerSavingStats: PowerSavingStats? by remember { mutableStateOf(null) }
 
+    LaunchedEffect(Unit) {
+        permissionStatus = permissionManager.checkPermissions()
+    }
+
+    // 定期刷新省电统计 - 使用 lifecycle-aware 效果
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                totalLocations = prefs.totalLocations
+                processedLocations = prefs.processedLocations
+                cacheStats = GeoMath.getCacheStats()
+                powerSavingStats = try {
+                    app.engine.getScheduler().stats
+                } catch (e: Exception) { null }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(brush = Brush.verticalGradient(colors = listOf(DeepChocolate, EspressoBlack)))
+    ) {
+        // 顶部导航栏 - 无返回按钮，作为底部Tab页面
+        GlassTopCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "设置",
+                    tint = NeonCoral,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    "应用设置",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = NeonCoral
+                )
+            }
+        }
+
+        // 内容区域
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            PermissionSectionContent(
+                permissionStatus = permissionStatus,
+                permissionManager = permissionManager,
+                onPermissionChanged = {
+                    permissionStatus = permissionManager.checkPermissions()
+                }
+            )
+
+            HorizontalDivider(color = Color(0x30FFFFFF))
+
+            LocationModeSection(
+                selectedMode = selectedMode,
+                onModeSelected = { mode ->
+                    selectedMode = mode
+                    prefs.powerMode = mode
+                    app.getLocationService()?.setPowerMode(mode)
+                }
+            )
+
+            HorizontalDivider(color = Color(0x30FFFFFF))
+
+            if (onOpenDataManagement != null) {
+                SettingsMenuCard(
+                    icon = Icons.Default.Folder,
+                    title = "数据与日志管理",
+                    description = "导出、导入或删除历史数据",
+                    tint = NeonCoral,
+                    onClick = onOpenDataManagement
+                )
+                HorizontalDivider(color = Color(0x30FFFFFF))
+            }
+
+            if (onOpenFenceExportImport != null) {
+                SettingsMenuCard(
+                    icon = Icons.Default.Share,
+                    title = "围栏导入导出",
+                    description = "导出或导入围栏数据（支持分享）",
+                    tint = NeonAmber,
+                    onClick = onOpenFenceExportImport
+                )
+                HorizontalDivider(color = Color(0x30FFFFFF))
+            }
+
+            if (onOpenStatsExportImport != null) {
+                SettingsMenuCard(
+                    icon = Icons.Default.Timeline,
+                    title = "停留记录导入导出",
+                    description = "导出或导入停留统计数据（支持分享）",
+                    tint = NeonBlue,
+                    onClick = onOpenStatsExportImport
+                )
+                HorizontalDivider(color = Color(0x30FFFFFF))
+            }
+
+            // 省电效果统计
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showPowerSavingStats = !showPowerSavingStats },
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0x4D000000)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(0.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BatterySaver,
+                            contentDescription = "省电统计",
+                            tint = Success,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "省电效果统计",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = Color(0xFFE0E0E0)
+                            )
+                            Text(
+                                "查看定位请求次数和省电效果",
+                                fontSize = 13.sp,
+                                color = Color(0xFFBDBDBD)
+                            )
+                        }
+                        Icon(
+                            imageVector = if (showPowerSavingStats) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (showPowerSavingStats) "收起" else "展开",
+                            tint = Color(0xFFBDBDBD),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    if (showPowerSavingStats) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        PowerSavingStatsSection(
+                            totalLocations = totalLocations,
+                            processedLocations = processedLocations,
+                            cacheStats = cacheStats,
+                            prefs = prefs,
+                            onReset = {
+                                prefs.resetStats()
+                                totalLocations = 0
+                                processedLocations = 0
+                            },
+                            onClearCache = {
+                                GeoMath.clearCirclePolygonCache()
+                                cacheStats = GeoMath.getCacheStats()
+                            },
+                            stats = powerSavingStats
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = Color(0x30FFFFFF))
+
+            // 高级设置
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showAdvancedSettings = !showAdvancedSettings },
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0x4D000000)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(0.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "高级设置",
+                            tint = NeonCoral,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "高级设置",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = Color(0xFFE0E0E0)
+                            )
+                            Text(
+                                "调整定位算法参数",
+                                fontSize = 13.sp,
+                                color = Color(0xFFBDBDBD)
+                            )
+                        }
+                        Icon(
+                            imageVector = if (showAdvancedSettings) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (showAdvancedSettings) "收起" else "展开",
+                            tint = Color(0xFFBDBDBD),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    if (showAdvancedSettings) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        AdvancedSettingsSection(
+                            stationaryThreshold = stationaryThreshold,
+                            onStationaryThresholdChange = { value ->
+                                stationaryThreshold = value
+                                prefs.stationaryThreshold = value
+                                app.updateEngineConfig()
+                            },
+                            boundaryBuffer = boundaryBuffer,
+                            onBoundaryBufferChange = { value ->
+                                boundaryBuffer = value
+                                prefs.boundaryBuffer = value
+                                app.updateEngineConfig()
+                            },
+                            driftThreshold = driftThreshold,
+                            onDriftThresholdChange = { value ->
+                                driftThreshold = value
+                                prefs.driftThreshold = value
+                                app.updateEngineConfig()
+                            }
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = Color(0x30FFFFFF))
+
+            InfoSection()
+
+            Spacer(modifier = Modifier.height(80.dp))
+        }
+    }
+}
+
+@Composable
+private fun SettingsMenuCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0x4D000000)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = tint,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = Color(0xFFE0E0E0)
+                )
+                Text(
+                    description,
+                    fontSize = 13.sp,
+                    color = Color(0xFFBDBDBD)
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color(0xFFBDBDBD)
+            )
+        }
+    }
+}
+
+// SettingsScreen 保持向后兼容 - 作为对话框
+@Composable
+fun SettingsScreen(
+    onDismiss: () -> Unit,
+    onOpenDataManagement: (() -> Unit)? = null,
+    onOpenFenceExportImport: (() -> Unit)? = null,
+    onOpenStatsExportImport: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val app = context.applicationContext as TrackMasterApplication
+    val prefs = app.appPreferences
+    val permissionManager = remember { PermissionManager(context) }
+    var permissionStatus by remember { mutableStateOf(permissionManager.checkPermissions()) }
+    var selectedMode by remember { mutableStateOf(prefs.powerMode) }
+
+    // 高级设置状态
+    var showAdvancedSettings by remember { mutableStateOf(false) }
+    var stationaryThreshold by remember { mutableStateOf(prefs.stationaryThreshold) }
+    var boundaryBuffer by remember { mutableStateOf(prefs.boundaryBuffer) }
+    var driftThreshold by remember { mutableStateOf(prefs.driftThreshold) }
+
+    // 省电统计状态
+    var showPowerSavingStats by remember { mutableStateOf(false) }
+
+    // 实时更新省电统计
+    var totalLocations by remember { mutableStateOf(prefs.totalLocations) }
+    var processedLocations by remember { mutableStateOf(prefs.processedLocations) }
+
+    // 缓存统计状态
+    var cacheStats by remember { mutableStateOf<GeoMath.CacheStats?>(null) }
+
+    // 省电算法统计
+    var powerSavingStats: PowerSavingStats? by remember { mutableStateOf(null) }
 
     LaunchedEffect(Unit) {
         permissionStatus = permissionManager.checkPermissions()
     }
-    
-    // 定期刷新省电统计
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(2000) // 每2秒刷新
-            totalLocations = prefs.totalLocations
-            processedLocations = prefs.processedLocations
-            // 更新缓存统计
-            cacheStats = GeoMath.getCacheStats()
-            // 更新省电算法统计
-            powerSavingStats = app.engine?.getScheduler()?.stats
+
+    // 定期刷新省电统计 - 使用 lifecycle-aware 效果
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                totalLocations = prefs.totalLocations
+                processedLocations = prefs.processedLocations
+                cacheStats = GeoMath.getCacheStats()
+                powerSavingStats = try {
+                    app.engine.getScheduler().stats
+                } catch (e: Exception) { null }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -103,7 +458,7 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                PermissionSection(
+                PermissionSectionContent(
                     permissionStatus = permissionStatus,
                     permissionManager = permissionManager,
                     onPermissionChanged = {
@@ -125,51 +480,35 @@ fun SettingsScreen(
                 HorizontalDivider(color = Color(0x30FFFFFF))
 
                 if (onOpenDataManagement != null) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenDataManagement() },
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0x4D000000)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(0.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "数据管理",
-                                tint = NeonCoral,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "数据与日志管理",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = Color(0xFFE0E0E0)
-                                )
-                                Text(
-                                    "导出、导入或删除历史数据",
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFBDBDBD)
-                                )
-                            }
-                            Text(
-                                ">",
-                                fontSize = 20.sp,
-                                color = Color(0xFFBDBDBD),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                    SettingsMenuCard(
+                        icon = Icons.Default.Folder,
+                        title = "数据与日志管理",
+                        description = "导出、导入或删除历史数据",
+                        tint = NeonCoral,
+                        onClick = onOpenDataManagement
+                    )
+                    HorizontalDivider(color = Color(0x30FFFFFF))
+                }
 
+                if (onOpenFenceExportImport != null) {
+                    SettingsMenuCard(
+                        icon = Icons.Default.Share,
+                        title = "围栏导入导出",
+                        description = "导出或导入围栏数据（支持分享）",
+                        tint = NeonAmber,
+                        onClick = onOpenFenceExportImport
+                    )
+                    HorizontalDivider(color = Color(0x30FFFFFF))
+                }
+
+                if (onOpenStatsExportImport != null) {
+                    SettingsMenuCard(
+                        icon = Icons.Default.Timeline,
+                        title = "停留记录导入导出",
+                        description = "导出或导入停留统计数据（支持分享）",
+                        tint = NeonBlue,
+                        onClick = onOpenStatsExportImport
+                    )
                     HorizontalDivider(color = Color(0x30FFFFFF))
                 }
 
@@ -215,7 +554,7 @@ fun SettingsScreen(
                                 modifier = Modifier.size(28.dp)
                             )
                         }
-                        
+
                         if (showPowerSavingStats) {
                             Spacer(modifier = Modifier.height(16.dp))
                             PowerSavingStatsSection(
@@ -230,7 +569,7 @@ fun SettingsScreen(
                                 },
                                 onClearCache = {
                                     GeoMath.clearCirclePolygonCache()
-                                    cacheStats = GeoMath.getCacheStats()  // 立即更新统计
+                                    cacheStats = GeoMath.getCacheStats()
                                 },
                                 stats = powerSavingStats
                             )
@@ -282,7 +621,7 @@ fun SettingsScreen(
                                 modifier = Modifier.size(28.dp)
                             )
                         }
-                        
+
                         if (showAdvancedSettings) {
                             Spacer(modifier = Modifier.height(16.dp))
                             AdvancedSettingsSection(
@@ -323,7 +662,7 @@ fun SettingsScreen(
 }
 
 @Composable
-fun PermissionSection(
+fun PermissionSectionContent(
     permissionStatus: PermissionManager.PermissionStatus,
     permissionManager: PermissionManager,
     onPermissionChanged: () -> Unit
@@ -377,7 +716,7 @@ fun PermissionSection(
 
         PermissionItem(
             title = "电池优化白名单",
-            description = "防止系统杀死后台服务",
+            description = "防止后台服务被系统杀死",
             isGranted = permissionStatus.isIgnoringBatteryOptimizations,
             onGrantClick = {
                 permissionManager.getBatteryOptimizationIntent()?.let { intent ->
@@ -481,21 +820,21 @@ fun LocationModeSection(
 
         LocationModeItem(
             title = "省电模式",
-            description = "定位频率较低(60秒/次)，在围栏边界区域提升至10秒/次，最省电",
+            description = "超低功耗，适合睡觉/长时间静止。静止1分钟起1分钟/次，5分钟起3分钟/次，1小时以上仅15分钟/次",
             isSelected = selectedMode == PowerMode.POWERSAVE,
             onClick = { onModeSelected(PowerMode.POWERSAVE) }
         )
 
         LocationModeItem(
             title = "均衡模式",
-            description = "根据运动状态智能调整：静止30秒/次，步行15秒/次，跑步/高速移动5秒/次",
+            description = "智能平衡：静止15秒/次起，逐渐降至8分钟/次。边界500米内临时提频",
             isSelected = selectedMode == PowerMode.BALANCED,
             onClick = { onModeSelected(PowerMode.BALANCED) }
         )
 
         LocationModeItem(
             title = "性能模式",
-            description = "最高定位频率(2秒/次)，实时性和精度最好，但耗电最高",
+            description = "最高频率(5秒/次)，实时性和精度最好，但耗电高，适合导航追踪",
             isSelected = selectedMode == PowerMode.PERFORMANCE,
             onClick = { onModeSelected(PowerMode.PERFORMANCE) }
         )
@@ -575,6 +914,7 @@ fun InfoSection() {
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun PowerSavingStatsSection(
     totalLocations: Int,
@@ -587,7 +927,7 @@ fun PowerSavingStatsSection(
 ) {
     val savedPercentage = prefs.getSavedPercentage()
     val performanceModeTotal = prefs.getPerformanceModeEstimate()
-    
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // 今日定位请求统计
         Card(
@@ -652,7 +992,7 @@ fun PowerSavingStatsSection(
                 }
             }
         }
-        
+
         // 缓存性能统计
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -686,9 +1026,9 @@ fun PowerSavingStatsSection(
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = when {
-                                    cacheStats.totalRequests == 0L -> Info  // 没有数据，中性颜色
-                                    cacheStats.hitRate >= 0.8 -> Success    // 高命中率
-                                    else -> Warning                         // 低命中率
+                                    cacheStats.totalRequests == 0L -> Info
+                                    cacheStats.hitRate >= 0.8 -> Success
+                                    else -> Warning
                                 }
                             )
                         }
@@ -767,7 +1107,6 @@ fun PowerSavingStatsSection(
             }
         }
 
-
         // 操作按钮行
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -843,7 +1182,7 @@ fun AdvancedSettingsSection(
                 )
             }
         }
-        
+
         // 重置按钮
         GlassButton(
             onClick = {
@@ -855,7 +1194,7 @@ fun AdvancedSettingsSection(
         ) {
             Text("恢复默认设置", color = Color.White)
         }
-        
+
         // 静止判定阈值
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
@@ -878,8 +1217,8 @@ fun AdvancedSettingsSection(
             Slider(
                 value = stationaryThreshold.toFloat(),
                 onValueChange = { onStationaryThresholdChange(it.toDouble()) },
-                valueRange = 10f..100f,
-                steps = 8,
+                valueRange = 30f..150f,
+                steps = 11,
                 colors = SliderDefaults.colors(
                     thumbColor = NeonCoral,
                     activeTrackColor = NeonCoral,
@@ -887,12 +1226,12 @@ fun AdvancedSettingsSection(
                 )
             )
             Text(
-                "设置用户静止时的距离判定阈值。值越大越容易判定为静止，越省电。",
+                "判定为静止的距离阈值。值越大越容易判定为静止，越省电。建议设置80-100米。",
                 fontSize = 11.sp,
                 color = Color(0xFF9E9E9E)
             )
         }
-        
+
         // 边界缓冲距离
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
@@ -915,8 +1254,8 @@ fun AdvancedSettingsSection(
             Slider(
                 value = boundaryBuffer.toFloat(),
                 onValueChange = { onBoundaryBufferChange(it.toDouble()) },
-                valueRange = 50f..500f,
-                steps = 8,
+                valueRange = 10f..200f,
+                steps = 18,
                 colors = SliderDefaults.colors(
                     thumbColor = NeonCoral,
                     activeTrackColor = NeonCoral,
@@ -924,12 +1263,12 @@ fun AdvancedSettingsSection(
                 )
             )
             Text(
-                "围栏边界缓冲区大小。值越大边界误判率越低，但可能导致延迟检测。",
+                "省电模式边界缓冲距离。值越大越省电，但进出围栏检测延迟。极小值(10-50米)可快速检测但耗电略高。",
                 fontSize = 11.sp,
                 color = Color(0xFF9E9E9E)
             )
         }
-        
+
         // 漂移检测阈值
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(

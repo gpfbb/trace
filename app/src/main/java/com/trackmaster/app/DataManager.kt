@@ -420,7 +420,255 @@ class DataManager(private val context: Context) {
             0
         }
     }
+
+    // ============================================================
+    // 停留记录导出导入（停留统计专用）
+    // ============================================================
+
+    /**
+     * 导出停留记录为 JSON 文件（stays + daily_stays + events）
+     * 导出后可分享给他人
+     */
+    suspend fun exportStatsToJson(): StatsExportResult = withContext(Dispatchers.IO) {
+        try {
+            val timestamp = SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.getDefault()).format(Date())
+            val fileName = "TrackMaster_停留记录_$timestamp.json"
+            val exportFile = File(exportDir, fileName)
+
+            // 读取所有数据
+            val allStays = dbHelper.getAllStayRecords()
+            val allDailyStays = dbHelper.getAllDailyStayRecords()
+            val allEvents = dbHelper.getAllEvents()
+
+            val json = JSONObject()
+            json.put("version", 1)
+            json.put("appVersion", "1.0.0")
+            json.put("exportTime", dateTimeFormat.format(Date()))
+            json.put("dataType", "trackmaster-stats")
+
+            // stays 数组
+            val staysArray = JSONArray()
+            allStays.forEach { stay ->
+                val obj = JSONObject()
+                obj.put("id", stay.id ?: "")
+                obj.put("fenceId", stay.fenceId)
+                obj.put("fenceName", stay.fenceName)
+                obj.put("enterTime", dateTimeFormat.format(stay.enterTime))
+                obj.put("exitTime", stay.exitTime?.let { dateTimeFormat.format(it) } ?: "")
+                obj.put("duration", stay.durationSeconds ?: 0L)
+                staysArray.put(obj)
+            }
+            json.put("stays", staysArray)
+
+            // dailyStays 数组
+            val dailyArray = JSONArray()
+            allDailyStays.forEach { daily ->
+                val obj = JSONObject()
+                obj.put("date", daily.date)
+                obj.put("fenceId", daily.fenceId)
+                obj.put("fenceName", daily.fenceName)
+                obj.put("duration", daily.totalDurationSeconds)
+                dailyArray.put(obj)
+            }
+            json.put("dailyStays", dailyArray)
+
+            // events 数组
+            val eventsArray = JSONArray()
+            allEvents.forEach { event ->
+                val obj = JSONObject()
+                obj.put("id", event.id)
+                obj.put("fenceId", event.fenceId)
+                obj.put("fenceName", event.fenceName)
+                obj.put("action", event.action.name)
+                obj.put("timestamp", dateTimeFormat.format(event.time))
+                obj.put("latitude", event.latitude)
+                obj.put("longitude", event.longitude)
+                obj.put("accuracy", event.accuracy)
+                eventsArray.put(obj)
+            }
+            json.put("events", eventsArray)
+
+            FileWriter(exportFile).use { writer ->
+                writer.write(json.toString(2))
+            }
+
+            StatsExportResult(
+                success = true,
+                filePath = exportFile.absolutePath,
+                fileName = fileName,
+                message = "导出成功",
+                staysCount = allStays.size,
+                dailyStaysCount = allDailyStays.size,
+                eventsCount = allEvents.size
+            )
+        } catch (e: Exception) {
+            StatsExportResult(
+                success = false,
+                message = "导出失败: ${e.message}"
+            )
+        }
+    }
+
+    /**
+     * 从 JSON 文件导入停留记录（合并策略）
+     * - stays/events: 按 ID 去重，新的覆盖旧的
+     * - dailyStays: 按 date+fenceId 累加时长
+     */
+    suspend fun importStatsFromJson(filePath: String): StatsImportResult = withContext(Dispatchers.IO) {
+        try {
+            val file = File(filePath)
+            if (!file.exists()) {
+                return@withContext StatsImportResult(
+                    success = false,
+                    message = "文件不存在"
+                )
+            }
+
+            val json = JSONObject(file.readText())
+
+            // 校验格式
+            val version = json.optInt("version", 0)
+            val dataType = json.optString("dataType", "")
+            if (version == 0 || dataType != "trackmaster-stats") {
+                return@withContext StatsImportResult(
+                    success = false,
+                    message = "文件格式不正确，不是停留记录导出文件"
+                )
+            }
+
+            var importedStays = 0
+            var importedDailyStays = 0
+            var importedEvents = 0
+
+            // 导入 stays（使用 upsert 策略）
+            val staysArray = json.optJSONArray("stays") ?: JSONArray()
+            val stayRecords = mutableListOf<FenceStayRecord>()
+            for (i in 0 until staysArray.length()) {
+                val obj = staysArray.getJSONObject(i)
+                val id = obj.optString("id", null).takeIf { it.isNotEmpty() }
+                val enterTime = try {
+                    dateTimeFormat.parse(obj.getString("enterTime")) ?: Date()
+                } catch (e: Exception) {
+                    Date()
+                }
+                val exitTime = try {
+                    obj.optString("exitTime", "").takeIf { it.isNotEmpty() }
+                        ?.let { dateTimeFormat.parse(it) }
+                } catch (e: Exception) { null }
+                val duration = obj.optLong("duration", 0L).takeIf { it > 0 }
+
+                stayRecords.add(
+                    FenceStayRecord(
+                        id = id,
+                        fenceId = obj.getString("fenceId"),
+                        fenceName = obj.getString("fenceName"),
+                        enterTime = enterTime,
+                        exitTime = exitTime,
+                        durationSeconds = duration
+                    )
+                )
+            }
+            if (stayRecords.isNotEmpty()) {
+                dbHelper.insertStayRecordsWithId(stayRecords)
+                importedStays = stayRecords.size
+            }
+
+            // 导入 dailyStays（累加策略）
+            val dailyArray = json.optJSONArray("dailyStays") ?: JSONArray()
+            val dailyRecords = mutableListOf<DailyStayRecord>()
+            for (i in 0 until dailyArray.length()) {
+                val obj = dailyArray.getJSONObject(i)
+                dailyRecords.add(
+                    DailyStayRecord(
+                        date = obj.getString("date"),
+                        fenceId = obj.getString("fenceId"),
+                        fenceName = obj.getString("fenceName"),
+                        totalDurationSeconds = obj.getLong("duration"),
+                        lastUpdated = Date()
+                    )
+                )
+            }
+            if (dailyRecords.isNotEmpty()) {
+                dbHelper.upsertDailyStayRecords(dailyRecords)
+                importedDailyStays = dailyRecords.size
+            }
+
+            // 导入 events（upsert 策略）
+            val eventsArray = json.optJSONArray("events") ?: JSONArray()
+            val eventRecords = mutableListOf<GeoFenceEvent>()
+            for (i in 0 until eventsArray.length()) {
+                val obj = eventsArray.getJSONObject(i)
+                val timestamp = try {
+                    dateTimeFormat.parse(obj.getString("timestamp")) ?: Date()
+                } catch (e: Exception) {
+                    Date()
+                }
+                eventRecords.add(
+                    GeoFenceEvent(
+                        id = obj.optString("id", UUID.randomUUID().toString()),
+                        fenceId = obj.getString("fenceId"),
+                        fenceName = obj.getString("fenceName"),
+                        action = GeoFenceAction.valueOf(obj.getString("action")),
+                        time = timestamp,
+                        latitude = obj.getDouble("latitude"),
+                        longitude = obj.getDouble("longitude"),
+                        accuracy = obj.getDouble("accuracy").toFloat()
+                    )
+                )
+            }
+            if (eventRecords.isNotEmpty()) {
+                dbHelper.insertEventsWithId(eventRecords)
+                importedEvents = eventRecords.size
+            }
+
+            StatsImportResult(
+                success = true,
+                message = "导入成功",
+                importedStays = importedStays,
+                importedDailyStays = importedDailyStays,
+                importedEvents = importedEvents
+            )
+        } catch (e: Exception) {
+            StatsImportResult(
+                success = false,
+                message = "导入失败: ${e.message}"
+            )
+        }
+    }
+
+    /**
+     * 获取分享用的文件 URI
+     */
+    fun getShareableStatsFile(): File? {
+        val files = exportDir.listFiles()?.sortedByDescending { it.lastModified() }
+        return files?.firstOrNull()
+    }
+
+    /**
+     * 获取所有每日停留记录（用于统计页面）
+     */
+    fun getAllDailyStayRecords(): List<DailyStayRecord> {
+        return dbHelper.getAllDailyStayRecords()
+    }
 }
+
+data class StatsExportResult(
+    val success: Boolean,
+    val filePath: String? = null,
+    val fileName: String? = null,
+    val message: String,
+    val staysCount: Int = 0,
+    val dailyStaysCount: Int = 0,
+    val eventsCount: Int = 0
+)
+
+data class StatsImportResult(
+    val success: Boolean,
+    val message: String,
+    val importedStays: Int = 0,
+    val importedDailyStays: Int = 0,
+    val importedEvents: Int = 0
+)
 
 data class StorageInfo(
     val fenceCount: Int,

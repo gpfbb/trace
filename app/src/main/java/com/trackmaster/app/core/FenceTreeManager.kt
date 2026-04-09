@@ -69,11 +69,10 @@ class FenceTreeManager(private val context: Context) {
     fun getParentMap(): Map<String, String> {
         val result = mutableMapOf<String, String>()
         for ((key, value) in prefs.all) {
+            // 只处理以 KEY_PREFIX 开头的键（排除 VERSION 键等）
             if (key.startsWith(KEY_PREFIX) && value is String) {
                 val fenceId = key.removePrefix(KEY_PREFIX)
-                if (fenceId != KEY_VERSION) {
-                    result[fenceId] = value
-                }
+                result[fenceId] = value
             }
         }
         return result

@@ -165,8 +165,10 @@ class StayDurationManagerTest {
         assertNotNull(day1Record)
         assertNotNull(day2Record)
 
-        assertTrue(day1Record!!.totalDurationSeconds in 1799..1801)
-        assertTrue(day2Record!!.totalDurationSeconds in 1799..1801)
+        // 首日: 23:30 到 00:00 = 30分钟 = 1800秒
+        assertEquals(1800L, day1Record!!.totalDurationSeconds)
+        // 次日: 00:00 到 00:30 = 30分钟 = 1800秒
+        assertEquals(1800L, day2Record!!.totalDurationSeconds)
     }
 
     @Test

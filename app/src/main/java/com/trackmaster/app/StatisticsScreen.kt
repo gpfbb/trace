@@ -43,6 +43,19 @@ fun StatisticsScreen(
     onDismiss: () -> Unit,
     statisticsManager: StatisticsManager
 ) {
+    // 防双击关闭
+    var dismissHandled by remember { mutableStateOf(false) }
+    fun debouncedDismiss() {
+        if (dismissHandled) return
+        dismissHandled = true
+        onDismiss()
+    }
+    fun safeDismiss() {
+        if (dismissHandled) return
+        dismissHandled = true
+        onDismiss()
+    }
+
     var selectedTimeDimension by remember { mutableStateOf(TimeDimension.DAY) }
     var statistics by remember { mutableStateOf<List<FenceStatistics>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -103,9 +116,14 @@ fun StatisticsScreen(
         TimeDimension.MONTH -> monthFormat.format(calendar.time)
         TimeDimension.YEAR -> yearFormat.format(calendar.time)
     }
-    
+
     GlassDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (!dismissHandled) {
+                dismissHandled = true
+                onDismiss()
+            }
+        },
         title = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)

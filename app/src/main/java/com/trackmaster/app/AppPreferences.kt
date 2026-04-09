@@ -5,63 +5,72 @@ import android.content.SharedPreferences
 import com.trackmaster.app.core.PowerMode
 
 class AppPreferences(context: Context) {
-    
+
     companion object {
         private const val PREFS_NAME = "trackmaster_prefs"
-        
+
         // 高级设置键
         private const val KEY_STATIONARY_THRESHOLD = "stationary_threshold"
         private const val KEY_BOUNDARY_BUFFER = "boundary_buffer"
         private const val KEY_DRIFT_THRESHOLD = "drift_threshold"
         private const val KEY_POWER_MODE = "power_mode"
-        
+        private const val KEY_FILL_ALPHA = "fill_alpha"
+
         // 省电统计键
         private const val KEY_TOTAL_LOCATIONS = "total_locations"
         private const val KEY_PROCESSED_LOCATIONS = "processed_locations"
         private const val KEY_LAST_RESET_DATE = "last_reset_date"
+
+        // 用户体验键
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
     }
-    
+
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    
+
     // ============================================================
     // 高级设置
     // ============================================================
-    
+
     var stationaryThreshold: Double
-        get() = prefs.getFloat(KEY_STATIONARY_THRESHOLD, 30.0f).toDouble()
+        get() = prefs.getFloat(KEY_STATIONARY_THRESHOLD, 80.0f).toDouble()
         set(value) = prefs.edit().putFloat(KEY_STATIONARY_THRESHOLD, value.toFloat()).apply()
-    
+
     var boundaryBuffer: Double
-        get() = prefs.getFloat(KEY_BOUNDARY_BUFFER, 200.0f).toDouble()
+        get() = prefs.getFloat(KEY_BOUNDARY_BUFFER, 10.0f).toDouble()
         set(value) = prefs.edit().putFloat(KEY_BOUNDARY_BUFFER, value.toFloat()).apply()
-    
+
     var driftThreshold: Double
         get() = prefs.getFloat(KEY_DRIFT_THRESHOLD, 50.0f).toDouble()
         set(value) = prefs.edit().putFloat(KEY_DRIFT_THRESHOLD, value.toFloat()).apply()
-    
+
     var powerMode: PowerMode
         get() {
             val ordinal = prefs.getInt(KEY_POWER_MODE, PowerMode.BALANCED.ordinal)
             return PowerMode.values().getOrElse(ordinal) { PowerMode.BALANCED }
         }
         set(value) = prefs.edit().putInt(KEY_POWER_MODE, value.ordinal).apply()
-    
+
+    // 围栏填充透明度
+    var fillAlpha: Float
+        get() = prefs.getFloat(KEY_FILL_ALPHA, 0.3f)
+        set(value) = prefs.edit().putFloat(KEY_FILL_ALPHA, value).apply()
+
     // ============================================================
     // 省电统计
     // ============================================================
-    
+
     var totalLocations: Int
         get() = prefs.getInt(KEY_TOTAL_LOCATIONS, 0)
         set(value) = prefs.edit().putInt(KEY_TOTAL_LOCATIONS, value).apply()
-    
+
     var processedLocations: Int
         get() = prefs.getInt(KEY_PROCESSED_LOCATIONS, 0)
         set(value) = prefs.edit().putInt(KEY_PROCESSED_LOCATIONS, value).apply()
-    
+
     var lastResetDate: Long
         get() = prefs.getLong(KEY_LAST_RESET_DATE, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_RESET_DATE, value).apply()
-    
+
     fun incrementLocations(shouldProcess: Boolean) {
         // totalLocations = 所有收到的定位（包括被忽略的）
         // processedLocations = 实际处理的定位
@@ -70,13 +79,13 @@ class AppPreferences(context: Context) {
             processedLocations++
         }
     }
-    
+
     fun resetStats() {
         totalLocations = 0
         processedLocations = 0
         lastResetDate = System.currentTimeMillis()
     }
-    
+
     fun getSavedPercentage(): Double {
         // 如果从未重置过，返回0%
         if (lastResetDate == 0L) return 0.0
@@ -101,7 +110,7 @@ class AppPreferences(context: Context) {
             0.0
         }
     }
-    
+
     /**
      * 获取性能模式估算的请求次数
      */
@@ -113,4 +122,16 @@ class AppPreferences(context: Context) {
         val elapsedHours = elapsedMs / (1000.0 * 60 * 60)
         return (elapsedHours * 1800).toLong().coerceAtLeast(processedLocations.toLong())
     }
+
+    // ============================================================
+    // 用户体验
+    // ============================================================
+
+    /**
+     * 是否已完成引导
+     * 用于判断首次启动时是否显示引导页
+     */
+    var isOnboardingCompleted: Boolean
+        get() = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+        set(value) = prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
 }

@@ -18,7 +18,9 @@ class Repository(
     private val writeBuffer = CopyOnWriteArrayList<StaySegment>()
     private val segmentCache = mutableMapOf<String, List<StaySegment>>()
     private val summaryCache = mutableMapOf<String, List<DailySummary>>()
-    @Volatile private var flushing = false
+
+    // 使用同步锁保护 flush 操作，避免并发 flush
+    private val flushLock = Any()
 
     /** 追加 Segment 到写入缓冲区，达到 batchSize 自动 flush */
     suspend fun enqueueSegment(seg: StaySegment) {
@@ -31,20 +33,23 @@ class Repository(
 
     /** 批量 flush 到底层存储（事务保护） */
     suspend fun flush() {
-        if (writeBuffer.isEmpty() || flushing) return
-        flushing = true
-        val batch = ArrayList(writeBuffer)
-        writeBuffer.clear()
+        val batch: ArrayList<StaySegment>
+        synchronized(flushLock) {
+            if (writeBuffer.isEmpty()) return
+            batch = ArrayList(writeBuffer)
+            writeBuffer.clear()
+        }
+        // 在临界区外执行数据库操作
         try {
             adapter.beginTransaction()
             adapter.insertSegments(batch)
             adapter.commitTransaction()
         } catch (e: Exception) {
             adapter.rollbackTransaction()
-            writeBuffer.addAll(0, batch) // 放回重试
+            synchronized(flushLock) {
+                writeBuffer.addAll(0, batch) // 放回重试
+            }
             throw e
-        } finally {
-            flushing = false
         }
     }
 

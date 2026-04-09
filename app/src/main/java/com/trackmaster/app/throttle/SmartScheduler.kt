@@ -32,29 +32,29 @@ data class LocationHistoryRecord(
 
 data class ThrottleConfig(
     /** 漂移过滤阈值（米），accuracy > 此值丢弃 */
-    val driftThresholdM: Double = 50.0,
+    val driftThresholdM: Double = 80.0,
     /** 静止判定：距离阈值倍率（精度半径 × 此值） */
-    val stationaryAccuracyMultiplier: Double = 1.2,
-    /** 静止判定：最小距离阈值（米） */
-    val stationaryMinDistanceM: Double = 30.0,
-    /** 静止判定：加速度方差阈值 */
-    val stationaryAccelVariance: Double = 0.15,
-    /** 静止判定：速度阈值（米/秒） */
-    val stationarySpeedThreshold: Double = 0.5,
+    val stationaryAccuracyMultiplier: Double = 2.0,
+    /** 静止判定：最小距离阈值（米），越大越容易判定静止 */
+    val stationaryMinDistanceM: Double = 100.0,
+    /** 静止判定：加速度方差阈值，越大越容易判定静止 */
+    val stationaryAccelVariance: Double = 0.5,
+    /** 静止判定：速度阈值（米/秒），越大越容易判定静止 */
+    val stationarySpeedThreshold: Double = 1.5,
     /** 静止判定：时间窗口大小（定位点数） */
     val stationaryWindowSize: Int = 5,
     /** 静止判定：需要在窗口内有多少个点满足条件才判定为静止 */
-    val stationaryMinPoints: Int = 4,
+    val stationaryMinPoints: Int = 3,
     /** 阶梯降频各阶段（静止分钟 → 间隔ms） */
     val throttleSteps: List<ThrottleStep> = DEFAULT_THROTTLE_STEPS,
-    /** 立即重置距离阈值（米） */
-    val resetDistanceM: Double = 50.0,
-    /** 边界 Buffer 区宽度（米），省电模式下临时提频 */
-    val boundaryBufferM: Double = 200.0,
+    /** 立即重置距离阈值（米），位移超过此值立即重置降频 */
+    val resetDistanceM: Double = 200.0,
+    /** 边界 Buffer 区宽度（米），省电模式下只有非常接近围栏边界才提频 */
+    val boundaryBufferM: Double = 10.0,
     /** SLC 兜底位移阈值（米） */
     val slcDriftM: Double = 300.0,
     /** 基础定位间隔（ms） */
-    val baseIntervalMs: Long = 5_000L,
+    val baseIntervalMs: Long = 30_000L,
 )
 
 data class ThrottleStep(
@@ -64,15 +64,41 @@ data class ThrottleStep(
     val intervalMs: Long,
 )
 
-val DEFAULT_THROTTLE_STEPS = listOf(
-    ThrottleStep(afterMin = 0, intervalMs = 5_000L),     // 0-2min: 5s/次
-    ThrottleStep(afterMin = 2, intervalMs = 10_000L),    // 2-5min: 10s/次
-    ThrottleStep(afterMin = 5, intervalMs = 30_000L),    // 5-10min: 30s/次
-    ThrottleStep(afterMin = 10, intervalMs = 60_000L),   // 10-20min: 1min/次
-    ThrottleStep(afterMin = 20, intervalMs = 120_000L),  // 20-40min: 2min/次
-    ThrottleStep(afterMin = 40, intervalMs = 240_000L),  // 40-60min: 4min/次
-    ThrottleStep(afterMin = 60, intervalMs = 480_000L),  // ≥60min: 8min/次
+/**
+ * 均衡模式降频阶梯
+ * 适用于 BALANCED 模式
+ * 优化：更快的降频，更长的间隔
+ */
+val BALANCED_THROTTLE_STEPS = listOf(
+    ThrottleStep(afterMin = 0, intervalMs = 30_000L),     // 0-1min: 30s/次
+    ThrottleStep(afterMin = 1, intervalMs = 90_000L),      // 1-3min: 90s/次
+    ThrottleStep(afterMin = 3, intervalMs = 180_000L),     // 3-5min: 3min/次
+    ThrottleStep(afterMin = 5, intervalMs = 300_000L),     // 5-10min: 5min/次
+    ThrottleStep(afterMin = 10, intervalMs = 480_000L),     // 10-20min: 8min/次
+    ThrottleStep(afterMin = 20, intervalMs = 600_000L),     // 20-40min: 10min/次
+    ThrottleStep(afterMin = 40, intervalMs = 900_000L),    // 40-60min: 15min/次
+    ThrottleStep(afterMin = 60, intervalMs = 1200_000L),   // ≥60min: 20min/次
 )
+
+/**
+ * 省电模式降频阶梯（优化版）
+ * 更激进的降频，适合睡觉/长时间静止场景
+ */
+val POWERSAVE_THROTTLE_STEPS = listOf(
+    ThrottleStep(afterMin = 0, intervalMs = 30_000L),      // 0-1min: 30s/次
+    ThrottleStep(afterMin = 1, intervalMs = 120_000L),     // 1-3min: 2min/次
+    ThrottleStep(afterMin = 3, intervalMs = 300_000L),      // 3-5min: 5min/次
+    ThrottleStep(afterMin = 5, intervalMs = 480_000L),     // 5-10min: 8min/次
+    ThrottleStep(afterMin = 10, intervalMs = 600_000L),    // 10-20min: 10min/次
+    ThrottleStep(afterMin = 20, intervalMs = 900_000L),    // 20-40min: 15min/次
+    ThrottleStep(afterMin = 40, intervalMs = 1200_000L),   // 40-60min: 20min/次
+    ThrottleStep(afterMin = 60, intervalMs = 1800_000L),   // ≥60min: 30min/次
+)
+
+/**
+ * 默认降频阶梯（兼容旧版本）
+ */
+val DEFAULT_THROTTLE_STEPS = POWERSAVE_THROTTLE_STEPS
 
 // ============================================================
 // 输出
@@ -172,6 +198,20 @@ class SmartScheduler(
         precomputeExpandedBBoxes(config.boundaryBufferM)
     }
 
+    /**
+     * 根据当前电源模式获取对应的降频阶梯
+     */
+    private fun getCurrentThrottleSteps(): List<ThrottleStep> {
+        return when (mode) {
+            PowerMode.PERFORMANCE -> {
+                // 性能模式：固定 5 秒间隔（极快响应）
+                listOf(ThrottleStep(afterMin = 0, intervalMs = 5_000L))
+            }
+            PowerMode.BALANCED -> BALANCED_THROTTLE_STEPS
+            PowerMode.POWERSAVE -> POWERSAVE_THROTTLE_STEPS
+        }
+    }
+
     // ============================================================
     // 公开 API
     // ============================================================
@@ -179,9 +219,10 @@ class SmartScheduler(
     /** 设置电源模式 */
     fun setMode(mode: PowerMode) {
         this.mode = mode
-        if (mode == PowerMode.PERFORMANCE) {
-            resetThrottle()
-        }
+        // 切换模式时重置降频状态
+        // PERFORMANCE模式需要立即响应，所以重置到最高频率
+        // 其他模式根据静止状态自适应降频
+        resetThrottle()
     }
 
     fun getMode(): PowerMode = mode
@@ -279,9 +320,10 @@ class SmartScheduler(
         return decision
     }
 
-    /** 屏幕状态变更回调，屏幕点亮时立即重置降频 */
+    /** 屏幕状态变更回调，已禁用 */
+    @Suppress("UNUSED_PARAMETER")
     fun onScreenStateChanged(isOn: Boolean) {
-        if (isOn) resetThrottle()
+        // 已禁用：点亮屏幕不触发重置
     }
 
     /** 活动识别回调，WALKING/DRIVING/CYCLING 时立即重置 */
@@ -432,7 +474,8 @@ class SmartScheduler(
         accelZBuffer.addLast(accel.z.toDouble())
         if (accelZBuffer.size > ACCEL_WINDOW) accelZBuffer.removeFirst()
 
-        if (accelBuffer.size < 3) return true
+        // 需要足够的样本才能计算方差
+        if (accelBuffer.size < ACCEL_WINDOW) return true
 
         val varianceX = computeSingleAxisVariance(accelXBuffer)
         val varianceY = computeSingleAxisVariance(accelYBuffer)
@@ -449,7 +492,7 @@ class SmartScheduler(
      * 计算单轴加速度方差
      */
     private fun computeSingleAxisVariance(buffer: List<Double>): Double {
-        if (buffer.size < 3) return 0.0
+        if (buffer.size < 2) return 0.0
         val n = buffer.size
         val mean = buffer.sum() / n
         return buffer.sumOf { (it - mean) * (it - mean) } / n
@@ -503,7 +546,7 @@ class SmartScheduler(
 
     /** 更新降频阶梯等级 */
     private fun updateThrottleLevel() {
-        val steps = config.throttleSteps
+        val steps = getCurrentThrottleSteps()
         var newLevel = 0
         for (i in steps.indices.reversed()) {
             if (accumulatedStationaryMs >= steps[i].afterMin * 60_000L) {
@@ -516,7 +559,7 @@ class SmartScheduler(
 
     /** 获取当前等级对应的定位间隔 */
     private fun getIntervalForLevel(): Long {
-        val steps = config.throttleSteps
+        val steps = getCurrentThrottleSteps()
         return steps[level.coerceAtMost(steps.size - 1)].intervalMs
     }
 

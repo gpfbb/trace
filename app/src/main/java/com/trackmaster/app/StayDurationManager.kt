@@ -91,27 +91,32 @@ class StayDurationManager(private val context: Context) {
                 Log.d(TAG, "结束计时: $fenceName, 日期=$enterDateKey, 时长=${duration}秒")
             }
         } else {
-            val calendar = Calendar.getInstance()
+            // 跨天情况：分别计算每天的停留时长
 
-            // 第一天：从进入时间到当天结束
-            calendar.time = session.enterTime
-            calendar.set(Calendar.HOUR_OF_DAY, 23)
-            calendar.set(Calendar.MINUTE, 59)
-            calendar.set(Calendar.SECOND, 59)
-            calendar.set(Calendar.MILLISECOND, 999)
-            val durationDay1 = (calendar.time.time - session.enterTime.time) / 1000
+            // ===== 第一天：从进入时间到当天午夜 =====
+            // 正确做法：获取进入日期的午夜（次日0点）
+            val enterCalendar = Calendar.getInstance()
+            enterCalendar.time = session.enterTime
+            // 设为次日0点0分0秒0毫秒
+            enterCalendar.add(Calendar.DAY_OF_MONTH, 1)
+            enterCalendar.set(Calendar.HOUR_OF_DAY, 0)
+            enterCalendar.set(Calendar.MINUTE, 0)
+            enterCalendar.set(Calendar.SECOND, 0)
+            enterCalendar.set(Calendar.MILLISECOND, 0)
+            val midnightOfNextDay = enterCalendar.time
+
+            val durationDay1 = (midnightOfNextDay.time - session.enterTime.time) / 1000
             if (durationDay1 > 0) {
                 addDailyDuration(enterDateKey, fenceId, fenceName, durationDay1)
                 Log.d(TAG, "跨天计时(首日): $fenceName, 日期=$enterDateKey, 时长=${durationDay1}秒")
             }
 
-            // 中间完整天：每整天计 86400 秒
-            calendar.add(Calendar.DAY_OF_MONTH, 1)
-            calendar.set(Calendar.HOUR_OF_DAY, 0)
-            calendar.set(Calendar.MINUTE, 0)
-            calendar.set(Calendar.SECOND, 0)
-            calendar.set(Calendar.MILLISECOND, 0)
+            // ===== 中间完整天：每整天计 86400 秒 =====
+            // 从次日0点开始
+            val dayCalendar = Calendar.getInstance()
+            dayCalendar.time = midnightOfNextDay
 
+            // 退出日期的午夜
             val exitCalendar = Calendar.getInstance()
             exitCalendar.time = exitTime
             exitCalendar.set(Calendar.HOUR_OF_DAY, 0)
@@ -119,14 +124,15 @@ class StayDurationManager(private val context: Context) {
             exitCalendar.set(Calendar.SECOND, 0)
             exitCalendar.set(Calendar.MILLISECOND, 0)
 
-            while (calendar.before(exitCalendar)) {
-                val fullDayKey = getDateKey(calendar.time)
+            // 计算中间完整天（不含首尾）
+            while (dayCalendar.before(exitCalendar)) {
+                val fullDayKey = getDateKey(dayCalendar.time)
                 addDailyDuration(fullDayKey, fenceId, fenceName, 86400L)
                 Log.d(TAG, "跨天计时(整天): $fenceName, 日期=$fullDayKey, 时长=86400秒")
-                calendar.add(Calendar.DAY_OF_MONTH, 1)
+                dayCalendar.add(Calendar.DAY_OF_MONTH, 1)
             }
 
-            // 最后一天：从当天开始到退出时间
+            // ===== 最后一天：从当天午夜到退出时间 =====
             val durationLastDay = (exitTime.time - exitCalendar.time.time) / 1000
             if (durationLastDay > 0) {
                 addDailyDuration(exitDateKey, fenceId, fenceName, durationLastDay)

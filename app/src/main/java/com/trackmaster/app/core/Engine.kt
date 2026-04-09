@@ -38,6 +38,10 @@ class Engine(
     /** 位置处理统计回调 */
     var onLocationProcessed: ((Boolean) -> Unit)? = null
 
+    /** 上一次评估的 shouldProcess 结果，供外部查询 */
+    @Volatile var lastShouldProcess: Boolean = false
+        private set
+
     /** 当前命中的叶子围栏 ID */
     @Volatile var currentLeafId: String? = null
         private set
@@ -45,6 +49,11 @@ class Engine(
     /** 当前所有命中的围栏 ID 列表（按深度排序，最深在前） */
     @Volatile var currentMatchedFenceIds: List<String> = emptyList()
         private set
+
+    /** 设置当前匹配的围栏ID列表（用于外部同步更新） */
+    fun setCurrentMatchedFenceIds(ids: List<String>) {
+        currentMatchedFenceIds = ids
+    }
 
     /** 当前活跃 Segment 的进入时间戳（事件时间） */
     @Volatile var currentEnterTs = 0L
@@ -113,20 +122,23 @@ class Engine(
      * 4. 更新当前命中的所有围栏列表
      * 5. 状态转移 → 生成 StaySegment
      *
-     * @return 生成的 StaySegment（如有），或 null
+     * @return Pair(生成的 StaySegment（如有）, 是否应该处理定位)
      */
     suspend fun onLocationUpdate(
         fix: LocationFix,
         accel: AccelerometerData? = null,
-    ): StaySegment? {
+    ): Pair<StaySegment?, Boolean> {
         // 1. SmartScheduler 评估
         val decision = scheduler.evaluate(fix, accel)
+        // 记录结果供外部查询
+        lastShouldProcess = decision.shouldProcess
         // 统计回调
         onLocationProcessed?.invoke(decision.shouldProcess)
-        if (!decision.shouldProcess) return null
+        if (!decision.shouldProcess) return Pair(null, false)
 
         // 2. 漂移过滤（与SmartScheduler保持一致）
-        if (fix.accuracy > scheduler.config.driftThresholdM.toFloat()) return null
+        // 注意：fix.accuracy 是 Float，driftThresholdM 是 Double，统一转为 Double 比较
+        if (fix.accuracy.toDouble() > scheduler.config.driftThresholdM) return Pair(null, false)
 
         // 2.5 更新动态缓冲区配置
         var currentBufferSize = 0.0
@@ -146,18 +158,39 @@ class Engine(
 
         // 3. 查找所有命中的围栏（包括嵌套的父级和子级）
         val allMatched = findAllMatchedFences(fix, currentBufferSize, considerBufferAsInside)
-        
+
         // 4. 更新当前命中的所有围栏列表（按深度降序排列）
-        currentMatchedFenceIds = allMatched.map { it.id }
-        
+        currentMatchedFenceIds = allMatched
+            .sortedByDescending { it.depth }  // 按深度降序，最深的在前面
+            .map { it.id }
+
         // 5. 找出最深的叶子围栏用于计时
         val deepest = allMatched.maxByOrNull { it.depth }
 
         // 6. 状态转移
         if (deepest?.id != currentLeafId) {
-            return transition(deepest?.id, fix.timestamp)
+            return Pair(transition(deepest?.id, fix.timestamp), true)
         }
-        return null
+        return Pair(null, true)
+    }
+
+    /**
+     * 仅评估位置是否应该处理（用于省电控制）
+     * 不执行完整的围栏检测逻辑，返回是否应该处理
+     */
+    fun evaluateLocation(fix: LocationFix): Boolean {
+        val decision = scheduler.evaluate(fix, null)
+        lastShouldProcess = decision.shouldProcess
+        return decision.shouldProcess
+    }
+
+    /**
+     * 同步检查当前位置是否在任何围栏内（用于省电决策）
+     * 不更新状态，不触发事件，仅查询
+     */
+    fun isLocationInAnyFence(fix: LocationFix): Boolean {
+        val matchedIds = checkFenceMatch(fix)
+        return matchedIds.isNotEmpty()
     }
 
     /** 活动识别回调（转发给 Scheduler） */
@@ -191,6 +224,13 @@ class Engine(
             transition(null, System.currentTimeMillis())
         }
         repo.flush()
+    }
+
+    /** 设置当前围栏（用于恢复状态时直接设置） */
+    fun setCurrentFenceForRecovery(fenceId: String?, enterTs: Long) {
+        currentLeafId = fenceId
+        currentEnterTs = enterTs
+        Log.d(TAG, "Engine恢复状态: currentLeafId=$fenceId, enterTs=$enterTs")
     }
 
     /** 资源释放 */
@@ -270,8 +310,9 @@ class Engine(
         }
         queryCount++
 
-        // 按面积升序排列（面积最小的在前，优先识别小围栏）
-        return matched.sortedBy { GeoMath.calculateFenceArea(it) }
+        // 按深度降序排列返回（深度最大的叶子围栏在前）
+        // 注意：Engine.kt调用者已按depth排序，此处保持一致性
+        return matched.sortedByDescending { it.depth }
     }
 
     /**

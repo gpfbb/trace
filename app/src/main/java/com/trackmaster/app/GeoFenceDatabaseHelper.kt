@@ -14,7 +14,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
     companion object {
         private const val DATABASE_NAME = "geofence.db"
-        private const val DATABASE_VERSION = 3
+        private const val DATABASE_VERSION = 6
 
         // 围栏表
         private const val TABLE_FENCES = "fences"
@@ -28,6 +28,8 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         private const val KEY_ENABLED = "enabled"
         private const val KEY_CREATED_AT = "created_at"
         private const val KEY_CATEGORY_ID = "category_id"
+        private const val KEY_COLOR = "color"
+        private const val KEY_ALPHA = "alpha"
 
         // 分类表
         private const val TABLE_CATEGORIES = "categories"
@@ -104,7 +106,9 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 $KEY_POINTS TEXT,
                 $KEY_ENABLED INTEGER DEFAULT 1,
                 $KEY_CREATED_AT INTEGER NOT NULL,
-                $KEY_CATEGORY_ID TEXT DEFAULT 'unassigned'
+                $KEY_CATEGORY_ID TEXT DEFAULT 'unassigned',
+                $KEY_COLOR TEXT DEFAULT '#FF0000',
+                $KEY_ALPHA REAL DEFAULT 0.3
             )
         """.trimIndent()
 
@@ -219,6 +223,65 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 Log.e("GeoFenceDB", "创建按日停留记录表失败", e)
             }
         }
+
+        if (oldVersion < 4) {
+            try {
+                db.execSQL("ALTER TABLE $TABLE_FENCES ADD COLUMN $KEY_COLOR TEXT DEFAULT '#FF0000'")
+                Log.d("GeoFenceDB", "添加围栏颜色列成功")
+            } catch (e: Exception) {
+                Log.e("GeoFenceDB", "添加围栏颜色列失败", e)
+            }
+        }
+
+        if (oldVersion < 5) {
+            try {
+                // 先检查列是否已存在
+                val cursor = db.rawQuery("PRAGMA table_info($TABLE_FENCES)", null)
+                var columnExists = false
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        val columnName = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                        if (columnName == KEY_ALPHA) {
+                            columnExists = true
+                            break
+                        }
+                    }
+                    cursor.close()
+                }
+                if (!columnExists) {
+                    db.execSQL("ALTER TABLE $TABLE_FENCES ADD COLUMN $KEY_ALPHA REAL DEFAULT 0.3")
+                    Log.d("GeoFenceDB", "添加围栏透明度列成功")
+                } else {
+                    Log.d("GeoFenceDB", "透明度列已存在，跳过添加")
+                }
+            } catch (e: Exception) {
+                Log.e("GeoFenceDB", "添加围栏透明度列失败", e)
+            }
+        }
+
+        if (oldVersion < 6) {
+            // 确保 alpha 列存在（处理从 v5 全新安装但 onCreate 没有该列的情况）
+            try {
+                val cursor = db.rawQuery("PRAGMA table_info($TABLE_FENCES)", null)
+                var columnExists = false
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        val columnName = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                        if (columnName == KEY_ALPHA) {
+                            columnExists = true
+                            break
+                        }
+                    }
+                    cursor.close()
+                }
+                if (!columnExists) {
+                    db.execSQL("ALTER TABLE $TABLE_FENCES ADD COLUMN $KEY_ALPHA REAL DEFAULT 0.3")
+                    Log.d("GeoFenceDB", "v6迁移：添加围栏透明度列成功")
+                }
+            } catch (e: Exception) {
+                Log.e("GeoFenceDB", "v6迁移：添加围栏透明度列失败", e)
+            }
+        }
     }
 
     fun insertFence(fence: GeoFence): Long {
@@ -234,6 +297,8 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_ENABLED, 1)
         values.put(KEY_CREATED_AT, fence.createdAt.time)
         values.put(KEY_CATEGORY_ID, fence.categoryId)
+        values.put(KEY_COLOR, fence.color)
+        values.put(KEY_ALPHA, fence.alpha)
 
         val result = db.insert(TABLE_FENCES, null, values)
         invalidateFenceCache()
@@ -242,48 +307,75 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
     fun getAllFences(): List<GeoFence> {
         if (allFencesCacheValid) {
+            Log.d("GeoFenceDB", "getAllFences 返回缓存: ${allFencesCache.size} 个")
             return allFencesCache.toList()
         }
 
+        Log.d("GeoFenceDB", "getAllFences 从数据库查询")
         val fences = mutableListOf<GeoFence>()
         val db = readableDatabase
         val cursor = db.query(TABLE_FENCES, null, null, null, null, null, "$KEY_CREATED_AT DESC")
 
         try {
+            Log.d("GeoFenceDB", "Cursor行数: ${cursor.count}")
             if (cursor.moveToFirst()) {
                 do {
-                    val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_ID))
-                    val name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_NAME))
-                    val type = GeoFenceType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(KEY_TYPE)))
-                    val centerLat = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))
-                    val centerLng = cursor.getDouble(cursor.getColumnIndexOrThrow(KEY_CENTER_LNG))
-                    val radius = cursor.getFloat(cursor.getColumnIndexOrThrow(KEY_RADIUS))
-                    val pointsJson = cursor.getString(cursor.getColumnIndexOrThrow(KEY_POINTS))
-                    val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CREATED_AT)))
-                    val categoryId = if (cursor.getColumnIndex(KEY_CATEGORY_ID) >= 0) {
-                        cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ID))
-                    } else {
-                        Category.UNASSIGNED_ID
+                    try {
+                        val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_ID))
+                        val name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_NAME))
+                        val type = GeoFenceType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(KEY_TYPE)))
+                        val pointsJson = cursor.getString(cursor.getColumnIndexOrThrow(KEY_POINTS))
+                        val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CREATED_AT)))
+                        val categoryId = if (cursor.getColumnIndex(KEY_CATEGORY_ID) >= 0) {
+                            cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ID))
+                        } else {
+                            Category.UNASSIGNED_ID
+                        }
+
+                        val color = if (cursor.getColumnIndex(KEY_COLOR) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_COLOR))) {
+                            cursor.getString(cursor.getColumnIndex(KEY_COLOR))
+                        } else {
+                            "#FF0000"
+                        }
+
+                        val alpha = if (cursor.getColumnIndex(KEY_ALPHA) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_ALPHA))) {
+                            cursor.getFloat(cursor.getColumnIndex(KEY_ALPHA))
+                        } else {
+                            0.3f
+                        }
+
+                        // 安全读取中心点和半径（多边形围栏这些是NULL）
+                        val center = if (cursor.getColumnIndex(KEY_CENTER_LAT) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_CENTER_LAT))) {
+                            GeoFencePoint(
+                                cursor.getDouble(cursor.getColumnIndex(KEY_CENTER_LAT)),
+                                cursor.getDouble(cursor.getColumnIndex(KEY_CENTER_LNG))
+                            )
+                        } else null
+
+                        val radius = if (cursor.getColumnIndex(KEY_RADIUS) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_RADIUS))) {
+                            cursor.getFloat(cursor.getColumnIndex(KEY_RADIUS))
+                        } else null
+
+                        val points = if (!pointsJson.isNullOrEmpty()) jsonToPoints(pointsJson) else null
+
+                        val fence = GeoFence(
+                            id = id,
+                            name = name,
+                            type = type,
+                            center = center,
+                            radius = radius,
+                            points = points,
+                            categoryId = categoryId,
+                            createdAt = createdAt,
+                            color = color,
+                            alpha = alpha
+                        )
+                        fences.add(fence)
+                        fenceCache[id] = fence
+                        Log.d("GeoFenceDB", "读取围栏: id=$id, name=$name, type=$type, center=$center, radius=$radius, pointsCount=${points?.size}")
+                    } catch (e: Exception) {
+                        Log.e("GeoFenceDB", "读取单个围栏出错: ${e.message}")
                     }
-
-                    val center = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))) {
-                        GeoFencePoint(centerLat, centerLng)
-                    } else null
-
-                    val points = if (pointsJson != null) jsonToPoints(pointsJson) else null
-
-                    val fence = GeoFence(
-                        id = id,
-                        name = name,
-                        type = type,
-                        center = center,
-                        radius = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_RADIUS))) radius else null,
-                        points = points,
-                        categoryId = categoryId,
-                        createdAt = createdAt
-                    )
-                    fences.add(fence)
-                    fenceCache[id] = fence
                 } while (cursor.moveToNext())
             }
         } finally {
@@ -293,6 +385,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         allFencesCache.clear()
         allFencesCache.addAll(fences)
         allFencesCacheValid = true
+        Log.d("GeoFenceDB", "getAllFences 返回 ${fences.size} 个围栏")
         return fences
     }
 
@@ -435,6 +528,8 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_RADIUS, fence.radius)
         values.put(KEY_POINTS, fence.points?.let { pointsToJson(it) })
         values.put(KEY_CATEGORY_ID, fence.categoryId)
+        values.put(KEY_COLOR, fence.color)
+        values.put(KEY_ALPHA, fence.alpha)
         // 注意：不更新CREATED_AT字段，保持原始创建时间
 
         val result = db.update(
@@ -519,11 +614,23 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                         Category.UNASSIGNED_ID
                     }
 
+                    val color = if (cursor.getColumnIndex(KEY_COLOR) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_COLOR))) {
+                        cursor.getString(cursor.getColumnIndex(KEY_COLOR))
+                    } else {
+                        "#FF0000"
+                    }
+
+                    val alpha = if (cursor.getColumnIndex(KEY_ALPHA) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_ALPHA))) {
+                        cursor.getFloat(cursor.getColumnIndex(KEY_ALPHA))
+                    } else {
+                        0.3f
+                    }
+
                     val center = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_CENTER_LAT))) {
                         GeoFencePoint(centerLat, centerLng)
                     } else null
 
-                    val points = if (pointsJson != null) jsonToPoints(pointsJson) else null
+                    val points = if (!pointsJson.isNullOrEmpty()) jsonToPoints(pointsJson) else null
 
                     fences.add(
                         GeoFence(
@@ -534,7 +641,9 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                             radius = if (!cursor.isNull(cursor.getColumnIndexOrThrow(KEY_RADIUS))) radius else null,
                             points = points,
                             categoryId = categoryIdVal,
-                            createdAt = createdAt
+                            createdAt = createdAt,
+                            color = color,
+                            alpha = alpha
                         )
                     )
                 } while (cursor.moveToNext())
@@ -1033,6 +1142,135 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         return records
     }
 
+    /** 获取所有日期的每日停留汇总记录（用于导出） */
+    fun getAllDailyStayRecords(): List<DailyStayRecord> {
+        val records = mutableListOf<DailyStayRecord>()
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_DAILY_STAYS,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "$KEY_DAILY_DATE DESC"
+        )
+
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    records.add(
+                        DailyStayRecord(
+                            date = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_DATE)),
+                            fenceId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_ID)),
+                            fenceName = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DAILY_FENCE_NAME)),
+                            totalDurationSeconds = cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION)),
+                            lastUpdated = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_LAST_UPDATED)))
+                        )
+                    )
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
+        }
+        return records
+    }
+
+    /** 批量插入或累加每日停留记录（用于导入时的合并） */
+    fun upsertDailyStayRecords(records: List<DailyStayRecord>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for (record in records) {
+                // 先查询是否已存在
+                val cursor = db.query(
+                    TABLE_DAILY_STAYS,
+                    arrayOf(KEY_DAILY_DURATION),
+                    "$KEY_DAILY_DATE = ? AND $KEY_DAILY_FENCE_ID = ?",
+                    arrayOf(record.date, record.fenceId),
+                    null, null, null
+                )
+                val existingDuration = if (cursor.moveToFirst()) {
+                    cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION))
+                } else 0L
+                cursor.close()
+
+                val values = ContentValues().apply {
+                    put(KEY_DAILY_DATE, record.date)
+                    put(KEY_DAILY_FENCE_ID, record.fenceId)
+                    put(KEY_DAILY_FENCE_NAME, record.fenceName)
+                    put(KEY_DAILY_DURATION, existingDuration + record.totalDurationSeconds)
+                    put(KEY_DAILY_LAST_UPDATED, System.currentTimeMillis())
+                }
+                db.insertWithOnConflict(
+                    TABLE_DAILY_STAYS,
+                    null,
+                    values,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /** 批量插入停留记录（使用提供的ID，支持去重） */
+    fun insertStayRecordsWithId(records: List<FenceStayRecord>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for (record in records) {
+                val values = ContentValues().apply {
+                    put(KEY_STAY_ID, record.id ?: UUID.randomUUID().toString())
+                    put(KEY_FENCE_ID, record.fenceId)
+                    put(KEY_FENCE_NAME, record.fenceName)
+                    put(KEY_ENTER_TIME, record.enterTime.time)
+                    put(KEY_EXIT_TIME, record.exitTime?.time)
+                    put(KEY_DURATION, record.durationSeconds)
+                }
+                db.insertWithOnConflict(
+                    TABLE_STAYS,
+                    null,
+                    values,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /** 批量插入围栏事件（使用提供的ID，支持去重） */
+    fun insertEventsWithId(events: List<GeoFenceEvent>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for (event in events) {
+                val values = ContentValues().apply {
+                    put(KEY_EVENT_ID, event.id)
+                    put(KEY_FENCE_ID, event.fenceId)
+                    put(KEY_FENCE_NAME, event.fenceName)
+                    put(KEY_ACTION, event.action.name)
+                    put(KEY_TIMESTAMP, event.time.time)
+                    put(KEY_LATITUDE, event.latitude)
+                    put(KEY_LONGITUDE, event.longitude)
+                    put(KEY_ACCURACY, event.accuracy)
+                }
+                db.insertWithOnConflict(
+                    TABLE_EVENTS,
+                    null,
+                    values,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     fun getStayRecordsByTimeRange(startTime: Date, endTime: Date): List<FenceStayRecord> {
         val records = mutableListOf<FenceStayRecord>()
         val db = readableDatabase
@@ -1078,5 +1316,172 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             cursor.close()
         }
         return records
+    }
+
+    // ============================================================
+    // 围栏导出功能
+    // ============================================================
+
+    /**
+     * 导出选定的围栏到JSON文件
+     * @param fences 要导出的围栏列表
+     * @param context Context用于获取外部存储目录
+     * @return 导出文件的绝对路径，失败返回null
+     */
+    fun generateFencesJson(fences: List<GeoFence>): String? {
+        try {
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val jsonArray = JSONArray()
+
+            fences.forEach { fence ->
+                val jsonObject = org.json.JSONObject().apply {
+                    put("id", UUID.randomUUID().toString()) // 生成新ID避免冲突
+                    put("name", fence.name)
+                    put("type", fence.type.name)
+                    put("color", fence.color)
+                    put("alpha", fence.alpha.toDouble())
+                    put("categoryId", fence.categoryId)
+                    put("createdAt", dateFormat.format(fence.createdAt))
+
+                    // 圆形围栏数据
+                    fence.center?.let {
+                        put("centerLat", it.latitude)
+                        put("centerLng", it.longitude)
+                    }
+                    fence.radius?.let {
+                        put("radius", it.toDouble())
+                    }
+
+                    // 多边形围栏数据
+                    fence.points?.let { points ->
+                        val pointsArray = JSONArray()
+                        points.forEach { point ->
+                            val pointObj = org.json.JSONObject().apply {
+                                put("lat", point.latitude)
+                                put("lng", point.longitude)
+                            }
+                            pointsArray.put(pointObj)
+                        }
+                        put("points", pointsArray)
+                    }
+                }
+                jsonArray.put(jsonObject)
+            }
+
+            val wrapper = org.json.JSONObject().apply {
+                put("version", 1)
+                put("exportTime", dateFormat.format(Date()))
+                put("fenceCount", fences.size)
+                put("fences", jsonArray)
+            }
+
+            Log.d("GeoFenceDB", "围栏JSON生成成功，共${fences.size}个围栏")
+            return wrapper.toString(2)
+        } catch (e: Exception) {
+            Log.e("GeoFenceDB", "围栏JSON生成失败", e)
+            return null
+        }
+    }
+
+    fun exportFencesToJson(fences: List<GeoFence>, context: Context): String? {
+        try {
+            val json = generateFencesJson(fences) ?: return null
+            val fileName = "TrackMaster_Fences_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.json"
+            val file = java.io.File(context.getExternalFilesDir(null), fileName)
+            file.writeText(json)
+            Log.d("GeoFenceDB", "围栏导出成功: ${file.absolutePath}")
+            return file.absolutePath
+        } catch (e: Exception) {
+            Log.e("GeoFenceDB", "围栏导出失败", e)
+            return null
+        }
+    }
+
+    /**
+     * 从JSON文件导入围栏
+     * @param jsonContent JSON文件内容
+     * @return 成功导入的围栏数量，失败返回-1
+     */
+    fun importFencesFromJson(jsonContent: String): Int {
+        try {
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val wrapper = org.json.JSONObject(jsonContent)
+
+            // 验证文件格式
+            val version = wrapper.optInt("version", 0)
+            if (version == 0) {
+                Log.e("GeoFenceDB", "无效的围栏文件格式：缺少版本号")
+                return -1
+            }
+
+            val fencesArray = wrapper.getJSONArray("fences")
+            val totalCount = fencesArray.length()
+            Log.d("GeoFenceDB", "开始导入围栏，共${totalCount}个")
+            var importedCount = 0
+
+            for (i in 0 until totalCount) {
+                val fenceJson = fencesArray.getJSONObject(i)
+
+                try {
+                    val type = GeoFenceType.valueOf(fenceJson.getString("type"))
+                    val center = if (fenceJson.has("centerLat") && fenceJson.has("centerLng")) {
+                        GeoFencePoint(
+                            latitude = fenceJson.getDouble("centerLat"),
+                            longitude = fenceJson.getDouble("centerLng")
+                        )
+                    } else null
+
+                    val radius = if (fenceJson.has("radius")) {
+                        fenceJson.getDouble("radius").toFloat()
+                    } else null
+
+                    val points = if (fenceJson.has("points")) {
+                        val pointsArray = fenceJson.getJSONArray("points")
+                        val pointList = mutableListOf<GeoFencePoint>()
+                        for (j in 0 until pointsArray.length()) {
+                            val pointObj = pointsArray.getJSONObject(j)
+                            pointList.add(GeoFencePoint(
+                                latitude = pointObj.getDouble("lat"),
+                                longitude = pointObj.getDouble("lng")
+                            ))
+                        }
+                        pointList
+                    } else null
+
+                    val createdAt = if (fenceJson.has("createdAt")) {
+                        dateFormat.parse(fenceJson.getString("createdAt")) ?: Date()
+                    } else Date()
+
+                    val fence = GeoFence(
+                        id = UUID.randomUUID().toString(),
+                        name = fenceJson.getString("name"),
+                        type = type,
+                        center = center,
+                        radius = radius,
+                        points = points,
+                        categoryId = fenceJson.optString("categoryId", Category.UNASSIGNED_ID),
+                        createdAt = createdAt,
+                        color = fenceJson.optString("color", "#FF0000"),
+                        alpha = fenceJson.optDouble("alpha", 0.3).toFloat()
+                    )
+
+                    val insertResult = insertFence(fence)
+                    if (insertResult > 0) {
+                        importedCount++
+                        Log.d("GeoFenceDB", "导入围栏成功: ${fence.name}, 类型: ${fence.type}, 中心: $center, 半径: $radius")
+                    } else {
+                        Log.e("GeoFenceDB", "导入围栏失败: ${fence.name}, insert返回: $insertResult")
+                    }
+                } catch (e: Exception) {
+                    Log.e("GeoFenceDB", "导入第${i+1}个围栏失败: ${e.message}")
+                }
+            }
+
+            Log.d("GeoFenceDB", "围栏导入完成，成功${importedCount}/$totalCount 个")
+            return importedCount
+        } catch (e: Exception) {
+            Log.e("GeoFenceDB", "围栏导入失败", e)
+            return -1
+        }
     }
 }
