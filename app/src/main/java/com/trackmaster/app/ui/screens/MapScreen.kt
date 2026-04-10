@@ -186,6 +186,7 @@ fun MapScreen(app: TrackMasterApplication) {
                         app.geoFences[index] = updatedFence
                         app.dbHelper.updateFence(updatedFence)
                         app.refreshEngineFences()
+                        app.checkAndUpdateFenceState()
                     }
                     isEditingFence = false
                     editingFence = null
@@ -304,6 +305,7 @@ fun MapScreen(app: TrackMasterApplication) {
                 app.geoFences.add(fence)
                 app.dbHelper.insertFence(fence)
                 app.refreshEngineFences()
+                app.checkAndUpdateFenceState()
 
                 showCreateDialog = false
                 drawingPoints = emptyList()
@@ -363,6 +365,7 @@ fun MapScreen(app: TrackMasterApplication) {
                         app.geoFences.removeIf { it.id == fence.id }
                         app.dbHelper.deleteFence(fence.id)
                         app.refreshEngineFences()
+                        app.checkAndUpdateFenceState()
                         showDeleteConfirm = null
                         if (selectedFence?.id == fence.id) selectedFence = null
                     },
