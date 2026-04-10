@@ -19,7 +19,6 @@ import com.trackmaster.app.CategoryManagerScreen
 import com.trackmaster.app.DataManagementScreen
 import com.trackmaster.app.FenceExportImportDialog
 import com.trackmaster.app.SettingsPage
-import com.trackmaster.app.SettingsScreen
 import com.trackmaster.app.StatisticsScreen
 import com.trackmaster.app.StatsExportImportScreen
 import com.trackmaster.app.TrackMasterApplication

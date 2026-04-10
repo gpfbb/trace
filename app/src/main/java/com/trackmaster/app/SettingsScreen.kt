@@ -38,7 +38,8 @@ fun SettingsPage(
     @Suppress("UNUSED_PARAMETER") onNavigateBack: (() -> Unit)? = null,
     onOpenDataManagement: (() -> Unit)? = null,
     onOpenFenceExportImport: (() -> Unit)? = null,
-    onOpenStatsExportImport: (() -> Unit)? = null
+    onOpenStatsExportImport: (() -> Unit)? = null,
+    hideNavBar: Boolean = false
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as TrackMasterApplication
@@ -97,28 +98,30 @@ fun SettingsPage(
             .background(brush = Brush.verticalGradient(colors = listOf(surfaceColor(), backgroundColor())))
     ) {
         // 顶部导航栏 - 无返回按钮，作为底部Tab页面
-        GlassTopCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        if (!hideNavBar) {
+            GlassTopCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "设置",
-                    tint = primaryColor(),
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    "应用设置",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = primaryColor()
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "设置",
+                        tint = primaryColor(),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "应用设置",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        color = primaryColor()
+                    )
+                }
             }
         }
 
@@ -450,57 +453,6 @@ fun SettingsScreen(
     onOpenFenceExportImport: (() -> Unit)? = null,
     onOpenStatsExportImport: (() -> Unit)? = null
 ) {
-    val context = LocalContext.current
-    val app = context.applicationContext as TrackMasterApplication
-    val prefs = app.appPreferences
-    val permissionManager = remember { PermissionManager(context) }
-    var permissionStatus by remember { mutableStateOf(permissionManager.checkPermissions()) }
-    var selectedMode by remember { mutableStateOf(prefs.powerMode) }
-    var currentTheme by remember { mutableStateOf(ThemeManager.getCurrentTheme()) }
-    var showThemePicker by remember { mutableStateOf(false) }
-
-    // 高级设置状态
-    var showAdvancedSettings by remember { mutableStateOf(false) }
-    var stationaryThreshold by remember { mutableStateOf(prefs.stationaryThreshold) }
-    var boundaryBuffer by remember { mutableStateOf(prefs.boundaryBuffer) }
-    var driftThreshold by remember { mutableStateOf(prefs.driftThreshold) }
-
-    // 省电统计状态
-    var showPowerSavingStats by remember { mutableStateOf(false) }
-
-    // 实时更新省电统计
-    var totalLocations by remember { mutableStateOf(prefs.totalLocations) }
-    var processedLocations by remember { mutableStateOf(prefs.processedLocations) }
-
-    // 缓存统计状态
-    var cacheStats by remember { mutableStateOf<GeoMath.CacheStats?>(null) }
-
-    // 省电算法统计
-    var powerSavingStats: PowerSavingStats? by remember { mutableStateOf(null) }
-
-    LaunchedEffect(Unit) {
-        permissionStatus = permissionManager.checkPermissions()
-    }
-
-    // 定期刷新省电统计 - 使用 lifecycle-aware 效果
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                totalLocations = prefs.totalLocations
-                processedLocations = prefs.processedLocations
-                cacheStats = GeoMath.getCacheStats()
-                powerSavingStats = try {
-                    app.engine.getScheduler().stats
-                } catch (e: Exception) { null }
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
     GlassDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -516,252 +468,13 @@ fun SettingsScreen(
             }
         },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                PermissionSectionContent(
-                    permissionStatus = permissionStatus,
-                    permissionManager = permissionManager,
-                    onPermissionChanged = {
-                        permissionStatus = permissionManager.checkPermissions()
-                    }
-                )
-
-                HorizontalDivider(color = Color(0x30FFFFFF))
-
-                LocationModeSection(
-                    selectedMode = selectedMode,
-                    onModeSelected = { mode ->
-                        selectedMode = mode
-                        prefs.powerMode = mode
-                        app.getLocationService()?.setPowerMode(mode)
-                    }
-                )
-
-                HorizontalDivider(color = Color(0x30FFFFFF))
-
-                // 主题选择
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showThemePicker = true },
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0x4D000000)
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Palette,
-                                contentDescription = "主题",
-                                tint = ThemeManager.getAccentColor(),
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "主题",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = Color(0xFFE0E0E0)
-                                )
-                                Text(
-                                    currentTheme.displayName,
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFBDBDBD)
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = Color(0xFFBDBDBD),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = Color(0x30FFFFFF))
-
-                if (onOpenDataManagement != null) {
-                    SettingsMenuCard(
-                        icon = Icons.Default.Folder,
-                        title = "数据与日志管理",
-                        description = "导出、导入或删除历史数据",
-                        tint = primaryColor(),
-                        onClick = onOpenDataManagement
-                    )
-                    HorizontalDivider(color = Color(0x30FFFFFF))
-                }
-
-                if (onOpenFenceExportImport != null) {
-                    SettingsMenuCard(
-                        icon = Icons.Default.Share,
-                        title = "围栏导入导出",
-                        description = "导出或导入围栏数据（支持分享）",
-                        tint = NeonAmber,
-                        onClick = onOpenFenceExportImport
-                    )
-                    HorizontalDivider(color = Color(0x30FFFFFF))
-                }
-
-                if (onOpenStatsExportImport != null) {
-                    SettingsMenuCard(
-                        icon = Icons.Default.Timeline,
-                        title = "停留记录导入导出",
-                        description = "导出或导入停留统计数据（支持分享）",
-                        tint = NeonBlue,
-                        onClick = onOpenStatsExportImport
-                    )
-                    HorizontalDivider(color = Color(0x30FFFFFF))
-                }
-
-                // 省电效果统计
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showPowerSavingStats = !showPowerSavingStats },
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0x4D000000)
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(0.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.BatterySaver,
-                                contentDescription = "省电统计",
-                                tint = Success,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "省电效果统计",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = Color(0xFFE0E0E0)
-                                )
-                                Text(
-                                    "查看定位请求次数和省电效果",
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFBDBDBD)
-                                )
-                            }
-                            Icon(
-                                imageVector = if (showPowerSavingStats) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (showPowerSavingStats) "收起" else "展开",
-                                tint = Color(0xFFBDBDBD),
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        if (showPowerSavingStats) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            PowerSavingStatsSection(
-                                totalLocations = totalLocations,
-                                processedLocations = processedLocations,
-                                cacheStats = cacheStats,
-                                prefs = prefs,
-                                onReset = {
-                                    prefs.resetStats()
-                                    totalLocations = 0
-                                    processedLocations = 0
-                                },
-                                onClearCache = {
-                                    GeoMath.clearCirclePolygonCache()
-                                    cacheStats = GeoMath.getCacheStats()
-                                },
-                                stats = powerSavingStats
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = Color(0x30FFFFFF))
-
-                // 高级设置
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showAdvancedSettings = !showAdvancedSettings },
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0x4D000000)
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(0.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Tune,
-                                contentDescription = "高级设置",
-                                tint = primaryColor(),
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "高级设置",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = Color(0xFFE0E0E0)
-                                )
-                                Text(
-                                    "调整定位算法参数",
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFBDBDBD)
-                                )
-                            }
-                            Icon(
-                                imageVector = if (showAdvancedSettings) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (showAdvancedSettings) "收起" else "展开",
-                                tint = Color(0xFFBDBDBD),
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        if (showAdvancedSettings) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            AdvancedSettingsSection(
-                                stationaryThreshold = stationaryThreshold,
-                                onStationaryThresholdChange = { value ->
-                                    stationaryThreshold = value
-                                    prefs.stationaryThreshold = value
-                                    app.updateEngineConfig()
-                                },
-                                boundaryBuffer = boundaryBuffer,
-                                onBoundaryBufferChange = { value ->
-                                    boundaryBuffer = value
-                                    prefs.boundaryBuffer = value
-                                    app.updateEngineConfig()
-                                },
-                                driftThreshold = driftThreshold,
-                                onDriftThresholdChange = { value ->
-                                    driftThreshold = value
-                                    prefs.driftThreshold = value
-                                    app.updateEngineConfig()
-                                }
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = Color(0x30FFFFFF))
-
-                InfoSection()
-            }
+            SettingsPage(
+                onNavigateBack = onDismiss,
+                onOpenDataManagement = onOpenDataManagement,
+                onOpenFenceExportImport = onOpenFenceExportImport,
+                onOpenStatsExportImport = onOpenStatsExportImport,
+                hideNavBar = true
+            )
         },
         confirmButton = {
             GlassButton(onClick = onDismiss) {
@@ -769,18 +482,6 @@ fun SettingsScreen(
             }
         }
     )
-
-    // 主题选择对话框
-    if (showThemePicker) {
-        ThemePickerDialog(
-            currentTheme = currentTheme,
-            onThemeSelected = { theme ->
-                currentTheme = theme
-                ThemeManager.setTheme(context, theme)
-            },
-            onDismiss = { showThemePicker = false }
-        )
-    }
 }
 
 @Composable

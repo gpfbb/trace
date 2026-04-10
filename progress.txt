@@ -84,3 +84,18 @@
 - **Learnings for future iterations:**
   - Grep entire codebase before deleting methods to confirm no references exist
 ---
+
+## 2026-04-10 - CLEAN-006
+- What was implemented
+  - Deleted ~340 lines of duplicate content from SettingsScreen (was identical to SettingsPage)
+  - Refactored SettingsScreen to thin GlassDialog wrapper: GlassDialog containing SettingsPage(hideNavBar=true)
+  - Added hideNavBar parameter to SettingsPage to conditionally hide the top GlassTopCard navigation bar
+  - Removed dead import of SettingsScreen from TrackMasterNavHost.kt
+- Files changed
+  - SettingsScreen.kt - replaced duplicate body with delegating GlassDialog wrapper, added hideNavBar param
+  - TrackMasterNavHost.kt - removed unused SettingsScreen import
+- **Learnings for future iterations:**
+  - SettingsPage and SettingsScreen had completely identical content but different wrappers (full-page vs dialog)
+  - The GlassDialog wrapper in SettingsScreen had its own title bar, so hideNavBar=true is needed to avoid double header
+  - When removing duplicate wrappers, check if content is truly identical or has subtle differences (the theme icon tint differed: getAccentColor vs getPrimaryColor)
+---
