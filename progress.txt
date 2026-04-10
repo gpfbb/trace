@@ -60,3 +60,13 @@
   - The daily_stats acceptance criteria is implemented as `daily_stays` table in the existing codebase
   - Always add index for timestamp columns used in queries
 
+
+## 2026-04-10 17:20 - BUG-001
+- What was implemented: Fixed fence status refresh after create/edit/delete. Added `checkAndUpdateFenceState()` call after `refreshEngineFences()` in MapScreen.kt at three locations: after creating a fence (line 307), after editing a fence (line 189), and after deleting a fence (line 367). This ensures the engine re-evaluates if the user's current location is inside/outside any fences, and updates `currentMatchedFences` and triggers UI refresh via `fenceStateVersion`.
+- Files changed: app/src/main/java/com/trackmaster/app/ui/screens/MapScreen.kt
+- **Learnings for future iterations:**
+  - When modifying `refreshEngineFences()`, also call `checkAndUpdateFenceState()` to re-evaluate the user's fence match status
+  - `currentMatchedFences` in TrackMasterApplication holds the list of fences the user is currently inside (for UI highlighting)
+  - `fenceStateVersion` StateFlow triggers UI recomposition when fences are modified
+  - The pre-existing unit test failures in `StayDurationManagerTest.kt` (Int vs Long type mismatch) are unrelated to fence status refresh issues
+---
