@@ -41,3 +41,14 @@
   - BALANCED_THROTTLE_STEPS vs POWERSAVE_THROTTLE_STEPS have different intervals at each level
   - When fixing UI text, verify against actual code constants not PRD descriptions
 ---
+
+## 2026-04-10 - CLEAN-004
+- What was implemented
+  - Deleted unused shareLauncher in StatsExportImportScreen.kt
+  - Sharing was already implemented via context.startActivity(Intent.createChooser))
+- Files changed
+  - StatsExportImportScreen.kt - removed unused shareLauncher
+- **Learnings for future iterations:**
+  - rememberLauncherForActivityResult can be unused if sharing is done via startActivity directly
+  - Always check if ActivityResultContracts import is still needed before removing launcher
+---

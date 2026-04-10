@@ -88,13 +88,6 @@ fun StatsExportImportScreen(
         }
     }
 
-    // 分享文件选择器
-    val shareLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        // 这个回调不需要做啥，文件已经分享出去了
-    }
-
     fun doExport() {
         scope.launch {
             isExporting = true
