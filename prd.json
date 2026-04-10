@@ -28,8 +28,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deleted screenReceiver and its registration from GeoFenceLocationService.kt, removed Engine.onScreenStateChanged(), removed SmartScheduler.onScreenStateChanged()"
     },
     {
       "id": "CLEAN-003",

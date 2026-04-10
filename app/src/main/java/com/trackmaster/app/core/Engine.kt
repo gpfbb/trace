@@ -194,11 +194,6 @@ class Engine(
         scheduler.onActivityDetected(activity)
     }
 
-    /** 屏幕状态变更（转发给 Scheduler） */
-    fun onScreenStateChanged(isOn: Boolean) {
-        scheduler.onScreenStateChanged(isOn)
-    }
-
     /** SLC 系统回调（转发给 Scheduler） */
     fun onSignificantLocationChange(distanceM: Double) {
         scheduler.onSignificantLocationChange(distanceM)

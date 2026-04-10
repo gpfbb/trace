@@ -320,12 +320,6 @@ class SmartScheduler(
         return decision
     }
 
-    /** 屏幕状态变更回调，已禁用 */
-    @Suppress("UNUSED_PARAMETER")
-    fun onScreenStateChanged(isOn: Boolean) {
-        // 已禁用：点亮屏幕不触发重置
-    }
-
     /** 活动识别回调，WALKING/DRIVING/CYCLING 时立即重置 */
     fun onActivityDetected(activity: ActivityResult) {
         if (activity.type == ActivityType.WALKING ||

@@ -13,3 +13,18 @@
   - FileProvider requires `${context.packageName}.fileprovider` authority
   - `dbHelper` is private in TrackMasterApplication - need to add public wrapper methods for access
 ---
+
+## 2026-04-10 - CLEAN-002
+- What was implemented
+  - Deleted dead code: screenReceiver broadcast registration in GeoFenceLocationService.kt
+  - Removed Engine.onScreenStateChanged() method which forwarded to empty scheduler method
+  - Removed SmartScheduler.onScreenStateChanged() which was already empty/disabled
+  - Cleaned up unused imports (BroadcastReceiver, IntentFilter)
+- Files changed
+  - GeoFenceLocationService.kt - removed screenReceiver and registration
+  - Engine.kt - removed onScreenStateChanged method
+  - SmartScheduler.kt - removed onScreenStateChanged method
+- **Learnings for future iterations:**
+  - SmartScheduler.onScreenStateChanged was explicitly disabled with comment "已禁用：点亮屏幕不触发重置"
+  - The screen receiver pattern registers for ACTION_SCREEN_ON/OFF broadcasts - when removing, also remove the unregisterReceiver call in onDestroy
+---

@@ -5,10 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -86,16 +84,6 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             stateListeners.forEach { it(value) }
         }
 
-    /** 屏幕状态接收器 */
-    private val screenReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val app = application as? TrackMasterApplication ?: return
-            when (intent?.action) {
-                Intent.ACTION_SCREEN_ON -> app.engine.onScreenStateChanged(true)
-                Intent.ACTION_SCREEN_OFF -> app.engine.onScreenStateChanged(false)
-            }
-        }
-    }
 
     inner class LocalBinder : Binder() {
         val service: GeoFenceLocationService
@@ -108,16 +96,6 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         createNotificationChannel()
         initLocationClient()
 
-        // 注册屏幕状态接收器
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_SCREEN_OFF)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(screenReceiver, filter)
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -142,7 +120,6 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         Log.d(TAG, "定位服务销毁")
         // 清理定时器
         powerSaveHandler.removeCallbacks(powerSaveCheckRunnable)
-        try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         stopLocation()
         locationClient?.onDestroy()
     }
