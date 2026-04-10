@@ -52,3 +52,13 @@
   - rememberLauncherForActivityResult can be unused if sharing is done via startActivity directly
   - Always check if ActivityResultContracts import is still needed before removing launcher
 ---
+
+## 2026-04-10 - CLEAN-005
+- What was implemented
+  - Deleted unused getShareableStatsFile() method from DataManager.kt
+  - Method was defined but never called anywhere in codebase
+- Files changed
+  - DataManager.kt - removed unused method
+- **Learnings for future iterations:**
+  - Grep entire codebase before deleting methods to confirm no references exist
+---

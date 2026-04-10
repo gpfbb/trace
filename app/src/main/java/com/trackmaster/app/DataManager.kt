@@ -662,14 +662,6 @@ class DataManager(private val context: Context) {
     }
 
     /**
-     * 获取分享用的文件 URI
-     */
-    fun getShareableStatsFile(): File? {
-        val files = exportDir.listFiles()?.sortedByDescending { it.lastModified() }
-        return files?.firstOrNull()
-    }
-
-    /**
      * 获取所有每日停留记录（用于统计页面）
      */
     fun getAllDailyStayRecords(): List<DailyStayRecord> {
