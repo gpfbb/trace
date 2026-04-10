@@ -63,6 +63,18 @@
   - AppPreferences defaults should match restoreDefaultSettings in SettingsViewModel
 ---
 
+## 2026-04-10 - CLEAN-008
+- What was implemented
+  - Implemented Option A: removed unused detailed stats from PowerSavingStats
+  - Detailed stats (locationRecords, modeStatsMap, performanceMetrics) were never persisted and NOT used for UI display
+  - UI uses AppPreferences (which IS persisted) for totalLocations/processedLocations counts
+- Files changed
+  - PowerSavingStats.kt - simplified to stub implementation
+- **Learnings for future iterations:**
+  - PowerSavingStats detailed tracking was never displayed in SettingsScreen - UI uses AppPreferences data instead
+  - Check if data is actually used before implementing persistence
+---
+
 ## 2026-04-10 - CLEAN-005
 - What was implemented
   - Deleted unused getShareableStatsFile() method from DataManager.kt

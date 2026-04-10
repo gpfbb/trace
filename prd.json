@@ -107,8 +107,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented Option A - removed unused detailed stats from PowerSavingStats since they weren't persisted and weren't used for UI display (UI uses AppPreferences which IS persisted)"
     }
   ]
 }
