@@ -1,5 +1,16 @@
 package com.trackmaster.app
 
+import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFencePoint
+import com.trackmaster.app.core.GeoFenceType
+import com.trackmaster.app.data.GeoFenceAction
+import com.trackmaster.app.data.GeoFenceEvent
+import com.trackmaster.app.data.FenceStayRecord
+import com.trackmaster.app.data.DailyFenceStats
+import com.trackmaster.app.ui.components.RadioButtonWithLabel
+import com.trackmaster.app.ui.components.FenceItem
+import com.trackmaster.app.ui.components.FenceItemWithMove
+
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -73,66 +84,6 @@ import com.amap.api.maps.model.PolygonOptions
 import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.ui.navigation.TrackMasterNavHost
 import java.util.*
-
-// 地理围栏相关数据结构
-data class GeoFencePoint(
-    val latitude: Double,
-    val longitude: Double
-)
-
-enum class GeoFenceType {
-    CIRCLE,
-    POLYGON
-}
-
-data class GeoFence(
-    val id: String,
-    val name: String,
-    val type: GeoFenceType,
-    val center: GeoFencePoint? = null, // 圆形围栏的中心点
-    val radius: Float? = null, // 圆形围栏的半径（米）
-    val points: List<GeoFencePoint>? = null, // 多边形围栏的顶点
-    val categoryId: String = Category.UNASSIGNED_ID, // 所属分类ID
-    val createdAt: Date = Date(),
-    val color: String = "#FF0000", // 围栏颜色，默认红色
-    val alpha: Float = 0.3f // 围栏透明度，默认30%
-)
-
-enum class GeoFenceAction {
-    ENTER,
-    EXIT,
-    STAY
-}
-
-data class GeoFenceEvent(
-    val id: String = UUID.randomUUID().toString(),
-    val fenceId: String,
-    val fenceName: String,
-    val action: GeoFenceAction,
-    val time: Date,
-    val latitude: Double,
-    val longitude: Double,
-    val accuracy: Float,
-    val durationSeconds: Long? = null
-)
-
-data class FenceStayRecord(
-    val id: String? = null,  // 可选，导入时用于去重
-    val fenceId: String,
-    val fenceName: String,
-    val enterTime: Date,
-    val exitTime: Date? = null,
-    val durationSeconds: Long? = null
-)
-
-data class DailyFenceStats(
-    val date: String,
-    val fenceId: String,
-    val fenceName: String,
-    val totalStayDuration: Long,
-    val enterCount: Int,
-    val exitCount: Int
-)
 
 class MainActivity : ComponentActivity() {
 
@@ -479,6 +430,16 @@ class MainActivity : ComponentActivity() {
         return app.currentMatchedFences.toList()
     }
 
+    // 获取所有围栏列表
+    fun getAllFences(): List<GeoFence> {
+        return geoFences.toList()
+    }
+
+    // 检查围栏是否被高亮
+    fun isFenceHighlighted(fenceId: String): Boolean {
+        return highlightedFenceId == fenceId
+    }
+
     // 获取围栏停留记录
     fun getFenceStayRecords(): List<FenceStayRecord> {
         return dbHelper.getAllStayRecords()
@@ -588,6 +549,8 @@ class MainActivity : ComponentActivity() {
 
     // 高亮显示指定围栏（再次点击取消高亮）
     fun highlightGeoFence(fenceId: String) {
+        val app = applicationContext as? TrackMasterApplication
+
         // 如果点击的是同一个围栏，取消高亮
         if (highlightedFenceId == fenceId) {
             highlightedFenceId = null
@@ -600,6 +563,7 @@ class MainActivity : ComponentActivity() {
                 polygon.strokeColor = AndroidColor.parseColor("#FF0000")
                 polygon.strokeWidth = 2f
             }
+            app?.notifyFenceStateChanged()
             return
         }
 
@@ -635,6 +599,8 @@ class MainActivity : ComponentActivity() {
             polygon?.strokeColor = AndroidColor.parseColor("#FFFF00")
             polygon?.strokeWidth = 4f
         }
+
+        app?.notifyFenceStateChanged()
     }
 
     // 设置地图类型
@@ -917,221 +883,6 @@ fun AMapView(
             }
 
 
-        }
-    }
-}
-
-@Composable
-fun RadioButtonWithLabel(
-    selected: Boolean,
-    label: String,
-    description: String? = null,
-    onSelected: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
-            .clickable { onSelected() },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(
-            selected = selected,
-            onClick = onSelected,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = NeonCoral,
-                unselectedColor = TextSecondary
-            )
-        )
-        Column(modifier = Modifier.padding(start = 10.dp)) {
-            ResponsiveSubtitleText(
-                text = label,
-                priority = if (selected) TextPriority.PRIMARY else TextPriority.SECONDARY,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-            )
-            if (description != null) {
-                Spacer(modifier = Modifier.height(2.dp))
-                ResponsiveLabelText(
-                    text = description,
-                    priority = TextPriority.TERTIARY
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun FenceItem(fence: GeoFence, mainActivity: MainActivity) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 4.dp)
-            .clickable {
-                mainActivity.highlightGeoFence(fence.id)
-            },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-        ),
-        shape = RoundedCornerShape(6.dp),
-        elevation = CardDefaults.cardElevation(1.dp)
-    ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = fence.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f)
-                )
-                Badge(
-                    containerColor = when (fence.type) {
-                        GeoFenceType.CIRCLE -> MaterialTheme.colorScheme.primary
-                        GeoFenceType.POLYGON -> MaterialTheme.colorScheme.secondary
-                    }
-                ) {
-                    Text(
-                        text = when (fence.type) {
-                            GeoFenceType.CIRCLE -> "圆形"
-                            GeoFenceType.POLYGON -> "多边形"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-                IconButton(
-                    onClick = { mainActivity.deleteGeoFence(fence.id) },
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        Icons.Default.DeleteForever,
-                        contentDescription = "删除围栏",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-            Text(
-                text = "创建时间: ${fence.createdAt}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun FenceItemWithMove(
-    fence: GeoFence,
-    mainActivity: MainActivity,
-    onEditClick: () -> Unit,
-    onCategoryClick: () -> Unit,
-    onDeleteClick: (GeoFence) -> Unit
-) {
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
-            initialOffsetY = { -40 },
-            animationSpec = tween(300)
-        ),
-        exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(
-            targetOffsetY = { 40 },
-            animationSpec = tween(300)
-        )
-    ) {
-        GlassCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp, horizontal = 6.dp)
-                .clickable {
-                    mainActivity.highlightGeoFence(fence.id)
-                }
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ResponsiveSubtitleText(
-                        text = fence.name,
-                        priority = TextPriority.PRIMARY,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    GlassBadge(
-                        containerColor = when (fence.type) {
-                            GeoFenceType.CIRCLE -> NeonCoral
-                            GeoFenceType.POLYGON -> NeonAmber
-                        }
-                    ) {
-                        Text(
-                            text = when (fence.type) {
-                                GeoFenceType.CIRCLE -> "圆形"
-                                GeoFenceType.POLYGON -> "多边形"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (fence.type == GeoFenceType.POLYGON) Color.Black else Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    
-                    // 分类按钮 - 移动围栏到分类
-                    GlassFloatingActionButton(
-                        onClick = onCategoryClick,
-                        modifier = Modifier.size(44.dp),
-                        containerColor = NeonBlue.copy(alpha = 0.4f)
-                    ) {
-                        Icon(
-                            Icons.Default.Category,
-                            contentDescription = "移动围栏到分类",
-                            tint = Color.White,
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // 编辑围栏按钮 - 编辑围栏形状
-                    GlassFloatingActionButton(
-                        onClick = onEditClick,
-                        modifier = Modifier.size(44.dp),
-                        containerColor = NeonCoral.copy(alpha = 0.4f)
-                    ) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "编辑围栏",
-                            tint = Color.White,
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // 删除围栏按钮 - 使用更鲜明的红色
-                    GlassFloatingActionButton(
-                        onClick = { onDeleteClick(fence) },
-                        modifier = Modifier.size(44.dp),
-                        containerColor = Danger.copy(alpha = 0.4f)
-                    ) {
-                        Icon(
-                            Icons.Default.DeleteForever,
-                            contentDescription = "删除围栏",
-                            tint = Color.White,
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                ResponsiveLabelText(
-                    text = "创建时间: ${fence.createdAt}",
-                    priority = TextPriority.TERTIARY,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
         }
     }
 }
@@ -1591,6 +1342,67 @@ fun MainScreen(
                                 color = NeonAmber.copy(alpha = 0.9f),
                                 fontWeight = FontWeight.Medium
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        // 围栏选择区域
+                        val allFences = mainActivity.getAllFences()
+                        if (allFences.isNotEmpty()) {
+                            Text(
+                                text = "选择围栏高亮",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = NeonCoral.copy(alpha = 0.8f),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 150.dp)
+                            ) {
+                                allFences.take(10).forEach { fence ->
+                                    val isHighlighted = mainActivity.isFenceHighlighted(fence.id)
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 2.dp)
+                                            .clickable {
+                                                mainActivity.highlightGeoFence(fence.id)
+                                            },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isHighlighted)
+                                                NeonCoral.copy(alpha = 0.3f)
+                                            else
+                                                Color.White.copy(alpha = 0.1f)
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = fence.name,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isHighlighted) NeonCoral else Color.White,
+                                                fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Normal,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (isHighlighted) {
+                                                Icon(
+                                                    Icons.Default.LocationOn,
+                                                    contentDescription = "已高亮",
+                                                    tint = NeonCoral,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
@@ -2687,7 +2499,7 @@ fun MainScreen(
                                         com.trackmaster.app.core.Geofence(
                                             id = f.id, name = f.name,
                                             type = com.trackmaster.app.core.GeoFenceType.valueOf(f.type.name),
-                                            polygon = if (f.type == com.trackmaster.app.GeoFenceType.CIRCLE) {
+                                            polygon = if (f.type == com.trackmaster.app.core.GeoFenceType.CIRCLE) {
                                                 val center = f.center ?: return@mapNotNull null
                                                 com.trackmaster.app.core.GeoMath.circleToPolygon(
                                                     com.trackmaster.app.core.GeoPoint(center.latitude, center.longitude),

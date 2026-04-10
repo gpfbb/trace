@@ -2,6 +2,7 @@ package com.trackmaster.app
 
 import android.content.Context
 import android.util.Log
+import com.trackmaster.app.data.FenceStayRecord
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap

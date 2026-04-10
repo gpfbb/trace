@@ -1,8 +1,60 @@
 package com.trackmaster.app.ui.theme
 
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 
-// 新复古液态玻璃拟态主题配色
+// ============================================
+// 主题感知颜色 - 这些颜色会根据当前主题动态变化
+// ============================================
+
+/**
+ * 主色调 - 根据当前主题返回对应颜色
+ * DARK_NIGHT: 珊瑚橙, SOFT_EYE: 柔和蓝, CLASSIC_RED: 经典红, MINIMAL_GRAPHITE: 石墨蓝灰
+ */
+@Composable
+fun primaryColor(): Color = ThemeManager.primaryColor.value
+
+/**
+ * 强调色 - 根据当前主题返回对应颜色
+ */
+@Composable
+fun accentColor(): Color = ThemeManager.accentColor.value
+
+/**
+ * 背景色 - 根据当前主题返回对应颜色
+ */
+@Composable
+fun backgroundColor(): Color = ThemeManager.backgroundColor.value
+
+/**
+ * 表面色 - 根据当前主题返回对应颜色（卡片、面板等）
+ */
+@Composable
+fun surfaceColor(): Color = ThemeManager.surfaceColor.value
+
+/**
+ * 主文字色 - 根据当前主题返回对应颜色
+ */
+@Composable
+fun textPrimary(): Color = ThemeManager.textPrimaryColor.value
+
+/**
+ * 次文字色 - 根据当前主题返回对应颜色
+ */
+@Composable
+fun textSecondary(): Color = ThemeManager.textSecondaryColor.value
+
+/**
+ * 玻璃面板色 - 根据当前主题返回对应颜色
+ */
+@Composable
+fun glassPanel(): Color = ThemeManager.glassPanelColor.value
+
+// ============================================
+// 旧版静态颜色别名 - 为了向后兼容
+// 这些直接使用 DARK_NIGHT 主题的颜色
+// ============================================
+
 // 主色调 - 霓虹珊瑚橙
 val NeonCoral = Color(0xFFFF7F50)
 val NeonAmber = Color(0xFFFFBF00)

@@ -12,6 +12,10 @@ import com.trackmaster.app.core.Engine
 import com.trackmaster.app.core.FenceMapper
 import com.trackmaster.app.core.FenceTreeManager
 import com.trackmaster.app.core.Geofence
+import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFenceAction
+import com.trackmaster.app.data.GeoFenceEvent
+import com.trackmaster.app.data.FenceStayRecord
 import com.trackmaster.app.core.LocationFix
 import com.trackmaster.app.services.Aggregator
 import com.trackmaster.app.storage.Repository
@@ -30,6 +34,7 @@ import com.trackmaster.app.di.appModule
 import org.koin.android.ext.koin.androidLogger
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
+import com.trackmaster.app.ui.theme.ThemeManager
 
 class TrackMasterApplication : Application() {
 
@@ -116,6 +121,10 @@ class TrackMasterApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        // 初始化主题管理器 - 必须最早执行以确保主题正确加载
+        ThemeManager.init(this)
+        Log.d(TAG, "主题初始化完成: ${ThemeManager.getCurrentTheme()}")
 
         // 初始化 Koin 依赖注入
         startKoin {
@@ -249,6 +258,25 @@ class TrackMasterApplication : Application() {
                 // 清除该围栏的进入时间记录
                 fenceEnterTimes.remove(closedSeg.leafGeofenceId)
 
+                // ========== BUG FIX: 嵌套围栏计时问题 ==========
+                // 问题：退出子围栏时，如果父围栏没有active session，需要启动它
+                // 同时清理掉其他无关的session（如果有）
+                val parentId = fenceTreeManager.getParent(closedSeg.leafGeofenceId)
+                if (parentId != null && engine.currentMatchedFenceIds.contains(parentId)) {
+                    // 清除所有session，只保留父围栏
+                    val currentSessions = stayDurationManager.activeSessions
+                    Log.d(TAG, "退出子围栏，清理多余session，当前activeSessions: ${currentSessions.keys.joinToString()}")
+                    currentSessions.clear()
+
+                    // 启动父围栏的计时
+                    val parentFence = geoFences.find { it.id == parentId }
+                    val parentName = parentFence?.name ?: parentId
+                    Log.d(TAG, "启动父围栏计时: $parentName")
+                    stayDurationManager.onFenceEnter(parentId, parentName, Date(location.time))
+                    fenceEnterTimes[parentId] = Date(location.time)
+                }
+                // ========== BUG FIX END ==========
+
                 // 保存上次离开状态
                 persistentStateManager.saveLastExitState(
                     closedSeg.leafGeofenceId,
@@ -310,13 +338,24 @@ class TrackMasterApplication : Application() {
                             location = location
                         )
 
+                        // 只有 smallest（最深的叶子围栏）启动计时
+                        // 父围栏只记录进入时间，不启动计时
                         if (fenceId == smallestFenceId) {
-                            stayDurationManager.onFenceEnter(fenceId, fenceName, Date(location.time))
-                            persistentStateManager.saveCurrentFenceState(
-                                fenceId,
-                                fenceName,
-                                Date(location.time)
-                            )
+                            // ========== BUG FIX: 清理多余的session ==========
+                            // 进入最深围栏时，如果该围栏没有active session才启动新session
+                            // 这样恢复的session不会被重置
+                            if (!stayDurationManager.isFenceActive(fenceId)) {
+                                Log.d(TAG, "进入最深围栏 $fenceName，启动计时")
+                                stayDurationManager.onFenceEnter(fenceId, fenceName, Date(location.time))
+                                persistentStateManager.saveCurrentFenceState(
+                                    fenceId,
+                                    fenceName,
+                                    Date(location.time)
+                                )
+                            } else {
+                                Log.d(TAG, "围栏 $fenceName 已在计时中，跳过")
+                            }
+                            // ========== BUG FIX END ==========
                         }
 
                         fenceEnterTimes[fenceId] = Date(location.time)

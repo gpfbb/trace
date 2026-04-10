@@ -28,6 +28,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.trackmaster.app.ui.components.CompactThemeSelector
+import com.trackmaster.app.ui.components.ThemePickerDialog
 import com.trackmaster.app.ui.theme.*
 
 // 独立的设置页面内容组件
@@ -44,6 +46,8 @@ fun SettingsPage(
     val permissionManager = remember { PermissionManager(context) }
     var permissionStatus by remember { mutableStateOf(permissionManager.checkPermissions()) }
     var selectedMode by remember { mutableStateOf(prefs.powerMode) }
+    var currentTheme by remember { mutableStateOf(ThemeManager.getCurrentTheme()) }
+    var showThemePicker by remember { mutableStateOf(false) }
 
     // 高级设置状态
     var showAdvancedSettings by remember { mutableStateOf(false) }
@@ -90,7 +94,7 @@ fun SettingsPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(brush = Brush.verticalGradient(colors = listOf(DeepChocolate, EspressoBlack)))
+            .background(brush = Brush.verticalGradient(colors = listOf(surfaceColor(), backgroundColor())))
     ) {
         // 顶部导航栏 - 无返回按钮，作为底部Tab页面
         GlassTopCard(
@@ -105,7 +109,7 @@ fun SettingsPage(
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "设置",
-                    tint = NeonCoral,
+                    tint = primaryColor(),
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -113,7 +117,7 @@ fun SettingsPage(
                     "应用设置",
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
-                    color = NeonCoral
+                    color = primaryColor()
                 )
             }
         }
@@ -149,12 +153,58 @@ fun SettingsPage(
 
             HorizontalDivider(color = Color(0x30FFFFFF))
 
+            // 主题选择
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showThemePicker = true },
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0x4D000000)
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = "主题",
+                            tint = ThemeManager.getPrimaryColor(),
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "主题",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = Color(0xFFE0E0E0)
+                            )
+                            Text(
+                                currentTheme.displayName,
+                                fontSize = 13.sp,
+                                color = Color(0xFFBDBDBD)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = Color(0xFFBDBDBD),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = Color(0x30FFFFFF))
+
             if (onOpenDataManagement != null) {
                 SettingsMenuCard(
                     icon = Icons.Default.Folder,
                     title = "数据与日志管理",
                     description = "导出、导入或删除历史数据",
-                    tint = NeonCoral,
+                    tint = primaryColor(),
                     onClick = onOpenDataManagement
                 )
                 HorizontalDivider(color = Color(0x30FFFFFF))
@@ -267,7 +317,7 @@ fun SettingsPage(
                         Icon(
                             imageVector = Icons.Default.Tune,
                             contentDescription = "高级设置",
-                            tint = NeonCoral,
+                            tint = primaryColor(),
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.width(16.dp))
@@ -324,6 +374,18 @@ fun SettingsPage(
 
             Spacer(modifier = Modifier.height(80.dp))
         }
+    }
+
+    // 主题选择对话框
+    if (showThemePicker) {
+        ThemePickerDialog(
+            currentTheme = currentTheme,
+            onThemeSelected = { theme ->
+                currentTheme = theme
+                ThemeManager.setTheme(context, theme)
+            },
+            onDismiss = { showThemePicker = false }
+        )
     }
 }
 
@@ -394,6 +456,8 @@ fun SettingsScreen(
     val permissionManager = remember { PermissionManager(context) }
     var permissionStatus by remember { mutableStateOf(permissionManager.checkPermissions()) }
     var selectedMode by remember { mutableStateOf(prefs.powerMode) }
+    var currentTheme by remember { mutableStateOf(ThemeManager.getCurrentTheme()) }
+    var showThemePicker by remember { mutableStateOf(false) }
 
     // 高级设置状态
     var showAdvancedSettings by remember { mutableStateOf(false) }
@@ -444,11 +508,11 @@ fun SettingsScreen(
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "设置",
-                    tint = NeonCoral,
+                    tint = primaryColor(),
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("应用设置", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = NeonCoral)
+                Text("应用设置", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = primaryColor())
             }
         },
         text = {
@@ -479,12 +543,58 @@ fun SettingsScreen(
 
                 HorizontalDivider(color = Color(0x30FFFFFF))
 
+                // 主题选择
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showThemePicker = true },
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0x4D000000)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Palette,
+                                contentDescription = "主题",
+                                tint = ThemeManager.getAccentColor(),
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "主题",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFFE0E0E0)
+                                )
+                                Text(
+                                    currentTheme.displayName,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFBDBDBD)
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = Color(0xFFBDBDBD),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color(0x30FFFFFF))
+
                 if (onOpenDataManagement != null) {
                     SettingsMenuCard(
                         icon = Icons.Default.Folder,
                         title = "数据与日志管理",
                         description = "导出、导入或删除历史数据",
-                        tint = NeonCoral,
+                        tint = primaryColor(),
                         onClick = onOpenDataManagement
                     )
                     HorizontalDivider(color = Color(0x30FFFFFF))
@@ -597,7 +707,7 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = "高级设置",
-                                tint = NeonCoral,
+                                tint = primaryColor(),
                                 modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
@@ -659,6 +769,18 @@ fun SettingsScreen(
             }
         }
     )
+
+    // 主题选择对话框
+    if (showThemePicker) {
+        ThemePickerDialog(
+            currentTheme = currentTheme,
+            onThemeSelected = { theme ->
+                currentTheme = theme
+                ThemeManager.setTheme(context, theme)
+            },
+            onDismiss = { showThemePicker = false }
+        )
+    }
 }
 
 @Composable
@@ -687,7 +809,7 @@ fun PermissionSectionContent(
             "权限管理",
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
-            color = NeonCoral
+            color = primaryColor()
         )
 
         PermissionItem(
@@ -815,7 +937,7 @@ fun LocationModeSection(
             "定位模式",
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
-            color = NeonCoral
+            color = primaryColor()
         )
 
         LocationModeItem(
@@ -861,7 +983,7 @@ fun LocationModeItem(
         elevation = CardDefaults.cardElevation(0.dp),
         border = if (isSelected) androidx.compose.foundation.BorderStroke(
             2.dp,
-            NeonCoral
+            primaryColor()
         ) else null
     ) {
         Row(
@@ -874,7 +996,7 @@ fun LocationModeItem(
             RadioButton(
                 selected = isSelected,
                 onClick = onClick,
-                colors = RadioButtonDefaults.colors(selectedColor = NeonCoral)
+                colors = RadioButtonDefaults.colors(selectedColor = primaryColor())
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -900,7 +1022,7 @@ fun InfoSection() {
             "使用说明",
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
-            color = NeonCoral
+            color = primaryColor()
         )
         Text(
             "1. 请授予所有必要权限以确保功能正常运行\n" +
@@ -943,7 +1065,7 @@ fun PowerSavingStatsSection(
                     "今日定位请求",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = NeonCoral
+                    color = primaryColor()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
@@ -1055,7 +1177,7 @@ fun PowerSavingStatsSection(
                                 "%,d 次".format(cacheStats.totalRequests),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = NeonCoral
+                                color = primaryColor()
                             )
                         }
                     }
@@ -1211,7 +1333,7 @@ fun AdvancedSettingsSection(
                     "${stationaryThreshold.toInt()}m",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = NeonCoral
+                    color = primaryColor()
                 )
             }
             Slider(
@@ -1220,8 +1342,8 @@ fun AdvancedSettingsSection(
                 valueRange = 30f..150f,
                 steps = 11,
                 colors = SliderDefaults.colors(
-                    thumbColor = NeonCoral,
-                    activeTrackColor = NeonCoral,
+                    thumbColor = primaryColor(),
+                    activeTrackColor = primaryColor(),
                     inactiveTrackColor = Color(0x4DFFFFFF)
                 )
             )
@@ -1248,7 +1370,7 @@ fun AdvancedSettingsSection(
                     "${boundaryBuffer.toInt()}m",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = NeonCoral
+                    color = primaryColor()
                 )
             }
             Slider(
@@ -1257,8 +1379,8 @@ fun AdvancedSettingsSection(
                 valueRange = 10f..200f,
                 steps = 18,
                 colors = SliderDefaults.colors(
-                    thumbColor = NeonCoral,
-                    activeTrackColor = NeonCoral,
+                    thumbColor = primaryColor(),
+                    activeTrackColor = primaryColor(),
                     inactiveTrackColor = Color(0x4DFFFFFF)
                 )
             )
@@ -1285,7 +1407,7 @@ fun AdvancedSettingsSection(
                     "${driftThreshold.toInt()}m/s",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = NeonCoral
+                    color = primaryColor()
                 )
             }
             Slider(
@@ -1294,8 +1416,8 @@ fun AdvancedSettingsSection(
                 valueRange = 10f..100f,
                 steps = 8,
                 colors = SliderDefaults.colors(
-                    thumbColor = NeonCoral,
-                    activeTrackColor = NeonCoral,
+                    thumbColor = primaryColor(),
+                    activeTrackColor = primaryColor(),
                     inactiveTrackColor = Color(0x4DFFFFFF)
                 )
             )

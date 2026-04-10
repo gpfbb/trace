@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.amap.api.location.AMapLocation
-import com.trackmaster.app.GeoFence
+import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.storage.Repository
 import kotlinx.coroutines.flow.MutableStateFlow

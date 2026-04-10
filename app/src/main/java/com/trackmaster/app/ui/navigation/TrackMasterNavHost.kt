@@ -6,7 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -21,8 +21,9 @@ import com.trackmaster.app.StatisticsScreen
 import com.trackmaster.app.StatsExportImportScreen
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.ui.screens.*
-import com.trackmaster.app.ui.theme.DeepChocolate
-import com.trackmaster.app.ui.theme.EspressoBlack
+import com.trackmaster.app.ui.theme.AppTheme
+import com.trackmaster.app.ui.theme.ThemeManager
+import com.trackmaster.app.ui.theme.backgroundColor
 import org.koin.compose.koinInject
 
 @Composable
@@ -31,6 +32,8 @@ fun TrackMasterNavHost(
     modifier: Modifier = Modifier
 ) {
     val app: TrackMasterApplication = koinInject()
+    val currentTheme = ThemeManager.getCurrentTheme()
+    val bgColor = backgroundColor()
 
     val startDestination by remember {
         derivedStateOf {
@@ -52,7 +55,8 @@ fun TrackMasterNavHost(
         Screen.DataManagement.route,
         Screen.FenceExportImport.route,
         Screen.CategoryManager.route,
-        Screen.Statistics.route
+        Screen.Statistics.route,
+        Screen.StatsExportImport.route
     )
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -61,16 +65,29 @@ fun TrackMasterNavHost(
             startDestination = startDestination,
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(DeepChocolate, EspressoBlack)
-                    )
-                )
+                .background(color = bgColor),
+            // 使用简单的淡入淡出，避免卡顿
+            enterTransition = {
+                fadeIn(animationSpec = tween(200))
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(150))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(200))
+            },
+            popExitTransition = {
+                fadeOut(animationSpec = tween(150))
+            }
         ) {
             composable(
                 route = Screen.Onboarding.route,
-                enterTransition = { fadeIn(tween(400)) },
-                exitTransition = { fadeOut(tween(300)) }
+                enterTransition = {
+                    fadeIn(animationSpec = tween(300))
+                },
+                exitTransition = {
+                    fadeOut(animationSpec = tween(200))
+                }
             ) {
                 OnboardingScreen(
                     onComplete = {
@@ -84,8 +101,8 @@ fun TrackMasterNavHost(
 
             composable(
                 route = Screen.Home.route,
-                enterTransition = { fadeIn(tween(300)) },
-                exitTransition = { fadeOut(tween(250)) }
+                enterTransition = { fadeIn(animationSpec = tween(200)) },
+                exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
                 HomeScreen(
                     onNavigateToMap = { navController.navigate(Screen.Map.route) },
@@ -95,16 +112,16 @@ fun TrackMasterNavHost(
 
             composable(
                 route = Screen.Map.route,
-                enterTransition = { fadeIn(tween(300)) },
-                exitTransition = { fadeOut(tween(200)) }
+                enterTransition = { fadeIn(animationSpec = tween(200)) },
+                exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
                 MapScreen(app = app)
             }
 
             composable(
                 route = Screen.History.route,
-                enterTransition = { fadeIn(tween(300)) },
-                exitTransition = { fadeOut(tween(250)) }
+                enterTransition = { fadeIn(animationSpec = tween(200)) },
+                exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
                 HistoryScreen(
                     onNavigateBack = { navController.popBackStack() }
@@ -113,8 +130,8 @@ fun TrackMasterNavHost(
 
             composable(
                 route = Screen.Settings.route,
-                enterTransition = { fadeIn(tween(300)) },
-                exitTransition = { fadeOut(tween(250)) }
+                enterTransition = { fadeIn(animationSpec = tween(200)) },
+                exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
                 SettingsPage(
                     onNavigateBack = { navController.popBackStack() },
@@ -126,8 +143,8 @@ fun TrackMasterNavHost(
 
             composable(
                 route = Screen.StatsExportImport.route,
-                enterTransition = { fadeIn(tween(300)) },
-                exitTransition = { fadeOut(tween(250)) }
+                enterTransition = { fadeIn(animationSpec = tween(200)) },
+                exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
                 StatsExportImportScreen(
                     onDismiss = { navController.popBackStack() },
@@ -138,8 +155,8 @@ fun TrackMasterNavHost(
 
             composable(
                 route = Screen.Statistics.route,
-                enterTransition = { fadeIn(tween(300)) },
-                exitTransition = { fadeOut(tween(250)) }
+                enterTransition = { fadeIn(animationSpec = tween(200)) },
+                exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
                 StatisticsScreen(
                     onDismiss = { navController.popBackStack() },
@@ -149,8 +166,8 @@ fun TrackMasterNavHost(
 
             composable(
                 route = Screen.DataManagement.route,
-                enterTransition = { fadeIn(tween(300)) },
-                exitTransition = { fadeOut(tween(250)) }
+                enterTransition = { fadeIn(animationSpec = tween(200)) },
+                exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
                 DataManagementScreen(
                     onDismiss = { navController.popBackStack() },
@@ -160,8 +177,8 @@ fun TrackMasterNavHost(
 
             composable(
                 route = Screen.FenceExportImport.route,
-                enterTransition = { fadeIn(tween(300)) },
-                exitTransition = { fadeOut(tween(250)) }
+                enterTransition = { fadeIn(animationSpec = tween(200)) },
+                exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
                 FenceExportImportDialog(
                     onDismiss = { navController.popBackStack() },
@@ -173,8 +190,8 @@ fun TrackMasterNavHost(
 
             composable(
                 route = Screen.CategoryManager.route,
-                enterTransition = { fadeIn(tween(300)) },
-                exitTransition = { fadeOut(tween(250)) }
+                enterTransition = { fadeIn(animationSpec = tween(200)) },
+                exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
                 CategoryManagerScreen(
                     onDismiss = { navController.popBackStack() }
@@ -182,15 +199,16 @@ fun TrackMasterNavHost(
             }
         }
 
+        // 使用简洁版底部导航栏
         if (currentRoute !in hideBottomNavRoutes) {
             var lastNavigationTime by remember { mutableStateOf(0L) }
-            val navigationCooldown = 400L
+            val navigationCooldown = 200L
 
-            BottomNavBar(
+            SimpleBottomNavBar(
                 currentRoute = currentRoute,
                 onNavigate = { screen ->
                     val currentTime = System.currentTimeMillis()
-                    if (currentTime - lastNavigationTime < navigationCooldown) return@BottomNavBar
+                    if (currentTime - lastNavigationTime < navigationCooldown) return@SimpleBottomNavBar
                     lastNavigationTime = currentTime
 
                     val currentDestRoute = navController.currentBackStackEntry?.destination?.route
@@ -202,7 +220,8 @@ fun TrackMasterNavHost(
                 },
                 modifier = Modifier
                     .align(androidx.compose.ui.Alignment.BottomCenter)
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = 20.dp)
+                    .padding(horizontal = 32.dp)
             )
         }
     }

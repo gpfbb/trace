@@ -15,7 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.Category
-import com.trackmaster.app.GeoFence
+import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.core.FenceTreeResult
 import com.trackmaster.app.core.FenceTreeManager
 import com.trackmaster.app.core.Geofence

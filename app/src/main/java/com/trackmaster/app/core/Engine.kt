@@ -117,7 +117,7 @@ class Engine(
      *
      * 流程：
      * 1. SmartScheduler 评估是否应处理
-     * 2. 漂移过滤（双重保险）
+     * 2. 漂移过滤
      * 3. BBox 快速排除 → 精确命中所有围栏（包括嵌套的父级和子级）
      * 4. 更新当前命中的所有围栏列表
      * 5. 状态转移 → 生成 StaySegment
@@ -137,13 +137,10 @@ class Engine(
         if (!decision.shouldProcess) return Pair(null, false)
 
         // 2. 漂移过滤（与SmartScheduler保持一致）
-        // 注意：fix.accuracy 是 Float，driftThresholdM 是 Double，统一转为 Double 比较
         if (fix.accuracy.toDouble() > scheduler.config.driftThresholdM) return Pair(null, false)
 
-        // 2.5 更新动态缓冲区配置
+        // 3. 获取动态缓冲区大小
         var currentBufferSize = 0.0
-        var considerBufferAsInside = true
-
         if (bufferManager != null) {
             val speedMps = fix.speed?.toDouble()
             val bufferState = bufferManager.update(
@@ -152,22 +149,21 @@ class Engine(
                 powerMode = currentPowerMode
             )
             currentBufferSize = bufferState.bufferSizeM
-            considerBufferAsInside = true // 将缓冲区视为内部以减少抖动
             Log.d(TAG, "动态缓冲区: ${"%.1f".format(currentBufferSize)}m")
         }
 
-        // 3. 查找所有命中的围栏（包括嵌套的父级和子级）
-        val allMatched = findAllMatchedFences(fix, currentBufferSize, considerBufferAsInside)
+        // 4. 查找所有命中的围栏（包括嵌套的父级和子级）
+        val allMatched = findAllMatchedFences(fix, currentBufferSize, true)
 
-        // 4. 更新当前命中的所有围栏列表（按深度降序排列）
+        // 5. 更新当前命中的所有围栏列表（按深度降序排列）
         currentMatchedFenceIds = allMatched
-            .sortedByDescending { it.depth }  // 按深度降序，最深的在前面
+            .sortedByDescending { it.depth }
             .map { it.id }
 
-        // 5. 找出最深的叶子围栏用于计时
+        // 6. 找出最深的叶子围栏用于计时
         val deepest = allMatched.maxByOrNull { it.depth }
 
-        // 6. 状态转移
+        // 7. 状态转移
         if (deepest?.id != currentLeafId) {
             return Pair(transition(deepest?.id, fix.timestamp), true)
         }

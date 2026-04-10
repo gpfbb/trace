@@ -1,9 +1,8 @@
 package com.trackmaster.app.core
 
 import com.trackmaster.app.Category
-import com.trackmaster.app.GeoFence
-import com.trackmaster.app.GeoFencePoint
-import com.trackmaster.app.GeoFenceType as OldType
+import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFencePoint
 import java.util.Date
 
 /**
@@ -59,11 +58,10 @@ object FenceMapper {
 
     /** 核心 Geofence → 旧 GeoFence（写回 DB） */
     fun toOld(core: Geofence): GeoFence {
-        val oldType = OldType.valueOf(core.type.name)
         return GeoFence(
             id = core.id,
             name = core.name,
-            type = oldType,
+            type = core.type,  // Same GeoFenceType enum, direct assignment
             center = core.center?.let { GeoFencePoint(it.lat, it.lng) },
             radius = core.radius?.toFloat(),
             points = when (core.type) {

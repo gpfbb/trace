@@ -1,6 +1,7 @@
 package com.trackmaster.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,17 +21,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.trackmaster.app.GeoFenceAction
-import com.trackmaster.app.GeoFenceEvent
+import com.trackmaster.app.data.GeoFenceAction
+import com.trackmaster.app.data.GeoFenceEvent
 import com.trackmaster.app.TrackMasterApplication
-import com.trackmaster.app.ui.theme.DeepChocolate
-import com.trackmaster.app.ui.theme.EspressoBlack
 import com.trackmaster.app.ui.theme.GlassTopCard
 import com.trackmaster.app.ui.theme.GlassCard
-import com.trackmaster.app.ui.theme.NeonCoral
 import com.trackmaster.app.ui.theme.Success
 import com.trackmaster.app.ui.theme.Danger
-import com.trackmaster.app.ui.theme.GlassPanelRich
+import com.trackmaster.app.ui.theme.primaryColor
+import com.trackmaster.app.ui.theme.surfaceColor
+import com.trackmaster.app.ui.theme.backgroundColor
+import com.trackmaster.app.ui.theme.glassPanel
 import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -69,7 +70,7 @@ fun HistoryScreen(
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(DeepChocolate, EspressoBlack)
+                    colors = listOf(surfaceColor(), backgroundColor())
                 )
             )
     ) {
@@ -90,14 +91,14 @@ fun HistoryScreen(
                     Icon(
                         imageVector = Icons.Default.History,
                         contentDescription = null,
-                        tint = NeonCoral
+                        tint = primaryColor()
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "历史记录",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = NeonCoral
+                        color = primaryColor()
                     )
                 }
                 Text(
@@ -171,7 +172,7 @@ fun HistoryScreen(
                         Text(
                             text = date,
                             fontSize = 14.sp,
-                            color = NeonCoral,
+                            color = primaryColor(),
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
@@ -264,15 +265,15 @@ private fun FilterChip(
     onClick: () -> Unit
 ) {
     Surface(
-        onClick = onClick,
+        modifier = Modifier.clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = if (isSelected) NeonCoral.copy(alpha = 0.2f) else GlassPanelRich
+        color = if (isSelected) primaryColor().copy(alpha = 0.2f) else glassPanel()
     ) {
         Text(
             text = label,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             fontSize = 14.sp,
-            color = if (isSelected) NeonCoral else Color.Gray
+            color = if (isSelected) primaryColor() else Color.Gray
         )
     }
 }

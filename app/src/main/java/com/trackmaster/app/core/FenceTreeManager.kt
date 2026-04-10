@@ -99,7 +99,7 @@ class FenceTreeManager(private val context: Context) {
      *
      * @return 带 parentId 和 depth 的核心 Geofence 列表
      */
-    fun loadFenceTree(oldFences: List<com.trackmaster.app.GeoFence>): List<Geofence> {
+    fun loadFenceTree(oldFences: List<com.trackmaster.app.data.GeoFence>): List<Geofence> {
         val coreFences = FenceMapper.toCoreList(oldFences)
         return applyParentMap(coreFences)
     }
@@ -129,7 +129,7 @@ class FenceTreeManager(private val context: Context) {
     /**
      * 构建围栏树结果
      */
-    fun buildTree(oldFences: List<com.trackmaster.app.GeoFence>): FenceTreeResult {
+    fun buildTree(oldFences: List<com.trackmaster.app.data.GeoFence>): FenceTreeResult {
         val fences = loadFenceTree(oldFences)
         return buildFenceTree(fences)
     }

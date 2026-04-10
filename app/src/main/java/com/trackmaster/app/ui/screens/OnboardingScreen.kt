@@ -29,12 +29,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.trackmaster.app.AppPreferences
-import com.trackmaster.app.ui.theme.DeepChocolate
-import com.trackmaster.app.ui.theme.EspressoBlack
 import com.trackmaster.app.ui.theme.GlassButton
-import com.trackmaster.app.ui.theme.NeonCoral
-import com.trackmaster.app.ui.theme.NeonAmber
 import com.trackmaster.app.ui.theme.Success
+import com.trackmaster.app.ui.theme.primaryColor
+import com.trackmaster.app.ui.theme.surfaceColor
+import com.trackmaster.app.ui.theme.backgroundColor
+import com.trackmaster.app.ui.theme.NeonAmber
 import kotlinx.coroutines.launch
 
 /**
@@ -72,7 +72,7 @@ fun OnboardingScreen(
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(DeepChocolate, EspressoBlack)
+                    colors = listOf(surfaceColor(), backgroundColor())
                 )
             )
     ) {
@@ -115,7 +115,7 @@ fun OnboardingScreen(
                         icon = Icons.Default.MyLocation,
                         title = "欢迎使用 TrackMaster",
                         description = "智能地理围栏追踪助手，精准记录您的每一次停留",
-                        accentColor = NeonCoral
+                        accentColor = primaryColor()
                     )
                     1 -> OnboardingPage(
                         icon = Icons.Default.Map,
@@ -148,8 +148,8 @@ fun OnboardingScreen(
                             .size(if (pagerState.currentPage == index) 24.dp else 8.dp, 8.dp)
                             .clip(CircleShape)
                             .background(
-                                if (pagerState.currentPage == index) NeonCoral
-                                else NeonCoral.copy(alpha = 0.3f)
+                                if (pagerState.currentPage == index) primaryColor()
+                                else primaryColor().copy(alpha = 0.3f)
                             )
                     )
                 }

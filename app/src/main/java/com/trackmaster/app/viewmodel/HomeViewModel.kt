@@ -3,7 +3,8 @@ package com.trackmaster.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.trackmaster.app.FenceStayRecord
+import com.trackmaster.app.data.FenceStayRecord
+import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.TrackMasterApplication
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -146,8 +147,8 @@ class HomeViewModel(
         val weekStart = calendar.time
 
         val events = app.geoFenceEvents.filter { it.time >= weekStart }
-        _weekEnterCount.value = events.count { it.action == com.trackmaster.app.GeoFenceAction.ENTER }
-        _weekExitCount.value = events.count { it.action == com.trackmaster.app.GeoFenceAction.EXIT }
+        _weekEnterCount.value = events.count { it.action == GeoFenceAction.ENTER }
+        _weekExitCount.value = events.count { it.action == GeoFenceAction.EXIT }
     }
 
     /**

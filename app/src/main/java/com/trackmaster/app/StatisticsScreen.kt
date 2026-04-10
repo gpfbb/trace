@@ -132,7 +132,7 @@ fun StatisticsScreen(
                     "统计数据可视化",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = NeonCoral
+                    color = primaryColor()
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),

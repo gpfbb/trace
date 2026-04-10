@@ -24,9 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.amap.api.location.AMapLocation
 import com.amap.api.maps.model.LatLng
-import com.trackmaster.app.GeoFence
-import com.trackmaster.app.GeoFencePoint
-import com.trackmaster.app.GeoFenceType
+import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFencePoint
+import com.trackmaster.app.core.GeoFenceType
 import com.trackmaster.app.LocationServiceState
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.ui.components.AMapViewWrapper
@@ -114,9 +114,15 @@ fun MapScreen(app: TrackMasterApplication) {
             selectedFenceId = selectedFence?.id,
             isDrawingMode = isDrawingMode,
             drawingPoints = drawingPoints,
+            selectedFenceType = selectedFenceType,
             isEditingFence = isEditingFence,
             editingPoints = editingPoints,
-            onMapClick = onMapClick
+            onMapClick = onMapClick,
+            onFenceClick = { fence ->
+                // 点击围栏时选中之
+                selectedFence = fence
+                showEditDialog = true
+            }
         )
 
         TopStatusIsland(
@@ -236,7 +242,7 @@ fun MapScreen(app: TrackMasterApplication) {
                 },
                 containerColor = when {
                     isDrawingMode || isEditingFence -> Danger
-                    else -> NeonCoral
+                    else -> primaryColor()
                 },
                 contentColor = Color.White
             ) {
@@ -381,11 +387,34 @@ private fun TopStatusIsland(
     onFenceListClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 计算围栏面积（用于找出最小的围栏）
+    fun calculateFenceArea(fence: GeoFence): Double {
+        return when (fence.type) {
+            GeoFenceType.CIRCLE -> {
+                val r = (fence.radius ?: 0f).toDouble()
+                Math.PI * r * r
+            }
+            GeoFenceType.POLYGON -> {
+                // 使用鞋带公式计算多边形面积
+                val pts = fence.points ?: return 0.0
+                if (pts.size < 3) return 0.0
+                var area = 0.0
+                val n = pts.size
+                for (i in 0 until n) {
+                    val j = (i + 1) % n
+                    area += pts[i].longitude * pts[j].latitude
+                    area -= pts[j].longitude * pts[i].latitude
+                }
+                kotlin.math.abs(area) / 2.0 * 111000.0 * 111000.0 // 粗略转换
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .height(48.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(GlassPanelRich.copy(alpha = 0.9f))
+            .background(glassPanel().copy(alpha = 0.9f))
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -393,11 +422,14 @@ private fun TopStatusIsland(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            val matchedFence = fences.find { it.id in currentMatchedFenceIds }
-            if (matchedFence != null) {
+            // 找出所有匹配的围栏中最小的一个（面积最小）
+            val matchedFences = fences.filter { it.id in currentMatchedFenceIds }
+            val smallestFence = matchedFences.minByOrNull { calculateFenceArea(it) }
+
+            if (smallestFence != null) {
                 Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Success, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(matchedFence.name, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                Text(smallestFence.name, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
             } else {
                 Icon(Icons.Filled.LocationOff, contentDescription = null, tint = Warning, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -431,88 +463,133 @@ private fun DrawingToolbar(
     onCancel: () -> Unit,
     onCreate: () -> Unit
 ) {
-    GlassCard(Modifier.fillMaxWidth()) {
-        Column {
-            Row(Modifier.fillMaxWidth().padding(8.dp)) {
-                Text(
-                    when (fenceType) {
-                        GeoFenceType.CIRCLE -> "圆形 - 点击地图选圆心"
-                        GeoFenceType.POLYGON -> {
-                            val remaining = 3 - drawingPoints.size
-                            if (remaining > 0) "多边形 - 需${remaining}个顶点"
-                            else "多边形 - ${drawingPoints.size}个顶点"
-                        }
-                    },
-                    fontSize = 12.sp,
-                    color = NeonCoral,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onUndo) {
+    // 紧凑型工具栏，使用两行布局减少垂直高度
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = glassPanel().copy(alpha = 0.95f),
+        tonalElevation = 4.dp
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // 第一行：类型选择和操作按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 围栏类型切换
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FilterChip(
+                        selected = fenceType == GeoFenceType.CIRCLE,
+                        onClick = { onFenceTypeChange(GeoFenceType.CIRCLE) },
+                        label = { Text("圆形", fontSize = 12.sp) },
+                        leadingIcon = { Icon(Icons.Filled.Circle, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                        modifier = Modifier.height(32.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    FilterChip(
+                        selected = fenceType == GeoFenceType.POLYGON,
+                        onClick = { onFenceTypeChange(GeoFenceType.POLYGON) },
+                        label = { Text("多边形", fontSize = 12.sp) },
+                        leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                        modifier = Modifier.height(32.dp)
+                    )
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                // 操作按钮
+                IconButton(
+                    onClick = onUndo,
+                    modifier = Modifier.size(36.dp)
+                ) {
                     Icon(
                         Icons.AutoMirrored.Filled.Undo,
                         contentDescription = "撤回",
-                        tint = if (drawingPoints.isNotEmpty()) NeonAmber else Color.Gray
+                        tint = if (drawingPoints.isNotEmpty()) NeonAmber else Color.Gray,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
-                IconButton(onClick = onCancel) {
-                    Icon(Icons.Filled.Close, contentDescription = "取消", tint = Color.Gray)
+                IconButton(
+                    onClick = onCancel,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "取消",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-                FilterChip(
-                    selected = fenceType == GeoFenceType.CIRCLE,
-                    onClick = { onFenceTypeChange(GeoFenceType.CIRCLE) },
-                    label = { Text("圆形") },
-                    leadingIcon = { Icon(Icons.Filled.Circle, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                )
-                Spacer(Modifier.width(8.dp))
-                FilterChip(
-                    selected = fenceType == GeoFenceType.POLYGON,
-                    onClick = { onFenceTypeChange(GeoFenceType.POLYGON) },
-                    label = { Text("多边形") },
-                    leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                )
-            }
+            Spacer(Modifier.height(8.dp))
 
-            Text("颜色", fontSize = 10.sp, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-                fenceColors.take(8).forEach { c ->
+            // 第二行：颜色和透明度
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 颜色选择器
+                Text("颜色:", fontSize = 10.sp, color = Color.Gray)
+                Spacer(Modifier.width(6.dp))
+                fenceColors.take(6).forEach { c ->
                     val sel = selectedColor == c
                     Box(
-                        Modifier.size(28.dp).clip(CircleShape)
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
                             .background(Color(AndroidColor.parseColor(c)))
-                            .then(if (sel) Modifier.background(Color.White.copy(alpha = 0.4f)) else Modifier)
+                            .then(if (sel) Modifier.background(Color.White.copy(alpha = 0.5f), CircleShape) else Modifier)
                             .clickable { onColorChange(c) }
                     )
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(3.dp))
                 }
+
+                Spacer(Modifier.width(8.dp))
+
+                // 透明度
+                Text("${(selectedAlpha * 100).toInt()}%", fontSize = 10.sp, color = Color.Gray)
+                Slider(
+                    value = selectedAlpha,
+                    onValueChange = onAlphaChange,
+                    modifier = Modifier.weight(1f).height(24.dp),
+                    valueRange = 0.1f..0.8f,
+                    steps = 6
+                )
             }
 
-            Text(
-                "透明度: ${(selectedAlpha * 100).toInt()}%",
-                fontSize = 10.sp,
-                color = Color.Gray,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-            Slider(
-                value = selectedAlpha,
-                onValueChange = onAlphaChange,
-                modifier = Modifier.fillMaxWidth(),
-                valueRange = 0.1f..0.8f,
-                steps = 6
-            )
+            Spacer(Modifier.height(8.dp))
 
-            Button(
-                onClick = onCreate,
-                enabled = when (fenceType) {
-                    GeoFenceType.CIRCLE -> drawingPoints.isNotEmpty()
-                    GeoFenceType.POLYGON -> drawingPoints.size >= 3
-                },
+            // 第三行：状态提示和创建按钮
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCoral)
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("创建围栏")
+                Text(
+                    when (fenceType) {
+                        GeoFenceType.CIRCLE -> if (drawingPoints.isEmpty()) "点击地图选圆心" else "已选圆心，半径100m"
+                        GeoFenceType.POLYGON -> {
+                            val remaining = 3 - drawingPoints.size
+                            if (remaining > 0) "还需${remaining}个顶点" else "${drawingPoints.size}个顶点，已可创建"
+                        }
+                    },
+                    fontSize = 11.sp,
+                    color = primaryColor(),
+                    modifier = Modifier.weight(1f)
+                )
+
+                Button(
+                    onClick = onCreate,
+                    enabled = when (fenceType) {
+                        GeoFenceType.CIRCLE -> drawingPoints.isNotEmpty()
+                        GeoFenceType.POLYGON -> drawingPoints.size >= 3
+                    },
+                    modifier = Modifier.height(36.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor()),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                ) {
+                    Text("创建", fontSize = 13.sp)
+                }
             }
         }
     }
@@ -651,7 +728,7 @@ private fun FenceListDialog(
                             }
                             if (matched) Icon(Icons.Filled.CheckCircle, contentDescription = "已命中", tint = Success)
                             IconButton(onClick = { onEditClick(fence) }) {
-                                Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = NeonCoral)
+                                Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = primaryColor())
                             }
                             IconButton(onClick = { onDeleteClick(fence) }) {
                                 Icon(Icons.Filled.Delete, contentDescription = "删除", tint = Danger)

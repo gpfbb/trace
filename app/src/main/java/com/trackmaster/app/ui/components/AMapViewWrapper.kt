@@ -22,9 +22,67 @@ import com.amap.api.maps.AMapOptions
 import com.amap.api.maps.CameraUpdateFactory
 import com.amap.api.maps.MapView
 import com.amap.api.maps.model.*
-import com.trackmaster.app.GeoFence
-import com.trackmaster.app.GeoFencePoint
-import com.trackmaster.app.GeoFenceType
+import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFencePoint
+import com.trackmaster.app.core.GeoFenceType
+import kotlin.math.sin
+import kotlin.math.cos
+import kotlin.math.sqrt
+import kotlin.math.atan2
+
+// 判断点是否在围栏内部
+private fun isLocationInsideFence(latLng: LatLng, fence: GeoFence): Boolean {
+    return when (fence.type) {
+        GeoFenceType.CIRCLE -> {
+            val center = fence.center ?: return false
+            val radius = fence.radius ?: return false
+            val distance = calculateDistance(
+                latLng.latitude, latLng.longitude,
+                center.latitude, center.longitude
+            )
+            distance <= radius
+        }
+        GeoFenceType.POLYGON -> {
+            val points = fence.points ?: return false
+            if (points.size < 3) return false
+            isPointInPolygon(latLng, points)
+        }
+    }
+}
+
+// 计算两点之间的距离（米）
+private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val R = 6371000.0 // 地球半径（米）
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2) * sin(dLat / 2) +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+            sin(dLon / 2) * sin(dLon / 2)
+    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * c
+}
+
+// 判断点是否在多边形内部（射线法）
+private fun isPointInPolygon(latLng: LatLng, points: List<GeoFencePoint>): Boolean {
+    val x = latLng.longitude
+    val y = latLng.latitude
+    var inside = false
+    val n = points.size
+    var j = n - 1
+
+    for (i in 0 until n) {
+        val xi = points[i].longitude
+        val yi = points[i].latitude
+        val xj = points[j].longitude
+        val yj = points[j].latitude
+
+        val intersect = ((yi > y) != (yj > y)) &&
+                (x < (xj - xi) * (y - yi) / (yj - yi) + xi)
+        if (intersect) inside = !inside
+        j = i
+    }
+    return inside
+}
 
 @Composable
 fun AMapViewWrapper(
@@ -35,9 +93,11 @@ fun AMapViewWrapper(
     selectedFenceId: String? = null,
     isDrawingMode: Boolean = false,
     drawingPoints: List<GeoFencePoint> = emptyList(),
+    selectedFenceType: GeoFenceType = GeoFenceType.CIRCLE,
     isEditingFence: Boolean = false,
     editingPoints: List<GeoFencePoint> = emptyList(),
-    onMapClick: (LatLng) -> Unit = {}
+    onMapClick: (LatLng) -> Unit = {},
+    onFenceClick: (GeoFence) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -155,7 +215,25 @@ fun AMapViewWrapper(
             Log.e("TrackMaster", "定位样式失败", e)
         }
 
-        aMap.setOnMapClickListener { latLng -> onMapClick(latLng) }
+        aMap.setOnMapClickListener { latLng ->
+            // 首先检查是否点击在某个围栏上（仅在非绘制模式下）
+            if (!isDrawingMode && !isEditingFence) {
+                val clickedFence = fences.find { fence ->
+                    isLocationInsideFence(latLng, fence)
+                }
+                if (clickedFence != null) {
+                    onFenceClick(clickedFence)
+                    true // 消费点击事件
+                } else {
+                    onMapClick(latLng)
+                    false
+                }
+            } else {
+                // 绘制/编辑模式下，交给绘制逻辑处理
+                onMapClick(latLng)
+                true
+            }
+        }
     }
 
     // 首次进入时自动定位到用户当前位置（通过位置服务提供的位置）
@@ -252,7 +330,7 @@ fun AMapViewWrapper(
     }
 
     // 绘制预览
-    LaunchedEffect(drawingPoints, isDrawingMode, mapView.value) {
+    LaunchedEffect(drawingPoints, isDrawingMode, selectedFenceType, mapView.value) {
         val mv = mapView.value ?: return@LaunchedEffect
         val aMap = mv.map ?: return@LaunchedEffect
 
@@ -260,6 +338,8 @@ fun AMapViewWrapper(
         tempMarkers.clear()
         previewCircle?.remove()
         previewCircle = null
+        previewPolygon?.remove()
+        previewPolygon = null
 
         if (!isDrawingMode) return@LaunchedEffect
 
@@ -268,11 +348,22 @@ fun AMapViewWrapper(
             if (marker != null) tempMarkers.add(marker)
         }
 
-        if (drawingPoints.size >= 2) {
+        // 圆形围栏预览：需要至少1个点（圆心）
+        if (selectedFenceType == GeoFenceType.CIRCLE && drawingPoints.isNotEmpty()) {
             val center = drawingPoints.first()
             previewCircle = aMap.addCircle(CircleOptions()
                 .center(LatLng(center.latitude, center.longitude))
                 .radius(100.0)
+                .strokeColor(0x80FF0000.toInt())
+                .fillColor(0x20FF0000)
+                .strokeWidth(2f))
+        }
+
+        // 多边形围栏预览：需要至少3个点才能形成多边形
+        if (selectedFenceType == GeoFenceType.POLYGON && drawingPoints.size >= 3) {
+            val latLngs = drawingPoints.map { LatLng(it.latitude, it.longitude) }
+            previewPolygon = aMap.addPolygon(PolygonOptions()
+                .addAll(latLngs)
                 .strokeColor(0x80FF0000.toInt())
                 .fillColor(0x20FF0000)
                 .strokeWidth(2f))

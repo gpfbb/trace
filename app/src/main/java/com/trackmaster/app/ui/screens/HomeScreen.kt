@@ -18,7 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.trackmaster.app.GeoFenceAction
+import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.LocationServiceState
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.ui.theme.*
@@ -101,20 +101,20 @@ fun HomeScreen(
 
     LazyColumn(
         Modifier.fillMaxSize()
-            .background(Brush.verticalGradient(listOf(DeepChocolate, EspressoBlack)))
+            .background(Brush.verticalGradient(listOf(surfaceColor(), backgroundColor())))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Row(Modifier.fillMaxWidth()) {
-                Text("TrackMaster", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = NeonCoral)
+                Text("TrackMaster", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = primaryColor())
             }
         }
 
         item {
             GlassCard(Modifier.fillMaxWidth()) {
                 Column {
-                    Text("当前状态", fontSize = 14.sp, color = NeonCoral)
+                    Text("当前状态", fontSize = 14.sp, color = primaryColor())
                     Spacer(Modifier.height(8.dp))
                     if (isInsideFence && currentFenceName != null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -146,7 +146,7 @@ fun HomeScreen(
         item {
             GlassCard(Modifier.fillMaxWidth()) {
                 Column {
-                    Text("本月停留时长 TOP 3", fontSize = 14.sp, color = NeonCoral)
+                    Text("本月停留时长 TOP 3", fontSize = 14.sp, color = primaryColor())
                     Spacer(Modifier.height(12.dp))
                     if (monthTopFences.isEmpty()) {
                         Text("暂无数据", fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
@@ -161,7 +161,7 @@ fun HomeScreen(
                                     Spacer(Modifier.width(8.dp))
                                     Text(pair.first, fontSize = 14.sp, color = Color.White)
                                 }
-                                Text(formatDuration(pair.second), fontSize = 14.sp, color = NeonCoral)
+                                Text(formatDuration(pair.second), fontSize = 14.sp, color = primaryColor())
                             }
                         }
                     }

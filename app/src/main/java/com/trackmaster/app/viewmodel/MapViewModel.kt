@@ -2,9 +2,9 @@ package com.trackmaster.app.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.ViewModel
-import com.trackmaster.app.GeoFence
-import com.trackmaster.app.GeoFencePoint
-import com.trackmaster.app.GeoFenceType
+import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFencePoint
+import com.trackmaster.app.core.GeoFenceType
 import com.trackmaster.app.TrackMasterApplication
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

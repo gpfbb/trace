@@ -2,6 +2,7 @@ package com.trackmaster.app
 
 import android.content.Context
 import android.util.Log
+import com.trackmaster.app.data.GeoFence
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

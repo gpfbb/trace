@@ -74,8 +74,8 @@ fun GlassCard(
             .shadow(
                 elevation = 12.dp,
                 shape = RoundedCornerShape(24.dp),
-                ambientColor = NeonCoral.copy(alpha = glowPulse * 0.8f),
-                spotColor = NeonCoral.copy(alpha = glowPulse * 0.6f)
+                ambientColor = primaryColor().copy(alpha = glowPulse * 0.8f),
+                spotColor = primaryColor().copy(alpha = glowPulse * 0.6f)
             )
             .clip(RoundedCornerShape(24.dp))
             .border(
@@ -91,9 +91,9 @@ fun GlassCard(
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        GlassPanelRich,
-                        GlassPanelRichDark,
-                        GlassPanelRich
+                        glassPanel(),
+                        surfaceColor(),
+                        glassPanel()
                     ),
                     start = androidx.compose.ui.geometry.Offset(
                         waveOffset * 1000f,
@@ -142,8 +142,8 @@ fun GlassTopCard(
             .shadow(
                 elevation = 10.dp,
                 shape = RoundedCornerShape(24.dp),
-                ambientColor = NeonCoral.copy(alpha = glowPulse),
-                spotColor = NeonCoral.copy(alpha = glowPulse * 0.7f)
+                ambientColor = primaryColor().copy(alpha = glowPulse),
+                spotColor = primaryColor().copy(alpha = glowPulse * 0.7f)
             )
             .clip(RoundedCornerShape(24.dp))
             .border(
@@ -159,8 +159,8 @@ fun GlassTopCard(
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        GlassPanelRich,
-                        GlassPanelRichDark
+                        glassPanel(),
+                        surfaceColor()
                     ),
                     start = androidx.compose.ui.geometry.Offset(0f, 0f),
                     end = androidx.compose.ui.geometry.Offset(100f, 100f)
@@ -236,8 +236,8 @@ fun GlassBottomSheetCard(
                 .shadow(
                     elevation = 14.dp,
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                    ambientColor = NeonCoral.copy(alpha = glowPulse),
-                    spotColor = NeonCoral.copy(alpha = glowPulse * 0.7f)
+                    ambientColor = primaryColor().copy(alpha = glowPulse),
+                    spotColor = primaryColor().copy(alpha = glowPulse * 0.7f)
                 )
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .border(
@@ -248,9 +248,9 @@ fun GlassBottomSheetCard(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            GlassPanelRich,
-                            GlassPanelRichDark,
-                            GlassPanelRich
+                            glassPanel(),
+                            surfaceColor(),
+                            glassPanel()
                         )
                     )
                 ),
@@ -289,7 +289,7 @@ fun GlassBottomSheetCard(
                             .clip(CircleShape)
                             .background(
                                 brush = Brush.linearGradient(
-                                    colors = listOf(NeonCoral, NeonAmber),
+                                    colors = listOf(primaryColor(), accentColor()),
                                     start = androidx.compose.ui.geometry.Offset(0f, 0f),
                                     end = androidx.compose.ui.geometry.Offset(100f, 100f)
                                 )
@@ -343,8 +343,8 @@ fun GlassButton(
             .shadow(
                 elevation = if (isPressed) 4.dp else 10.dp,
                 shape = RoundedCornerShape(20.dp),
-                ambientColor = NeonCoral.copy(alpha = 0.4f),
-                spotColor = NeonCoral.copy(alpha = 0.3f)
+                ambientColor = primaryColor().copy(alpha = 0.4f),
+                spotColor = primaryColor().copy(alpha = 0.3f)
             )
             .clip(RoundedCornerShape(20.dp))
             .border(
@@ -360,13 +360,13 @@ fun GlassButton(
             .background(
                 brush = if (isPressed) {
                     Brush.linearGradient(
-                        colors = listOf(NeonCoral, NeonAmber),
+                        colors = listOf(primaryColor(), accentColor()),
                         start = androidx.compose.ui.geometry.Offset(0f, 0f),
                         end = androidx.compose.ui.geometry.Offset(100f, 100f)
                     )
                 } else {
                     Brush.linearGradient(
-                        colors = listOf(GlassPanelRich, GlassPanelLightRich),
+                        colors = listOf(glassPanel(), glassPanel()),
                         start = androidx.compose.ui.geometry.Offset(0f, 0f),
                         end = androidx.compose.ui.geometry.Offset(100f, 100f)
                     )
@@ -374,7 +374,7 @@ fun GlassButton(
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(color = NeonCoral),
+                indication = rememberRipple(color = primaryColor()),
                 enabled = enabled,
                 onClick = {
                     isPressed = true
@@ -404,7 +404,7 @@ fun GlassButton(
 fun GlassFloatingActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    containerColor: Color = NeonCoral,
+    containerColor: Color = primaryColor(),
     content: @Composable () -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
@@ -534,7 +534,7 @@ fun GlassDialog(
                         ProvideTextStyle(
                             MaterialTheme.typography.headlineSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = NeonCoral
+                                color = primaryColor()
                             )
                         ) {
                             title()
@@ -576,7 +576,7 @@ fun GlassDialog(
 // 液态玻璃拟态徽章
 @Composable
 fun GlassBadge(
-    containerColor: Color = NeonCoral,
+    containerColor: Color = primaryColor(),
     content: @Composable () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "badgeGlow")
@@ -619,7 +619,7 @@ fun GlassBadge(
             ProvideTextStyle(
                 MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Medium,
-                    color = if (containerColor == NeonCoral || containerColor == NeonAmber) 
+                    color = if (containerColor == primaryColor() || containerColor == accentColor()) 
                         Color.Black else Color.White
                 )
             ) {
@@ -649,8 +649,8 @@ fun GlassTextField(
             .shadow(
                 elevation = 4.dp,
                 shape = RoundedCornerShape(16.dp),
-                ambientColor = NeonCoral.copy(alpha = 0.15f),
-                spotColor = NeonCoral.copy(alpha = 0.1f)
+                ambientColor = primaryColor().copy(alpha = 0.15f),
+                spotColor = primaryColor().copy(alpha = 0.1f)
             ),
         label = label,
         placeholder = placeholder,
@@ -659,12 +659,12 @@ fun GlassTextField(
         singleLine = singleLine,
         shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = GlassPanelRich,
-            unfocusedContainerColor = GlassPanelLightRich,
-            focusedBorderColor = NeonCoral,
+            focusedContainerColor = glassPanel(),
+            unfocusedContainerColor = glassPanel(),
+            focusedBorderColor = primaryColor(),
             unfocusedBorderColor = GlassBorder,
-            cursorColor = NeonCoral,
-            focusedLabelColor = NeonCoral,
+            cursorColor = primaryColor(),
+            focusedLabelColor = primaryColor(),
             unfocusedLabelColor = Color(0xFFBDBDBD)
         )
     )
@@ -726,7 +726,7 @@ fun ResponsiveText(
         TextPriority.SECONDARY -> TextSecondary
         TextPriority.TERTIARY -> TextTertiary
         TextPriority.DISABLED -> TextDisabled
-        TextPriority.ACCENT -> NeonCoral
+        TextPriority.ACCENT -> primaryColor()
     }
     
     // 平滑的颜色动画
