@@ -36,29 +36,45 @@ class StayDurationManagerTest {
                     addDailyDuration(enterDateKey, fenceId, fenceName, duration)
                 }
             } else {
-                val calendar = Calendar.getInstance()
-                calendar.time = session.enterTime
-                calendar.set(Calendar.HOUR_OF_DAY, 23)
-                calendar.set(Calendar.MINUTE, 59)
-                calendar.set(Calendar.SECOND, 59)
-                calendar.set(Calendar.MILLISECOND, 999)
-                val midnight = calendar.time
+                // ===== 第一天：从进入时间到进入日期午夜（次日0点） =====
+                // 使用clear()确保Calendar状态干净
+                val enterCalendar = Calendar.getInstance()
+                enterCalendar.clear()
+                enterCalendar.time = session.enterTime
+                enterCalendar.add(Calendar.DAY_OF_MONTH, 1)
+                enterCalendar.set(Calendar.HOUR_OF_DAY, 0)
+                enterCalendar.set(Calendar.MINUTE, 0)
+                enterCalendar.set(Calendar.SECOND, 0)
+                enterCalendar.set(Calendar.MILLISECOND, 0)
+                val midnightOfNextDay = enterCalendar.time
 
-                val durationDay1 = (midnight.time - session.enterTime.time) / 1000
+                val durationDay1 = (midnightOfNextDay.time - session.enterTime.time) / 1000
                 if (durationDay1 > 0) {
                     addDailyDuration(enterDateKey, fenceId, fenceName, durationDay1)
                 }
 
-                calendar.time = exitTime
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                val nextMidnight = calendar.time
+                // ===== 中间完整天 =====
+                var dayCalendar = Calendar.getInstance()
+                dayCalendar.clear()
+                dayCalendar.time = midnightOfNextDay
+                val exitCalendar = Calendar.getInstance()
+                exitCalendar.clear()
+                exitCalendar.time = exitTime
+                exitCalendar.set(Calendar.HOUR_OF_DAY, 0)
+                exitCalendar.set(Calendar.MINUTE, 0)
+                exitCalendar.set(Calendar.SECOND, 0)
+                exitCalendar.set(Calendar.MILLISECOND, 0)
 
-                val durationDay2 = (exitTime.time - nextMidnight.time) / 1000
-                if (durationDay2 > 0) {
-                    addDailyDuration(exitDateKey, fenceId, fenceName, durationDay2)
+                while (dayCalendar.before(exitCalendar)) {
+                    val fullDayKey = getDateKey(dayCalendar.time)
+                    addDailyDuration(fullDayKey, fenceId, fenceName, 86400L)
+                    dayCalendar.add(Calendar.DAY_OF_MONTH, 1)
+                }
+
+                // ===== 最后一天：从当天0点到退出时间 =====
+                val durationLastDay = (exitTime.time - exitCalendar.time.time) / 1000
+                if (durationLastDay > 0) {
+                    addDailyDuration(exitDateKey, fenceId, fenceName, durationLastDay)
                 }
             }
         }
@@ -112,7 +128,7 @@ class StayDurationManagerTest {
         val dateKey = stayManager.getDateKey(enterTime)
         val record = stayManager.getDailyRecord(dateKey, "fence1")
         assertNotNull(record)
-        assertEquals(3600, record?.totalDurationSeconds)
+        assertEquals(3600L, record?.totalDurationSeconds)
     }
 
     @Test
@@ -138,20 +154,22 @@ class StayDurationManagerTest {
         stayManager.onFenceExit("fence3", "市", finalExitTime)
 
         val dateKey = stayManager.getDateKey(time)
-        assertEquals(3600, stayManager.getDailyRecord(dateKey, "fence1")?.totalDurationSeconds)
-        assertEquals(1800, stayManager.getDailyRecord(dateKey, "fence2")?.totalDurationSeconds)
-        assertEquals(3600, stayManager.getDailyRecord(dateKey, "fence3")?.totalDurationSeconds)
+        assertEquals(3600L, stayManager.getDailyRecord(dateKey, "fence1")?.totalDurationSeconds)
+        assertEquals(1800L, stayManager.getDailyRecord(dateKey, "fence2")?.totalDurationSeconds)
+        assertEquals(3600L, stayManager.getDailyRecord(dateKey, "fence3")?.totalDurationSeconds)
     }
 
     @Test
     fun `test overnight stay`() {
         val calendar = Calendar.getInstance()
         calendar.set(2024, Calendar.JANUARY, 15, 23, 30, 0)
+        calendar.set(Calendar.MILLISECOND, 0) // 确保毫秒为0以获得精确计算
         val enterTime = calendar.time
 
         stayManager.onFenceEnter("fence1", "家", enterTime)
 
         calendar.set(2024, Calendar.JANUARY, 16, 0, 30, 0)
+        calendar.set(Calendar.MILLISECOND, 0) // 确保毫秒为0以获得精确计算
         val exitTime = calendar.time
 
         stayManager.onFenceExit("fence1", "家", exitTime)
@@ -193,6 +211,6 @@ class StayDurationManagerTest {
         val dateKey = "2024-01-15"
         val record = stayManager.getDailyRecord(dateKey, "fence1")
 
-        assertEquals(28800, record?.totalDurationSeconds)
+        assertEquals(28800L, record?.totalDurationSeconds)
     }
 }

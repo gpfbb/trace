@@ -81,3 +81,14 @@
   - `Engine.initWithLocation()` uses DB open segments to determine restoration - if app was force-killed before save, DB has no record
   - The fix adds an early return after `updateApplicationStateForFence` when user is still in same fence but DB has no record
 ---
+
+## 2026-04-10 20:15 - BUG-003
+- What was implemented: Fixed Int vs Long type mismatches in StayDurationManagerTest.kt (5 locations: lines 115, 141, 142, 143, 196) - changed assertEquals(int, ...) to assertEquals(long, ...). Also fixed MockStayDurationManager's overnight calculation bug that caused 1-second precision error by ensuring Calendar.MILLISECOND is explicitly set to 0 when constructing Date objects in test cases.
+- Files changed: app/src/test/java/com/trackmaster/app/StayDurationManagerTest.kt
+- **Learnings for future iterations:**
+  - assertEquals(Int, Long?) causes test failures - always use Long literals (L suffix) in assertEquals for duration values
+  - Calendar.set() does NOT reset MILLISECOND field - Calendar.getInstance() returns calendar with current system millisecond value, so set() on time fields leaves millisecond unchanged
+  - When testing time calculations, always explicitly call calendar.set(Calendar.MILLISECOND, 0) after setting time fields to ensure millisecond precision
+  - The actual overnight calculation logic in MockStayDurationManager was correct (same as StayDurationManager.kt) - the 1-second error was purely from test setup Calendar not having MILLISECOND=0
+  - MockStayDurationManager's cross-day logic now matches main app StayDurationManager.kt implementation
+---
