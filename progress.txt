@@ -14,6 +14,14 @@
   - Typecheck passes with only warnings (deprecated icons, unused variables) - no errors
   - When implementing nested fence features, remember the Engine layer uses `Geofence` from `core/` while UI uses `GeoFence` from `data/`
 
+## 2026-04-10 16:20 - US-004
+- What was implemented: Verified nested timing engine implementation - all acceptance criteria met: findAllMatchedFences returns matched fences sorted by depth (Engine.kt:262), timing state machine handles enter/exit (TrackMasterApplication.kt:240-290), getActiveSessions() returns active sessions (StayDurationManager.kt:239), onLocationUpdate() processes location (Engine.kt:127). Nested stat aggregation is handled by Aggregator.kt.
+- Files changed: None (already implemented)
+- **Learnings for future iterations:**
+  - Nested timing: Engine.findAllMatchedFences() finds ALL matched fences (not just deepest), TrackMasterApplication handles state machine for parent/child timing
+  - Active sessions tracked in StayDurationManager.activeSessions ConcurrentHashMap
+  - Aggregator handles T+1 batch processing with cross-day segment splitting
+
 ## 2026-04-10 16:10 - US-003
 - What was implemented: Verified geometry calculation tools in GeoMath.kt - all acceptance criteria met: haversine (line 94), pointInCircle (line 243), pointInPolygon ray casting (line 224), computeBBox (line 112), pointInFence unified entry (line 247). Typecheck passes.
 - Files changed: None (already implemented)

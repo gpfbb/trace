@@ -65,8 +65,8 @@
         "Tests pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Core nested timing implemented: findAllMatchedFences (Engine.kt:262), onLocationUpdate (Engine.kt:127), getActiveSessions (StayDurationManager.kt:239), state machine in TrackMasterApplication.kt"
     },
     {
       "id": "US-005",
