@@ -1,0 +1,15 @@
+## Codebase Patterns
+- GeoFence data model exists in two places: `data/FenceData.kt` (UI layer) and `core/GeofenceModels.kt` (Engine layer). The UI layer `GeoFence` uses `categoryId` while Engine uses `category` - both need to be kept consistent
+- Build system uses Gradle 9.0 with `JAVA_HOME=/d/javajdk` on this machine
+- The project has both unit tests and instrumentation tests - unit tests have pre-existing Int vs Long type mismatch issues in `StayDurationManagerTest.kt`
+- GeofenceDatabaseHelper already has comprehensive table definitions including fences, categories, events, stays, daily_stays tables
+- PersistentStateManager handles SharedPreferences-based state persistence for fence enter/exit times
+- Engine.kt in core/ handles the nested timing logic with findAllMatchedFences() and state machine
+
+## 2026-04-10 15:45 - US-001
+- What was implemented: Added `parentId` field to `GeoFence` data class in `data/FenceData.kt` to match US-001 acceptance criteria. All required fields now present: id, name, type, center, radius, points, parentId, categoryId, color, alpha. Also verified: GeoPoint (core/GeofenceModels.kt), StayRecord (data/FenceData.kt as FenceStayRecord), GeoFenceType enum (core/GeofenceModels.kt)
+- Files changed: app/src/main/java/com/trackmaster/app/data/FenceData.kt
+- **Learnings for future iterations:**
+  - The codebase already had comprehensive data models - the main gap was `parentId` missing from the UI layer `GeoFence`
+  - Typecheck passes with only warnings (deprecated icons, unused variables) - no errors
+  - When implementing nested fence features, remember the Engine layer uses `Geofence` from `core/` while UI uses `GeoFence` from `data/`
