@@ -14,6 +14,14 @@
   - Typecheck passes with only warnings (deprecated icons, unused variables) - no errors
   - When implementing nested fence features, remember the Engine layer uses `Geofence` from `core/` while UI uses `GeoFence` from `data/`
 
+## 2026-04-10 16:40 - US-009 to US-012
+- What was implemented: Verified all remaining stories are implemented. US-009 (map fence display): AMapViewWrapper draws circle/polygon fences with color/alpha, supports tap-to-select and polygon vertex undo. US-010 (Dynamic Island): TrackMasterApplication has fence selection flow with map highlighting. US-011 (statistics UI): StatisticsScreen displays daily/monthly/yearly reports with duration rankings. US-012 (category management): CategoryManager handles CRUD operations with fence assignment.
+- Files changed: None (already implemented)
+- **Learnings for future iterations:**
+  - Map fence drawing: MapViewModel manages drawingPoints with undo via dropLast(1)
+  - Dynamic Island integration: currentMatchedFenceIds is used for highlighting on map
+  - Statistics are real-time updated via collectAsState on stayDurationManager flows
+
 ## 2026-04-10 16:30 - US-007 & US-008
 - What was implemented: Fixed export filename format for fence and stats exports. Changed `fences_$timestamp.json` → `trackmaster_fences_$dateStr.json` and `TrackMaster_停留记录_$timestamp.json` → `trackmaster_stats_$dateStr.json`. Also fixed export to NOT include ID in fence JSON (import generates new UUID). Verified import preview is handled by FenceExportImportDialog.
 - Files changed: app/src/main/java/com/trackmaster/app/DataManager.kt

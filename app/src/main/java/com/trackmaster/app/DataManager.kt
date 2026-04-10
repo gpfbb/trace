@@ -390,6 +390,23 @@ class DataManager(private val context: Context) {
             val file = File(filePath)
             if (!file.exists()) return@withContext 0
             val jsonArray = JSONArray(file.readText())
+
+            // 预扫描：收集所有需要创建的分类
+            val categoryNames = mutableSetOf<String>()
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val catId = obj.optString("categoryId", Category.UNASSIGNED_ID)
+                if (catId != Category.UNASSIGNED_ID && dbHelper.getCategoryByName(catId) == null) {
+                    categoryNames.add(catId)
+                }
+            }
+
+            // 自动创建不存在的分类
+            for (catName in categoryNames) {
+                val newCat = Category(name = catName)
+                dbHelper.insertCategory(newCat)
+            }
+
             var count = 0
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)

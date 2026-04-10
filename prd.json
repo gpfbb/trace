@@ -80,8 +80,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "PersistentStateManager + Engine.initWithLocation implemented"
     },
     {
       "id": "US-006",
@@ -96,8 +96,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "getAllDailyRecords, getMonthlyRecords, getYearlyRecords implemented. Cross-day splitting in onFenceExit"
     },
     {
       "id": "US-007",
@@ -112,8 +112,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Export/import implemented with correct filename format. Import auto-creates missing categories."
     },
     {
       "id": "US-008",
@@ -128,8 +128,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "exportStatsToJson and importStatsFromJson implemented with correct filename format"
     },
     {
       "id": "US-009",
@@ -145,8 +145,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "AMapViewWrapper draws circle/polygon fences with color/alpha, tap-to-select, polygon vertex undo"
     },
     {
       "id": "US-010",
@@ -160,8 +160,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fence selection flow with map highlighting via currentMatchedFenceIds"
     },
     {
       "id": "US-011",
@@ -176,8 +176,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "StatisticsScreen displays daily/monthly/yearly reports with duration rankings, real-time updates"
     },
     {
       "id": "US-012",
@@ -191,8 +191,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "CategoryManager handles CRUD with fence assignment, filter by category"
     }
   ]
 }
