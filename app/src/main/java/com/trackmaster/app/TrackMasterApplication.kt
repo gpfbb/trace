@@ -589,8 +589,18 @@ class TrackMasterApplication : Application() {
             // Engine结果无效（用户已移动到其他围栏）或没有Engine恢复结果
             // 需要根据实际位置处理围栏转换
 
-            // 如果有旧的围栏状态，先结束其计时（用户已离开）
-            if (currentFenceState != null) {
+            // 如果用户仍在之前的围栏内（isStillInFence=true），但数据库没有记录，
+            // 说明app被强制关闭而saveAllActiveSessions()未被调用
+            // 此时应该恢复计时，而不是重新开始
+            if (currentFenceState != null && isStillInFence) {
+                Log.d(TAG, "用户仍在围栏 ${currentFenceState.fenceName} 内（数据库无记录），恢复计时")
+                // 使用原始进入时间恢复计时，不使用重启时间
+                updateApplicationStateForFence(currentFenceState.fenceId, currentFenceState.enterTime.time, location)
+                engine.setCurrentFenceForRecovery(currentFenceState.fenceId, currentFenceState.enterTime.time)
+                // 恢复完成后返回，不执行后续的计时开始逻辑
+                return
+            } else if (currentFenceState != null) {
+                // 用户确实已离开围栏，结束计时
                 val exitTime = lastAppCloseTime ?: Date(location.time)
                 stayDurationManager.onFenceExit(currentFenceState.fenceId, currentFenceState.fenceName, exitTime)
                 fenceEnterTimes.remove(currentFenceState.fenceId)

@@ -70,3 +70,14 @@
   - `fenceStateVersion` StateFlow triggers UI recomposition when fences are modified
   - The pre-existing unit test failures in `StayDurationManagerTest.kt` (Int vs Long type mismatch) are unrelated to fence status refresh issues
 ---
+
+## 2026-04-10 18:10 - BUG-002
+- What was implemented: Fixed timer restoration when app is force-killed but user is still in same fence. The bug occurred because: (1) open stays are only saved to DB when app closes normally via `saveAllActiveSessions()`, not in real-time; (2) when app is force-killed, DB has no open stay but SharedPreferences has `currentFenceState`; (3) the restoration logic checked `engineRestoreResult` (from DB) but not `currentFenceState` (from SharedPreferences) when deciding whether to restore or restart timer. Added check at TrackMasterApplication.kt:595 - if `currentFenceState != null && isStillInFence`, restore with original enter time instead of starting new timer.
+- Files changed: app/src/main/java/com/trackmaster/app/TrackMasterApplication.kt
+- **Learnings for future iterations:**
+  - Open stays are NOT persisted to DB in real-time - only when `saveAllActiveSessions()` is called on app close
+  - `handleFirstLocationAfterRestoreInternal()` has complex branching logic - the bug was in the `else` block at line 588 where it fell through to start a new timer instead of restoring
+  - `PersistentStateManager.getCurrentFenceState()` saves fenceId, fenceName, and enterTime to SharedPreferences - this survives force-kill
+  - `Engine.initWithLocation()` uses DB open segments to determine restoration - if app was force-killed before save, DB has no record
+  - The fix adds an early return after `updateApplicationStateForFence` when user is still in same fence but DB has no record
+---
