@@ -1,198 +1,57 @@
 {
   "project": "TrackMaster",
-  "branchName": "ralph/trackmaster-rewrite",
-  "description": "TrackMaster Android 地理围栏追踪应用重构，修复嵌套围栏计时bug，代码精简，支持导入导出",
+  "branchName": "ralph/bugfix-timer-restoration",
+  "description": "TrackMaster Bug修复 - 围栏刷新和计时恢复问题",
   "userStories": [
     {
-      "id": "US-001",
-      "title": "创建基础数据模型",
-      "description": "作为开发者，我需要创建基础的围栏和停留记录数据模型，以便后续功能开发。",
+      "id": "BUG-001",
+      "title": "修复围栏状态刷新 - 设置围栏后不显示用户在围栏内",
+      "description": "用户设置好围栏后，软件不会刷新显示用户在围栏内。需要检查位置更新和围栏匹配逻辑。",
       "acceptanceCriteria": [
-        "创建 GeoFence 数据类，包含 id/name/type/center/radius/points/parentId/categoryId/color/alpha",
-        "创建 StayRecord 数据类，包含 id/fenceId/fenceName/enterTime/exitTime/durationSeconds",
-        "创建 GeoPoint 数据类，包含 lat/lng",
-        "创建 GeoFenceType 枚举，CIRCLE 和 POLYGON",
-        "Typecheck passes"
-      ],
-      "priority": 1,
-      "passes": true,
-      "notes": "All required fields present: id, name, type, center, radius, points, parentId, categoryId, color, alpha"
-    },
-    {
-      "id": "US-002",
-      "title": "创建 SQLite 数据库辅助类",
-      "description": "作为开发者，我需要创建数据库辅助类来持久化存储所有数据。",
-      "acceptanceCriteria": [
-        "创建 fences 表，包含所有 GeoFence 字段",
-        "创建 stays 表，包含所有 StayRecord 字段",
-        "创建 daily_stats 表，存储每日统计 (date/fence_id/total_seconds/enter_count)",
-        "创建 categories 表，存储分类",
-        "创建 export_meta 表，记录导出历史",
-        "创建必要的索引",
-        "Typecheck passes"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "All tables present: fences, stays, daily_stays, categories, export_meta. Indexes created."
-    },
-    {
-      "id": "US-003",
-      "title": "实现几何计算工具",
-      "description": "作为开发者，我需要几何计算工具来判断点是否在围栏内。",
-      "acceptanceCriteria": [
-        "实现 haversine 距离计算",
-        "实现圆形围栏判断 (点与圆心的距离 <= 半径)",
-        "实现多边形围栏判断 (射线法)",
-        "实现 BBox 包围盒计算",
-        "实现 pointInFence 统一入口",
-        "Typecheck passes"
-      ],
-      "priority": 3,
-      "passes": true,
-      "notes": "All functions in GeoMath.kt: haversine, pointInCircle, pointInPolygon, computeBBox, pointInFence"
-    },
-    {
-      "id": "US-004",
-      "title": "实现嵌套计时引擎",
-      "description": "作为开发者，我需要实现嵌套围栏计时引擎，核心规则是所有匹配的围栏同时计时，子围栏时间累加到父围栏。",
-      "acceptanceCriteria": [
-        "实现 getMatchedFences() 获取所有匹配围栏（按深度排序）",
-        "实现计时状态机：进入时启动所有匹配围栏计时，退出时停止对应围栏",
-        "实现 getActiveSessions() 返回当前所有活动的计时会话",
-        "实现 onLocationUpdate() 处理位置更新，触发进入/离开事件",
-        "实现嵌套统计聚合：getTotalStats(fenceId) 返回包含子围栏时间的总和",
+        "设置围栏后，当用户进入围栏时，地图上正确高亮显示围栏",
+        "状态栏或UI正确显示已进入围栏状态",
+        "计时器正确开始",
         "Typecheck passes",
         "Tests pass"
       ],
-      "priority": 4,
+      "priority": 1,
       "passes": true,
-      "notes": "Core nested timing implemented: findAllMatchedFences (Engine.kt:262), onLocationUpdate (Engine.kt:127), getActiveSessions (StayDurationManager.kt:239), state machine in TrackMasterApplication.kt"
+      "notes": ""
     },
     {
-      "id": "US-005",
-      "title": "实现状态持久化与恢复",
-      "description": "作为开发者，我需要实现状态持久化和恢复，确保应用重启后计时继续。",
+      "id": "BUG-002",
+      "title": "修复计时状态持久化 - 应用重启后重新计时",
+      "description": "用户在数据可视化页面计时中，退出应用清除后台后重新进入，计时器重新开始而不是继续之前的计时。",
       "acceptanceCriteria": [
-        "实现 saveState() 保存当前计时围栏ID和进入时间戳到 SharedPreferences",
-        "实现 restoreState() 从 SharedPreferences 恢复计时状态",
+        "应用重启后，从SharedPreferences正确恢复正在计时的围栏ID和进入时间戳",
         "恢复时使用原始进入时间，不使用重启时间",
-        "从数据库加载未关闭的 stays 记录",
-        "Typecheck passes"
-      ],
-      "priority": 5,
-      "passes": true,
-      "notes": "PersistentStateManager + Engine.initWithLocation implemented"
-    },
-    {
-      "id": "US-006",
-      "title": "实现统计管理",
-      "description": "作为开发者，我需要实现统计管理，支持按日/月/年查询历史统计。",
-      "acceptanceCriteria": [
-        "实现 getDailyStats(date) 查询指定日期的统计",
-        "实现 getMonthlyStats(year, month) 查询月统计",
-        "实现 getYearlyStats(year) 查询年统计",
-        "每次计时结束自动保存到 daily_stats 表",
-        "支持跨天分割停留记录",
-        "Typecheck passes"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": "getAllDailyRecords, getMonthlyRecords, getYearlyRecords implemented. Cross-day splitting in onFenceExit"
-    },
-    {
-      "id": "US-007",
-      "title": "实现围栏导入导出",
-      "description": "作为用户，我需要导出围栏为 JSON 模板分享给其他用户，以及从 JSON 导入围栏。",
-      "acceptanceCriteria": [
-        "实现 exportFences() 导出围栏为 JSON，不包含 ID",
-        "实现 importFences() 从 JSON 导入，生成新 ID",
-        "导入时如果分类不存在自动创建",
-        "导入前显示预览",
-        "文件名格式: trackmaster_fences_YYYYMMDD.json",
-        "Typecheck passes"
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": "Export/import implemented with correct filename format. Import auto-creates missing categories."
-    },
-    {
-      "id": "US-008",
-      "title": "实现统计数据导入导出",
-      "description": "作为用户，我需要导出统计数据为 JSON，以及从 JSON 导入统计数据。",
-      "acceptanceCriteria": [
-        "实现 exportStats() 导出统计数据为 JSON",
-        "实现 importStats() 从 JSON 导入，与现有数据合并",
-        "相同日期+围栏的数据累加",
-        "支持日期范围选择",
-        "文件名格式: trackmaster_stats_YYYYMMDD.json",
-        "Typecheck passes"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": "exportStatsToJson and importStatsFromJson implemented with correct filename format"
-    },
-    {
-      "id": "US-009",
-      "title": "实现地图围栏显示",
-      "description": "作为用户，我需要在地图上显示围栏，并支持围栏创建和编辑。",
-      "acceptanceCriteria": [
-        "在地图上绘制圆形围栏和多边形围栏",
-        "点击地图选择位置创建圆形围栏",
-        "点击地图添加顶点创建多边形围栏",
-        "可撤销上一个顶点",
-        "围栏使用配置的颜色和透明度",
+        "数据可视化页面显示正确的已计时时长",
+        "从数据库加载未关闭的stays记录",
+        "计时会话正确继续",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
-      "priority": 9,
-      "passes": true,
-      "notes": "AMapViewWrapper draws circle/polygon fences with color/alpha, tap-to-select, polygon vertex undo"
+      "priority": 2,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-010",
-      "title": "实现 Dynamic Island 围栏选择",
-      "description": "作为用户，我需要在 Dynamic Island 中选择围栏高亮显示在地图上。",
+      "id": "BUG-003",
+      "title": "全面测试计时引擎 - 确保嵌套围栏计时正确",
+      "description": "测试嵌套围栏场景：进入父围栏后进入子围栏，计时应该正确累加。退出时也应该正确处理。",
       "acceptanceCriteria": [
-        "展开 Dynamic Island 显示围栏列表",
-        "点击围栏名称，地图上对应围栏高亮（黄色边框）",
-        "再次点击取消高亮",
+        "进入父围栏时父围栏开始计时",
+        "进入子围栏时子围栏开始计时，且时间累加到父围栏",
+        "退出子围栏时子围栏停止计时，父围栏继续计时",
+        "退出父围栏时父围栏停止计时",
+        "跨天分割正确处理",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
-      "priority": 10,
-      "passes": true,
-      "notes": "Fence selection flow with map highlighting via currentMatchedFenceIds"
-    },
-    {
-      "id": "US-011",
-      "title": "实现统计报表界面",
-      "description": "作为用户，我需要查看日报表、月报表、年报表。",
-      "acceptanceCriteria": [
-        "显示选中日期的所有围栏停留记录",
-        "显示每个围栏的进入次数和总时长",
-        "显示停留时长排行榜",
-        "当天数据实时更新",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "StatisticsScreen displays daily/monthly/yearly reports with duration rankings, real-time updates"
-    },
-    {
-      "id": "US-012",
-      "title": "实现围栏分类管理",
-      "description": "作为用户，我需要创建和管理围栏分类。",
-      "acceptanceCriteria": [
-        "创建/编辑/删除分类",
-        "将围栏分配到分类",
-        "按分类筛选围栏",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "CategoryManager handles CRUD with fence assignment, filter by category"
+      "priority": 3,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
+
