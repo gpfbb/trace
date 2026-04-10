@@ -1,57 +1,114 @@
 {
   "project": "TrackMaster",
-  "branchName": "ralph/bugfix-timer-restoration",
-  "description": "TrackMaster Bug修复 - 围栏刷新和计时恢复问题",
+  "branchName": "ralph/refactor-cleanup",
+  "description": "TrackMaster 代码清理与修复 - 10个审查问题",
   "userStories": [
     {
-      "id": "BUG-001",
-      "title": "修复围栏状态刷新 - 设置围栏后不显示用户在围栏内",
-      "description": "用户设置好围栏后，软件不会刷新显示用户在围栏内。需要检查位置更新和围栏匹配逻辑。",
+      "id": "CLEAN-001",
+      "title": "修复 FenceExportImportDialog 导航空实现",
+      "description": "从导航路由 Screen.FenceExportImport.route 进入时，onExport 和 onImport 回调都是空 lambda，导致功能不可用。",
       "acceptanceCriteria": [
-        "设置围栏后，当用户进入围栏时，地图上正确高亮显示围栏",
-        "状态栏或UI正确显示已进入围栏状态",
-        "计时器正确开始",
-        "Typecheck passes",
-        "Tests pass"
+        "修复 TrackMasterNavHost.kt 中 FenceExportImportDialog 的 onExport/onImport 回调",
+        "或删除重复的导航入口，使用 MainActivity 中已有的正确实现",
+        "验证导入导出功能可以正常工作",
+        "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": ""
+      "notes": "Implemented proper onExport/onImport callbacks in TrackMasterNavHost using TrackMasterApplication helper methods"
     },
     {
-      "id": "BUG-002",
-      "title": "修复计时状态持久化 - 应用重启后重新计时",
-      "description": "用户在数据可视化页面计时中，退出应用清除后台后重新进入，计时器重新开始而不是继续之前的计时。",
+      "id": "CLEAN-002",
+      "title": "删除 onScreenStateChanged 死代码",
+      "description": "SmartScheduler.onScreenStateChanged() 已禁用（内部为空），但调用方仍在调用。这是无效代码。",
       "acceptanceCriteria": [
-        "应用重启后，从SharedPreferences正确恢复正在计时的围栏ID和进入时间戳",
-        "恢复时使用原始进入时间，不使用重启时间",
-        "数据可视化页面显示正确的已计时时长",
-        "从数据库加载未关闭的stays记录",
-        "计时会话正确继续",
-        "Typecheck passes",
-        "Tests pass"
+        "删除 GeoFenceLocationService.kt 中的屏幕广播接收器注册",
+        "删除 Engine.kt 中对 scheduler.onScreenStateChanged() 的调用",
+        "删除或实现 SmartScheduler.onScreenStateChanged()",
+        "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
-      "id": "BUG-003",
-      "title": "全面测试计时引擎 - 确保嵌套围栏计时正确",
-      "description": "测试嵌套围栏场景：进入父围栏后进入子围栏，计时应该正确累加。退出时也应该正确处理。",
+      "id": "CLEAN-003",
+      "title": "修复定位模式描述与实际实现不一致",
+      "description": "省电模式和均衡模式使用完全相同的降频阶梯，且 UI 描述与实际代码不符。",
       "acceptanceCriteria": [
-        "进入父围栏时父围栏开始计时",
-        "进入子围栏时子围栏开始计时，且时间累加到父围栏",
-        "退出子围栏时子围栏停止计时，父围栏继续计时",
-        "退出父围栏时父围栏停止计时",
-        "跨天分割正确处理",
-        "Typecheck passes",
-        "Tests pass"
+        "在 SmartScheduler.kt 中定义 POWERSAVE_THROTTLE_STEPS 与 BALANCED_THROTTLE_STEPS 不同的阶梯",
+        "修正 SettingsScreen.kt 中省电/均衡模式的描述文本",
+        "确保描述准确反映实际降频行为",
+        "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CLEAN-004",
+      "title": "删除 shareLauncher 死代码",
+      "description": "StatsExportImportScreen.kt 中的 shareLauncher 回调为空，完全无用。",
+      "acceptanceCriteria": [
+        "删除无用的 shareLauncher 定义",
+        "或使用它实现真正的分享功能",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CLEAN-005",
+      "title": "删除未使用的 getShareableStatsFile 方法",
+      "description": "DataManager.kt 中定义了 getShareableStatsFile() 但从未被调用。",
+      "acceptanceCriteria": [
+        "删除 DataManager.kt 中未使用的 getShareableStatsFile() 方法",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CLEAN-006",
+      "title": "删除 SettingsScreen 重复定义",
+      "description": "SettingsScreen.kt 中 SettingsPage 和 SettingsScreen 完全相同，是重复定义。",
+      "acceptanceCriteria": [
+        "删除 SettingsScreen 重复定义，只保留 SettingsPage",
+        "验证导航仍然正常工作",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CLEAN-007",
+      "title": "统一 AppPreferences 默认值",
+      "description": "AppPreferences 的默认值与 SettingsViewModel.restoreDefaultSettings 不一致。",
+      "acceptanceCriteria": [
+        "修正 AppPreferences.kt 中的默认值：stationaryThreshold=30, boundaryBuffer=200",
+        "确保首次使用 AppPreferences 时获得正确的默认值",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CLEAN-008",
+      "title": "处理 PowerSavingStats 未持久化问题",
+      "description": "PowerSavingStats 详细统计未持久化，应用重启后丢失。",
+      "acceptanceCriteria": [
+        "方案A: 删除 PowerSavingStats 的详细统计，只保留 AppPreferences 的简单计数",
+        "方案B: 实现 PowerSavingStats 的持久化",
+        "选择一种方案并实现",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
       "notes": ""
     }
   ]
 }
-

@@ -852,4 +852,24 @@ class TrackMasterApplication : Application() {
         }
     }
 
+    /** 导出围栏列表到JSON字符串 */
+    fun exportFencesToJson(fences: List<GeoFence>): String? {
+        return dbHelper.generateFencesJson(fences)
+    }
+
+    /** 导入围栏并刷新所有相关状态 */
+    fun importFencesAndRefresh(jsonContent: String): Int {
+        val count = dbHelper.importFencesFromJson(jsonContent)
+        if (count >= 0) {
+            // 刷新Application的围栏数据
+            geoFences.clear()
+            geoFences.addAll(dbHelper.getAllFences())
+            // 刷新Engine的围栏数据
+            refreshEngineFences()
+            // 检查当前位置是否在围栏内
+            checkAndUpdateFenceState()
+        }
+        return count
+    }
+
 }

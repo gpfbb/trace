@@ -1,5 +1,6 @@
 package com.trackmaster.app.ui.navigation
 
+import android.content.Intent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -7,7 +8,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -25,6 +28,10 @@ import com.trackmaster.app.ui.theme.AppTheme
 import com.trackmaster.app.ui.theme.ThemeManager
 import com.trackmaster.app.ui.theme.backgroundColor
 import org.koin.compose.koinInject
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun TrackMasterNavHost(
@@ -180,11 +187,41 @@ fun TrackMasterNavHost(
                 enterTransition = { fadeIn(animationSpec = tween(200)) },
                 exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
+                val context = LocalContext.current
                 FenceExportImportDialog(
                     onDismiss = { navController.popBackStack() },
                     fences = app.geoFences.toList(),
-                    onExport = { },
-                    onImport = { }
+                    onExport = { selectedFences ->
+                        val json = app.exportFencesToJson(selectedFences)
+                        if (json != null) {
+                            try {
+                                val fileName = "TrackMaster_Fences_${
+                                    SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                                }.json"
+                                val file = File(context.getExternalFilesDir(null), fileName)
+                                file.writeText(json)
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file
+                                )
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/json"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    putExtra(Intent.EXTRA_SUBJECT, "TrackMaster 围栏分享")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "分享围栏").apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    },
+                    onImport = { jsonContent ->
+                        app.importFencesAndRefresh(jsonContent)
+                    }
                 )
             }
 

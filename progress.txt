@@ -1,94 +1,15 @@
-## Codebase Patterns
-- GeoFence data model exists in two places: `data/FenceData.kt` (UI layer) and `core/GeofenceModels.kt` (Engine layer). The UI layer `GeoFence` uses `categoryId` while Engine uses `category` - both need to be kept consistent
-- Build system uses Gradle 9.0 with `JAVA_HOME=/d/javajdk` on this machine
-- The project has both unit tests and instrumentation tests - unit tests have pre-existing Int vs Long type mismatch issues in `StayDurationManagerTest.kt`
-- GeofenceDatabaseHelper already has comprehensive table definitions including fences, categories, events, stays, daily_stays tables
-- PersistentStateManager handles SharedPreferences-based state persistence for fence enter/exit times
-- Engine.kt in core/ handles the nested timing logic with findAllMatchedFences() and state machine
-
-## 2026-04-10 15:45 - US-001
-- What was implemented: Added `parentId` field to `GeoFence` data class in `data/FenceData.kt` to match US-001 acceptance criteria. All required fields now present: id, name, type, center, radius, points, parentId, categoryId, color, alpha. Also verified: GeoPoint (core/GeofenceModels.kt), StayRecord (data/FenceData.kt as FenceStayRecord), GeoFenceType enum (core/GeofenceModels.kt)
-- Files changed: app/src/main/java/com/trackmaster/app/data/FenceData.kt
+## 2026-04-10 - CLEAN-001
+- What was implemented
+  - Fixed FenceExportImportDialog in TrackMasterNavHost by implementing proper onExport/onImport callbacks
+  - Added helper methods `exportFencesToJson()` and `importFencesAndRefresh()` to TrackMasterApplication
+  - Export creates JSON file, gets FileProvider URI, and starts share intent
+  - Import calls `importFencesAndRefresh()` which updates db, geoFences list, engine, and fence state
+- Files changed
+  - TrackMasterApplication.kt - added export/import helper methods
+  - TrackMasterNavHost.kt - added imports, implemented callbacks
 - **Learnings for future iterations:**
-  - The codebase already had comprehensive data models - the main gap was `parentId` missing from the UI layer `GeoFence`
-  - Typecheck passes with only warnings (deprecated icons, unused variables) - no errors
-  - When implementing nested fence features, remember the Engine layer uses `Geofence` from `core/` while UI uses `GeoFence` from `data/`
-
-## 2026-04-10 16:40 - US-009 to US-012
-- What was implemented: Verified all remaining stories are implemented. US-009 (map fence display): AMapViewWrapper draws circle/polygon fences with color/alpha, supports tap-to-select and polygon vertex undo. US-010 (Dynamic Island): TrackMasterApplication has fence selection flow with map highlighting. US-011 (statistics UI): StatisticsScreen displays daily/monthly/yearly reports with duration rankings. US-012 (category management): CategoryManager handles CRUD operations with fence assignment.
-- Files changed: None (already implemented)
-- **Learnings for future iterations:**
-  - Map fence drawing: MapViewModel manages drawingPoints with undo via dropLast(1)
-  - Dynamic Island integration: currentMatchedFenceIds is used for highlighting on map
-  - Statistics are real-time updated via collectAsState on stayDurationManager flows
-
-## 2026-04-10 16:30 - US-007 & US-008
-- What was implemented: Fixed export filename format for fence and stats exports. Changed `fences_$timestamp.json` → `trackmaster_fences_$dateStr.json` and `TrackMaster_停留记录_$timestamp.json` → `trackmaster_stats_$dateStr.json`. Also fixed export to NOT include ID in fence JSON (import generates new UUID). Verified import preview is handled by FenceExportImportDialog.
-- Files changed: app/src/main/java/com/trackmaster/app/DataManager.kt
-- **Learnings for future iterations:**
-  - Export filename formats must match the PRD exactly: trackmaster_fences_YYYYMMDD.json and trackmaster_stats_YYYYMMDD.json
-  - Fence export should NOT include id field - import generates new UUID
-
-## 2026-04-10 16:25 - US-005 & US-006
-- What was implemented: Verified state persistence (US-005): PersistentStateManager.saveCurrentFenceState/getCurrentFenceState, Engine.initWithLocation with RestoreResult. Verified stats management (US-006): getAllDailyRecords/getMonthlyRecords/getYearlyRecords implemented, auto-save to daily_stays on timer end (saveDailyRecord), cross-day segment splitting in onFenceExit.
-- Files changed: None (already implemented)
-- **Learnings for future iterations:**
-  - US-006 functions are named differently than acceptance criteria: getDailyStats→getAllDailyRecords, getMonthlyStats→getMonthlyRecords, getYearlyStats→getYearlyRecords
-  - Cross-day splitting is handled in StayDurationManager.onFenceExit() by calculating duration up to midnight and remaining duration after
-
-## 2026-04-10 16:20 - US-004
-- What was implemented: Verified nested timing engine implementation - all acceptance criteria met: findAllMatchedFences returns matched fences sorted by depth (Engine.kt:262), timing state machine handles enter/exit (TrackMasterApplication.kt:240-290), getActiveSessions() returns active sessions (StayDurationManager.kt:239), onLocationUpdate() processes location (Engine.kt:127). Nested stat aggregation is handled by Aggregator.kt.
-- Files changed: None (already implemented)
-- **Learnings for future iterations:**
-  - Nested timing: Engine.findAllMatchedFences() finds ALL matched fences (not just deepest), TrackMasterApplication handles state machine for parent/child timing
-  - Active sessions tracked in StayDurationManager.activeSessions ConcurrentHashMap
-  - Aggregator handles T+1 batch processing with cross-day segment splitting
-
-## 2026-04-10 16:10 - US-003
-- What was implemented: Verified geometry calculation tools in GeoMath.kt - all acceptance criteria met: haversine (line 94), pointInCircle (line 243), pointInPolygon ray casting (line 224), computeBBox (line 112), pointInFence unified entry (line 247). Typecheck passes.
-- Files changed: None (already implemented)
-- **Learnings for future iterations:**
-  - GeoMath.kt contains comprehensive geometry tools with caching (circlePolygonCache) and hysteresis support
-  - The pointInFence function handles both CIRCLE and POLYGON types automatically
-
-## 2026-04-10 16:05 - US-002
-- What was implemented: Added `export_meta` table to GeoFenceDatabaseHelper with all required fields (export_id, export_type, filename, record_count, export_timestamp). Added index on export_timestamp. Added v7 migration. All acceptance criteria met: fences table, stays table, daily_stats table (as daily_stays), categories table, export_meta table, and necessary indexes.
-- Files changed: app/src/main/java/com/trackmaster/app/GeoFenceDatabaseHelper.kt
-- **Learnings for future iterations:**
-  - DATABASE_VERSION must be incremented for each schema change
-  - Migration blocks use `if (oldVersion < N)` pattern and must be in ascending order
-  - The daily_stats acceptance criteria is implemented as `daily_stays` table in the existing codebase
-  - Always add index for timestamp columns used in queries
-
-
-## 2026-04-10 17:20 - BUG-001
-- What was implemented: Fixed fence status refresh after create/edit/delete. Added `checkAndUpdateFenceState()` call after `refreshEngineFences()` in MapScreen.kt at three locations: after creating a fence (line 307), after editing a fence (line 189), and after deleting a fence (line 367). This ensures the engine re-evaluates if the user's current location is inside/outside any fences, and updates `currentMatchedFences` and triggers UI refresh via `fenceStateVersion`.
-- Files changed: app/src/main/java/com/trackmaster/app/ui/screens/MapScreen.kt
-- **Learnings for future iterations:**
-  - When modifying `refreshEngineFences()`, also call `checkAndUpdateFenceState()` to re-evaluate the user's fence match status
-  - `currentMatchedFences` in TrackMasterApplication holds the list of fences the user is currently inside (for UI highlighting)
-  - `fenceStateVersion` StateFlow triggers UI recomposition when fences are modified
-  - The pre-existing unit test failures in `StayDurationManagerTest.kt` (Int vs Long type mismatch) are unrelated to fence status refresh issues
----
-
-## 2026-04-10 18:10 - BUG-002
-- What was implemented: Fixed timer restoration when app is force-killed but user is still in same fence. The bug occurred because: (1) open stays are only saved to DB when app closes normally via `saveAllActiveSessions()`, not in real-time; (2) when app is force-killed, DB has no open stay but SharedPreferences has `currentFenceState`; (3) the restoration logic checked `engineRestoreResult` (from DB) but not `currentFenceState` (from SharedPreferences) when deciding whether to restore or restart timer. Added check at TrackMasterApplication.kt:595 - if `currentFenceState != null && isStillInFence`, restore with original enter time instead of starting new timer.
-- Files changed: app/src/main/java/com/trackmaster/app/TrackMasterApplication.kt
-- **Learnings for future iterations:**
-  - Open stays are NOT persisted to DB in real-time - only when `saveAllActiveSessions()` is called on app close
-  - `handleFirstLocationAfterRestoreInternal()` has complex branching logic - the bug was in the `else` block at line 588 where it fell through to start a new timer instead of restoring
-  - `PersistentStateManager.getCurrentFenceState()` saves fenceId, fenceName, and enterTime to SharedPreferences - this survives force-kill
-  - `Engine.initWithLocation()` uses DB open segments to determine restoration - if app was force-killed before save, DB has no record
-  - The fix adds an early return after `updateApplicationStateForFence` when user is still in same fence but DB has no record
----
-
-## 2026-04-10 20:15 - BUG-003
-- What was implemented: Fixed Int vs Long type mismatches in StayDurationManagerTest.kt (5 locations: lines 115, 141, 142, 143, 196) - changed assertEquals(int, ...) to assertEquals(long, ...). Also fixed MockStayDurationManager's overnight calculation bug that caused 1-second precision error by ensuring Calendar.MILLISECOND is explicitly set to 0 when constructing Date objects in test cases.
-- Files changed: app/src/test/java/com/trackmaster/app/StayDurationManagerTest.kt
-- **Learnings for future iterations:**
-  - assertEquals(Int, Long?) causes test failures - always use Long literals (L suffix) in assertEquals for duration values
-  - Calendar.set() does NOT reset MILLISECOND field - Calendar.getInstance() returns calendar with current system millisecond value, so set() on time fields leaves millisecond unchanged
-  - When testing time calculations, always explicitly call calendar.set(Calendar.MILLISECOND, 0) after setting time fields to ensure millisecond precision
-  - The actual overnight calculation logic in MockStayDurationManager was correct (same as StayDurationManager.kt) - the 1-second error was purely from test setup Calendar not having MILLISECOND=0
-  - MockStayDurationManager's cross-day logic now matches main app StayDurationManager.kt implementation
+  - TrackMasterNavHost uses `koinInject()` to get TrackMasterApplication instance
+  - `LocalContext.current` provides context in Compose for file operations
+  - FileProvider requires `${context.packageName}.fileprovider` authority
+  - `dbHelper` is private in TrackMasterApplication - need to add public wrapper methods for access
 ---
