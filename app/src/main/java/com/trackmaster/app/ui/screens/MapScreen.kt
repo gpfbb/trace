@@ -62,6 +62,7 @@ fun MapScreen(app: TrackMasterApplication) {
     )
 
     val fenceStateVersion by app.fenceStateVersion.collectAsState()
+    val highlightedFenceId by app.highlightedFenceId.collectAsState()
 
     LaunchedEffect(fenceStateVersion) {
         localFences = app.geoFences.toList()
@@ -112,6 +113,7 @@ fun MapScreen(app: TrackMasterApplication) {
             fences = localFences,
             currentMatchedFenceIds = localMatchedIds,
             selectedFenceId = selectedFence?.id,
+            highlightedFenceId = highlightedFenceId,
             isDrawingMode = isDrawingMode,
             drawingPoints = drawingPoints,
             selectedFenceType = selectedFenceType,
@@ -128,7 +130,12 @@ fun MapScreen(app: TrackMasterApplication) {
         TopStatusIsland(
             currentMatchedFenceIds = localMatchedIds,
             fences = localFences,
+            highlightedFenceId = highlightedFenceId,
             onFenceListClick = { showFenceList = true },
+            onFenceClick = { fenceId ->
+                // 切换高亮状态：点击同一围栏则取消高亮，否则高亮该围栏
+                app.setHighlightedFenceId(if (highlightedFenceId == fenceId) null else fenceId)
+            },
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -318,7 +325,16 @@ fun MapScreen(app: TrackMasterApplication) {
         FenceListDialog(
             fences = localFences,
             currentMatchedIds = localMatchedIds,
-            onDismiss = { showFenceList = false },
+            highlightedFenceId = highlightedFenceId,
+            onDismiss = {
+                showFenceList = false
+                // 关闭对话框时清除高亮
+                app.setHighlightedFenceId(null)
+            },
+            onHighlightClick = { fence ->
+                // 切换高亮状态
+                app.setHighlightedFenceId(if (highlightedFenceId == fence.id) null else fence.id)
+            },
             onEditClick = { fence ->
                 selectedFence = fence
                 showFenceList = false
@@ -387,7 +403,9 @@ fun MapScreen(app: TrackMasterApplication) {
 private fun TopStatusIsland(
     currentMatchedFenceIds: Set<String>,
     fences: List<GeoFence>,
+    highlightedFenceId: String?,
     onFenceListClick: () -> Unit,
+    onFenceClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // 计算围栏面积（用于找出最小的围栏）
@@ -432,7 +450,13 @@ private fun TopStatusIsland(
             if (smallestFence != null) {
                 Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Success, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(smallestFence.name, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                Text(
+                    text = smallestFence.name,
+                    fontSize = 14.sp,
+                    color = if (highlightedFenceId == smallestFence.id) NeonAmber else Color.White,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickable { onFenceClick(smallestFence.id) }
+                )
             } else {
                 Icon(Icons.Filled.LocationOff, contentDescription = null, tint = Warning, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -695,7 +719,9 @@ private fun CreateFenceDialog(
 private fun FenceListDialog(
     fences: List<GeoFence>,
     currentMatchedIds: Set<String>,
+    highlightedFenceId: String?,
     onDismiss: () -> Unit,
+    onHighlightClick: (GeoFence) -> Unit,
     onEditClick: (GeoFence) -> Unit,
     onDeleteClick: (GeoFence) -> Unit
 ) {
@@ -710,16 +736,28 @@ private fun FenceListDialog(
                     items(fences.size) { i ->
                         val fence = fences[i]
                         val matched = fence.id in currentMatchedIds
+                        val isHighlighted = fence.id == highlightedFenceId
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                .background(if (matched) Success.copy(alpha = 0.1f) else Color.Transparent)
+                                .background(
+                                    when {
+                                        isHighlighted -> NeonAmber.copy(alpha = 0.2f)
+                                        matched -> Success.copy(alpha = 0.1f)
+                                        else -> Color.Transparent
+                                    }
+                                )
+                                .clickable { onHighlightClick(fence) }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(Modifier.size(24.dp).clip(CircleShape).background(Color(AndroidColor.parseColor(fence.color))))
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(fence.name, fontWeight = FontWeight.Medium)
+                                Text(
+                                    fence.name,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isHighlighted) NeonAmber else Color.White
+                                )
                                 Text(
                                     when (fence.type) {
                                         GeoFenceType.CIRCLE -> "圆形 ${fence.radius?.toInt() ?: 0}m"
@@ -730,6 +768,7 @@ private fun FenceListDialog(
                                 )
                             }
                             if (matched) Icon(Icons.Filled.CheckCircle, contentDescription = "已命中", tint = Success)
+                            if (isHighlighted) Icon(Icons.Filled.LocationOn, contentDescription = "已高亮", tint = NeonAmber)
                             IconButton(onClick = { onEditClick(fence) }) {
                                 Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = primaryColor())
                             }

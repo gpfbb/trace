@@ -91,6 +91,7 @@ fun AMapViewWrapper(
     fences: List<GeoFence> = emptyList(),
     currentMatchedFenceIds: Set<String> = emptySet(),
     selectedFenceId: String? = null,
+    highlightedFenceId: String? = null, // 从灵动岛选择的高亮围栏ID
     isDrawingMode: Boolean = false,
     drawingPoints: List<GeoFencePoint> = emptyList(),
     selectedFenceType: GeoFenceType = GeoFenceType.CIRCLE,
@@ -183,7 +184,9 @@ fun AMapViewWrapper(
     }
 
     // 地图配置
-    LaunchedEffect(mapView.value) {
+    // 注意：需要同时监听 mapView.value、isDrawingMode、isEditingFence 的变化
+    // 以确保地图点击监听器能够获取到最新的状态值
+    LaunchedEffect(mapView.value, isDrawingMode, isEditingFence) {
         val mv = mapView.value ?: return@LaunchedEffect
         var retry = 0
         var aMap: AMap? = mv.map
@@ -216,22 +219,17 @@ fun AMapViewWrapper(
         }
 
         aMap.setOnMapClickListener { latLng ->
-            // 首先检查是否点击在某个围栏上（仅在非绘制模式下）
-            if (!isDrawingMode && !isEditingFence) {
-                val clickedFence = fences.find { fence ->
-                    isLocationInsideFence(latLng, fence)
-                }
-                if (clickedFence != null) {
-                    onFenceClick(clickedFence)
-                    true // 消费点击事件
-                } else {
-                    onMapClick(latLng)
-                    false
-                }
-            } else {
-                // 绘制/编辑模式下，交给绘制逻辑处理
+            // 地图点击只处理绘制/选点，围栏选择只能在灵动岛操作
+            // 注意：isDrawingMode 和 isEditingFence 是 Compose State 对象
+            // 在监听器被调用时直接读取 .value 以获取最新值
+            val currentIsDrawingMode = isDrawingMode
+            val currentIsEditingFence = isEditingFence
+            if (currentIsDrawingMode || currentIsEditingFence) {
                 onMapClick(latLng)
-                true
+                false  // 不消费事件，让绘制点继续传播
+            } else {
+                // 非绘制模式下，地图点击不选中任何围栏
+                false
             }
         }
     }
@@ -276,8 +274,10 @@ fun AMapViewWrapper(
         fences.forEach { fence ->
             val matched = fence.id in currentMatchedFenceIds
             val selected = fence.id == selectedFenceId
+            val highlighted = fence.id == highlightedFenceId
             val strokeColor = when {
                 matched -> 0xFF00FF00.toInt()    // 绿色-命中
+                highlighted -> 0xFFFFFF00.toInt()   // 黄色-高亮（灵动岛选择）
                 selected -> 0xFFFFFF00.toInt()   // 黄色-选中
                 else -> Color.parseColor(fence.color)
             }

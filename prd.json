@@ -1,114 +1,51 @@
 {
   "project": "TrackMaster",
-  "branchName": "ralph/refactor-cleanup",
-  "description": "TrackMaster 代码清理与修复 - 10个审查问题",
+  "branchName": "ralph/fix-remaining-issues",
+  "description": "TrackMaster 修复三个遗留问题",
   "userStories": [
     {
-      "id": "CLEAN-001",
-      "title": "修复 FenceExportImportDialog 导航空实现",
-      "description": "从导航路由 Screen.FenceExportImport.route 进入时，onExport 和 onImport 回调都是空 lambda，导致功能不可用。",
+      "id": "FIX-001",
+      "title": "修复绘制模式点击地图不能添加点",
+      "description": "用户在绘制模式下点击地图无法添加点",
       "acceptanceCriteria": [
-        "修复 TrackMasterNavHost.kt 中 FenceExportImportDialog 的 onExport/onImport 回调",
-        "或删除重复的导航入口，使用 MainActivity 中已有的正确实现",
-        "验证导入导出功能可以正常工作",
+        "绘制模式下点击地图应在地图上添加点",
+        "点击后地图显示预览圆/多边形",
+        "可以完成绘制并创建围栏",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Implemented proper onExport/onImport callbacks in TrackMasterNavHost using TrackMasterApplication helper methods"
+      "notes": "Fixed: Added isDrawingMode and isEditingFence as LaunchedEffect dependencies to ensure listener captures current state. Also read state values directly in listener callback for additional safety."
     },
     {
-      "id": "CLEAN-002",
-      "title": "删除 onScreenStateChanged 死代码",
-      "description": "SmartScheduler.onScreenStateChanged() 已禁用（内部为空），但调用方仍在调用。这是无效代码。",
+      "id": "FIX-002",
+      "title": "修复灵动岛围栏高亮功能",
+      "description": "点击灵动岛里的围栏名称，地图上对应围栏应高亮显示（黄色边框）",
       "acceptanceCriteria": [
-        "删除 GeoFenceLocationService.kt 中的屏幕广播接收器注册",
-        "删除 Engine.kt 中对 scheduler.onScreenStateChanged() 的调用",
-        "删除或实现 SmartScheduler.onScreenStateChanged()",
+        "点击灵动岛围栏列表中的围栏",
+        "地图上该围栏显示黄色边框高亮",
+        "再次点击取消高亮",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Deleted screenReceiver and its registration from GeoFenceLocationService.kt, removed Engine.onScreenStateChanged(), removed SmartScheduler.onScreenStateChanged()"
+      "notes": "Fixed: Added onFenceClick callback to TopStatusIsland and onHighlightClick to FenceListDialog. Connected to app.setHighlightedFenceId() for toggling highlight state."
     },
     {
-      "id": "CLEAN-003",
-      "title": "修复定位模式描述与实际实现不一致",
-      "description": "省电模式和均衡模式使用完全相同的降频阶梯，且 UI 描述与实际代码不符。",
+      "id": "FIX-003",
+      "title": "修复统计时间累加问题",
+      "description": "应用重启或创建新围栏后，统计时间应保留之前的累加时间，而不是从零开始",
       "acceptanceCriteria": [
-        "在 SmartScheduler.kt 中定义 POWERSAVE_THROTTLE_STEPS 与 BALANCED_THROTTLE_STEPS 不同的阶梯",
-        "修正 SettingsScreen.kt 中省电/均衡模式的描述文本",
-        "确保描述准确反映实际降频行为",
-        "Typecheck passes"
+        "从数据库加载今日所有未关闭的stays记录",
+        "activeSessions应保留之前的计时状态",
+        "getCurrentDuration()返回累积的时长",
+        "数据可视化页面显示正确的累积时长",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Fixed SettingsScreen.kt descriptions to match actual throttle steps. Note: PRD description was incorrect - POWERSAVE_THROTTLE_STEPS and BALANCED_THROTTLE_STEPS were already different in code."
-    },
-    {
-      "id": "CLEAN-004",
-      "title": "删除 shareLauncher 死代码",
-      "description": "StatsExportImportScreen.kt 中的 shareLauncher 回调为空，完全无用。",
-      "acceptanceCriteria": [
-        "删除无用的 shareLauncher 定义",
-        "或使用它实现真正的分享功能",
-        "Typecheck passes"
-      ],
-      "priority": 4,
-      "passes": true,
-      "notes": "Deleted unused shareLauncher - sharing is already implemented via context.startActivity(Intent.createChooser))"
-    },
-    {
-      "id": "CLEAN-005",
-      "title": "删除未使用的 getShareableStatsFile 方法",
-      "description": "DataManager.kt 中定义了 getShareableStatsFile() 但从未被调用。",
-      "acceptanceCriteria": [
-        "删除 DataManager.kt 中未使用的 getShareableStatsFile() 方法",
-        "Typecheck passes"
-      ],
-      "priority": 5,
-      "passes": true,
-      "notes": "Deleted unused getShareableStatsFile method from DataManager.kt"
-    },
-    {
-      "id": "CLEAN-006",
-      "title": "删除 SettingsScreen 重复定义",
-      "description": "SettingsScreen.kt 中 SettingsPage 和 SettingsScreen 完全相同，是重复定义。",
-      "acceptanceCriteria": [
-        "删除 SettingsScreen 重复定义，只保留 SettingsPage",
-        "验证导航仍然正常工作",
-        "Typecheck passes"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": "Refactored SettingsScreen to thin GlassDialog wrapper delegating to SettingsPage(hideNavBar=true). Deleted ~340 lines of duplicate content, removed dead import from TrackMasterNavHost.kt"
-    },
-    {
-      "id": "CLEAN-007",
-      "title": "统一 AppPreferences 默认值",
-      "description": "AppPreferences 的默认值与 SettingsViewModel.restoreDefaultSettings 不一致。",
-      "acceptanceCriteria": [
-        "修正 AppPreferences.kt 中的默认值：stationaryThreshold=30, boundaryBuffer=200",
-        "确保首次使用 AppPreferences 时获得正确的默认值",
-        "Typecheck passes"
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": "Fixed AppPreferences defaults: stationaryThreshold=30, boundaryBuffer=200 to match restoreDefaultSettings"
-    },
-    {
-      "id": "CLEAN-008",
-      "title": "处理 PowerSavingStats 未持久化问题",
-      "description": "PowerSavingStats 详细统计未持久化，应用重启后丢失。",
-      "acceptanceCriteria": [
-        "方案A: 删除 PowerSavingStats 的详细统计，只保留 AppPreferences 的简单计数",
-        "方案B: 实现 PowerSavingStats 的持久化",
-        "选择一种方案并实现",
-        "Typecheck passes"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": "Implemented Option A - removed unused detailed stats from PowerSavingStats since they weren't persisted and weren't used for UI display (UI uses AppPreferences which IS persisted)"
+      "passes": false,
+      "notes": ""
     }
   ]
 }
