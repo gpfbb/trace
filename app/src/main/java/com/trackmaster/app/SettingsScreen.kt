@@ -942,14 +942,14 @@ fun LocationModeSection(
 
         LocationModeItem(
             title = "省电模式",
-            description = "超低功耗，适合睡觉/长时间静止。静止1分钟起1分钟/次，5分钟起3分钟/次，1小时以上仅15分钟/次",
+            description = "超低功耗，适合睡觉/长时间静止。静止1分钟起2分钟/次，5分钟起8分钟/次，1小时以上仅30分钟/次",
             isSelected = selectedMode == PowerMode.POWERSAVE,
             onClick = { onModeSelected(PowerMode.POWERSAVE) }
         )
 
         LocationModeItem(
             title = "均衡模式",
-            description = "智能平衡：静止15秒/次起，逐渐降至8分钟/次。边界500米内临时提频",
+            description = "智能平衡：静止30秒/次起，逐渐降至8分钟/次。边界500米内临时提频",
             isSelected = selectedMode == PowerMode.BALANCED,
             onClick = { onModeSelected(PowerMode.BALANCED) }
         )

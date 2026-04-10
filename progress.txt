@@ -28,3 +28,16 @@
   - SmartScheduler.onScreenStateChanged was explicitly disabled with comment "已禁用：点亮屏幕不触发重置"
   - The screen receiver pattern registers for ACTION_SCREEN_ON/OFF broadcasts - when removing, also remove the unregisterReceiver call in onDestroy
 ---
+
+## 2026-04-10 - CLEAN-003
+- What was implemented
+  - Fixed SettingsScreen.kt mode descriptions to accurately reflect throttle steps
+  - Note: PRD description was wrong - POWERSAVE and BALANCED throttle steps were already different in code
+  - Only the UI descriptions were incorrect
+- Files changed
+  - SettingsScreen.kt - corrected mode descriptions
+- **Learnings for future iterations:**
+  - SmartScheduler.kt already defines different throttle steps for each mode
+  - BALANCED_THROTTLE_STEPS vs POWERSAVE_THROTTLE_STEPS have different intervals at each level
+  - When fixing UI text, verify against actual code constants not PRD descriptions
+---
