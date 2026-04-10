@@ -48,8 +48,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "All functions in GeoMath.kt: haversine, pointInCircle, pointInPolygon, computeBBox, pointInFence"
     },
     {
       "id": "US-004",
