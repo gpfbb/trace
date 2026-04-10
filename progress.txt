@@ -14,6 +14,20 @@
   - Typecheck passes with only warnings (deprecated icons, unused variables) - no errors
   - When implementing nested fence features, remember the Engine layer uses `Geofence` from `core/` while UI uses `GeoFence` from `data/`
 
+## 2026-04-10 16:30 - US-007 & US-008
+- What was implemented: Fixed export filename format for fence and stats exports. Changed `fences_$timestamp.json` → `trackmaster_fences_$dateStr.json` and `TrackMaster_停留记录_$timestamp.json` → `trackmaster_stats_$dateStr.json`. Also fixed export to NOT include ID in fence JSON (import generates new UUID). Verified import preview is handled by FenceExportImportDialog.
+- Files changed: app/src/main/java/com/trackmaster/app/DataManager.kt
+- **Learnings for future iterations:**
+  - Export filename formats must match the PRD exactly: trackmaster_fences_YYYYMMDD.json and trackmaster_stats_YYYYMMDD.json
+  - Fence export should NOT include id field - import generates new UUID
+
+## 2026-04-10 16:25 - US-005 & US-006
+- What was implemented: Verified state persistence (US-005): PersistentStateManager.saveCurrentFenceState/getCurrentFenceState, Engine.initWithLocation with RestoreResult. Verified stats management (US-006): getAllDailyRecords/getMonthlyRecords/getYearlyRecords implemented, auto-save to daily_stays on timer end (saveDailyRecord), cross-day segment splitting in onFenceExit.
+- Files changed: None (already implemented)
+- **Learnings for future iterations:**
+  - US-006 functions are named differently than acceptance criteria: getDailyStats→getAllDailyRecords, getMonthlyStats→getMonthlyRecords, getYearlyStats→getYearlyRecords
+  - Cross-day splitting is handled in StayDurationManager.onFenceExit() by calculating duration up to midnight and remaining duration after
+
 ## 2026-04-10 16:20 - US-004
 - What was implemented: Verified nested timing engine implementation - all acceptance criteria met: findAllMatchedFences returns matched fences sorted by depth (Engine.kt:262), timing state machine handles enter/exit (TrackMasterApplication.kt:240-290), getActiveSessions() returns active sessions (StayDurationManager.kt:239), onLocationUpdate() processes location (Engine.kt:127). Nested stat aggregation is handled by Aggregator.kt.
 - Files changed: None (already implemented)

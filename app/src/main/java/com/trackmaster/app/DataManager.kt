@@ -2,6 +2,12 @@ package com.trackmaster.app
 
 import android.content.Context
 import android.os.Environment
+import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFencePoint
+import com.trackmaster.app.core.GeoFenceType
+import com.trackmaster.app.data.GeoFenceAction
+import com.trackmaster.app.data.GeoFenceEvent
+import com.trackmaster.app.data.FenceStayRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -348,7 +354,7 @@ class DataManager(private val context: Context) {
             val jsonArray = JSONArray()
             fences.forEach { fence ->
                 val obj = JSONObject()
-                obj.put("id", fence.id)
+                // 不包含 id，导入时生成新 ID
                 obj.put("name", fence.name)
                 obj.put("type", fence.type.name)
                 obj.put("categoryId", fence.categoryId)
@@ -369,8 +375,8 @@ class DataManager(private val context: Context) {
                 jsonArray.put(obj)
             }
 
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val file = File(exportDir, "fences_$timestamp.json")
+            val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+            val file = File(exportDir, "trackmaster_fences_$dateStr.json")
             file.writeText(jsonArray.toString(2))
             file.absolutePath
         } catch (e: Exception) {
@@ -388,9 +394,11 @@ class DataManager(private val context: Context) {
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
                 val type = GeoFenceType.valueOf(obj.getString("type"))
+                // 生成新 ID，不使用导入的 ID
+                val newId = UUID.randomUUID().toString()
                 val fence = if (type == GeoFenceType.CIRCLE) {
                     GeoFence(
-                        id = obj.getString("id"),
+                        id = newId,
                         name = obj.getString("name"),
                         type = type,
                         center = GeoFencePoint(obj.getDouble("centerLat"), obj.getDouble("centerLng")),
@@ -405,7 +413,7 @@ class DataManager(private val context: Context) {
                         pts.add(GeoFencePoint(pj.getDouble("lat"), pj.getDouble("lng")))
                     }
                     GeoFence(
-                        id = obj.getString("id"),
+                        id = newId,
                         name = obj.getString("name"),
                         type = type,
                         points = pts,
@@ -431,8 +439,8 @@ class DataManager(private val context: Context) {
      */
     suspend fun exportStatsToJson(): StatsExportResult = withContext(Dispatchers.IO) {
         try {
-            val timestamp = SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.getDefault()).format(Date())
-            val fileName = "TrackMaster_停留记录_$timestamp.json"
+            val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+            val fileName = "trackmaster_stats_$dateStr.json"
             val exportFile = File(exportDir, fileName)
 
             // 读取所有数据
