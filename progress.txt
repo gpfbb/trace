@@ -53,6 +53,16 @@
   - Always check if ActivityResultContracts import is still needed before removing launcher
 ---
 
+## 2026-04-10 - CLEAN-007
+- What was implemented
+  - Fixed AppPreferences defaults: stationaryThreshold=30, boundaryBuffer=200
+  - Now matches values restored by SettingsViewModel.restoreDefaultSettings()
+- Files changed
+  - AppPreferences.kt - corrected default values
+- **Learnings for future iterations:**
+  - AppPreferences defaults should match restoreDefaultSettings in SettingsViewModel
+---
+
 ## 2026-04-10 - CLEAN-005
 - What was implemented
   - Deleted unused getShareableStatsFile() method from DataManager.kt

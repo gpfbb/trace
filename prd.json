@@ -93,8 +93,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fixed AppPreferences defaults: stationaryThreshold=30, boundaryBuffer=200 to match restoreDefaultSettings"
     },
     {
       "id": "CLEAN-008",
