@@ -5,6 +5,13 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
+import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFencePoint
+import com.trackmaster.app.core.GeoFenceType
+import com.trackmaster.app.data.GeoFenceAction
+import com.trackmaster.app.data.DailyFenceStats
+import com.trackmaster.app.data.FenceStayRecord
+import com.trackmaster.app.data.GeoFenceEvent
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.*
@@ -14,7 +21,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
     companion object {
         private const val DATABASE_NAME = "geofence.db"
-        private const val DATABASE_VERSION = 6
+        private const val DATABASE_VERSION = 7
 
         // 围栏表
         private const val TABLE_FENCES = "fences"
@@ -64,6 +71,14 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         private const val KEY_DAILY_FENCE_NAME = "daily_fence_name"
         private const val KEY_DAILY_DURATION = "daily_duration"
         private const val KEY_DAILY_LAST_UPDATED = "daily_last_updated"
+
+        // 导出元数据表
+        private const val TABLE_EXPORT_META = "export_meta"
+        private const val KEY_EXPORT_ID = "export_id"
+        private const val KEY_EXPORT_TYPE = "export_type"
+        private const val KEY_EXPORT_FILENAME = "filename"
+        private const val KEY_EXPORT_RECORD_COUNT = "record_count"
+        private const val KEY_EXPORT_TIMESTAMP = "export_timestamp"
     }
 
     // 内存缓存：使用 ConcurrentHashMap 保证线程安全
@@ -160,11 +175,22 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             )
         """.trimIndent()
 
+        val createExportMetaTable = """
+            CREATE TABLE $TABLE_EXPORT_META (
+                $KEY_EXPORT_ID TEXT PRIMARY KEY,
+                $KEY_EXPORT_TYPE TEXT NOT NULL,
+                $KEY_EXPORT_FILENAME TEXT NOT NULL,
+                $KEY_EXPORT_RECORD_COUNT INTEGER NOT NULL DEFAULT 0,
+                $KEY_EXPORT_TIMESTAMP INTEGER NOT NULL
+            )
+        """.trimIndent()
+
         db.execSQL(createFencesTable)
         db.execSQL(createCategoriesTable)
         db.execSQL(createEventsTable)
         db.execSQL(createStaysTable)
         db.execSQL(createDailyStaysTable)
+        db.execSQL(createExportMetaTable)
 
         db.execSQL("CREATE INDEX idx_fences_created ON $TABLE_FENCES($KEY_CREATED_AT)")
         db.execSQL("CREATE INDEX idx_fences_category ON $TABLE_FENCES($KEY_CATEGORY_ID)")
@@ -173,6 +199,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         db.execSQL("CREATE INDEX idx_events_timestamp ON $TABLE_EVENTS($KEY_TIMESTAMP)")
         db.execSQL("CREATE INDEX idx_stays_fence ON $TABLE_STAYS($KEY_FENCE_ID)")
         db.execSQL("CREATE INDEX idx_daily_stays_date ON $TABLE_DAILY_STAYS($KEY_DAILY_DATE)")
+        db.execSQL("CREATE INDEX idx_export_timestamp ON $TABLE_EXPORT_META($KEY_EXPORT_TIMESTAMP)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -280,6 +307,25 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 }
             } catch (e: Exception) {
                 Log.e("GeoFenceDB", "v6迁移：添加围栏透明度列失败", e)
+            }
+        }
+
+        if (oldVersion < 7) {
+            try {
+                val createExportMetaTable = """
+                    CREATE TABLE IF NOT EXISTS $TABLE_EXPORT_META (
+                        $KEY_EXPORT_ID TEXT PRIMARY KEY,
+                        $KEY_EXPORT_TYPE TEXT NOT NULL,
+                        $KEY_EXPORT_FILENAME TEXT NOT NULL,
+                        $KEY_EXPORT_RECORD_COUNT INTEGER NOT NULL DEFAULT 0,
+                        $KEY_EXPORT_TIMESTAMP INTEGER NOT NULL
+                    )
+                """.trimIndent()
+                db.execSQL(createExportMetaTable)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_export_timestamp ON $TABLE_EXPORT_META($KEY_EXPORT_TIMESTAMP)")
+                Log.d("GeoFenceDB", "v7迁移：创建导出元数据表成功")
+            } catch (e: Exception) {
+                Log.e("GeoFenceDB", "v7迁移：创建导出元数据表失败", e)
             }
         }
     }

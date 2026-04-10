@@ -13,3 +13,13 @@
   - The codebase already had comprehensive data models - the main gap was `parentId` missing from the UI layer `GeoFence`
   - Typecheck passes with only warnings (deprecated icons, unused variables) - no errors
   - When implementing nested fence features, remember the Engine layer uses `Geofence` from `core/` while UI uses `GeoFence` from `data/`
+
+## 2026-04-10 16:05 - US-002
+- What was implemented: Added `export_meta` table to GeoFenceDatabaseHelper with all required fields (export_id, export_type, filename, record_count, export_timestamp). Added index on export_timestamp. Added v7 migration. All acceptance criteria met: fences table, stays table, daily_stats table (as daily_stays), categories table, export_meta table, and necessary indexes.
+- Files changed: app/src/main/java/com/trackmaster/app/GeoFenceDatabaseHelper.kt
+- **Learnings for future iterations:**
+  - DATABASE_VERSION must be incremented for each schema change
+  - Migration blocks use `if (oldVersion < N)` pattern and must be in ascending order
+  - The daily_stats acceptance criteria is implemented as `daily_stays` table in the existing codebase
+  - Always add index for timestamp columns used in queries
+

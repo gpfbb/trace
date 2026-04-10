@@ -32,8 +32,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "All tables present: fences, stays, daily_stays, categories, export_meta. Indexes created."
     },
     {
       "id": "US-003",
