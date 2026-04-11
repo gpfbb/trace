@@ -90,15 +90,14 @@ fun AMapViewWrapper(
     currentLocation: AMapLocation? = null,
     fences: List<GeoFence> = emptyList(),
     currentMatchedFenceIds: Set<String> = emptySet(),
-    selectedFenceId: String? = null,
     highlightedFenceId: String? = null, // 从灵动岛选择的高亮围栏ID
+    displayedFenceId: String? = null, // 从灵动岛选择的显示围栏ID（只读显示围栏点）
     isDrawingMode: Boolean = false,
     drawingPoints: List<GeoFencePoint> = emptyList(),
     selectedFenceType: GeoFenceType = GeoFenceType.CIRCLE,
     isEditingFence: Boolean = false,
     editingPoints: List<GeoFencePoint> = emptyList(),
-    onMapClick: (LatLng) -> Unit = {},
-    onFenceClick: (GeoFence) -> Unit = {}
+    onMapClick: (LatLng) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -124,6 +123,7 @@ fun AMapViewWrapper(
     var previewCircle by remember { mutableStateOf<Circle?>(null) }
     var previewPolygon by remember { mutableStateOf<Polygon?>(null) }
     val editingMarkers = remember { mutableStateListOf<Marker>() }
+    val displayedMarkers = remember { mutableStateListOf<Marker>() }
 
     // 初始化地图
     LaunchedEffect(isPrivacyReady) {
@@ -150,6 +150,8 @@ fun AMapViewWrapper(
         previewPolygon = null
         editingMarkers.forEach { it.remove() }
         editingMarkers.clear()
+        displayedMarkers.forEach { it.remove() }
+        displayedMarkers.clear()
     }
 
     // 生命周期
@@ -256,7 +258,7 @@ fun AMapViewWrapper(
     }
 
     // 围栏覆盖物
-    LaunchedEffect(fences.map { it.id to it }.hashCode(), mapView.value) {
+    LaunchedEffect(displayedFenceId, fences.map { it.id to it }.hashCode(), mapView.value) {
         val mv = mapView.value ?: return@LaunchedEffect
         val aMap = mv.map ?: return@LaunchedEffect
 
@@ -271,14 +273,18 @@ fun AMapViewWrapper(
             polygonOverlays.remove(it)
         }
 
+        // 清理灵动岛显示的点位标记（当fences变化时清理）
+        displayedMarkers.forEach { it.remove() }
+        displayedMarkers.clear()
+
         fences.forEach { fence ->
             val matched = fence.id in currentMatchedFenceIds
-            val selected = fence.id == selectedFenceId
             val highlighted = fence.id == highlightedFenceId
+            val displayed = fence.id == displayedFenceId
             val strokeColor = when {
+                highlighted -> 0xFFFFFF00.toInt()   // 黄色-高亮
+                displayed -> Color.parseColor(fence.color)  // 显示围栏点，只用原始颜色，不高亮
                 matched -> 0xFF00FF00.toInt()    // 绿色-命中
-                highlighted -> 0xFFFFFF00.toInt()   // 黄色-高亮（灵动岛选择）
-                selected -> 0xFFFFFF00.toInt()   // 黄色-选中
                 else -> Color.parseColor(fence.color)
             }
             val alphaInt = (fence.alpha * 255).toInt()
@@ -324,6 +330,34 @@ fun AMapViewWrapper(
                     poly.points = latLngs
                     poly.strokeColor = strokeColor
                     poly.fillColor = fillColor
+                }
+            }
+            // 如果是灵动岛选中的围栏，添加所有点位标记
+            if (displayed) {
+                when (fence.type) {
+                    GeoFenceType.CIRCLE -> {
+                        val center = fence.center
+                        if (center != null) {
+                            val marker = aMap.addMarker(MarkerOptions()
+                                .position(LatLng(center.latitude, center.longitude))
+                                .title("${fence.name} (圆心)")
+                                .snippet("半径: ${fence.radius}m"))
+                            if (marker != null) displayedMarkers.add(marker)
+                        }
+                    }
+                    GeoFenceType.POLYGON -> {
+                        val pts = fence.points
+                        if (pts != null) {
+                            pts.forEachIndexed { idx, pt ->
+                                val marker = aMap.addMarker(MarkerOptions()
+                                    .position(LatLng(pt.latitude, pt.longitude))
+                                    .title("${fence.name} 顶点${idx + 1}")
+                                    .snippet("(${String.format("%.6f", pt.latitude)}, ${String.format("%.6f", pt.longitude)})"))
+                                if (marker != null) displayedMarkers.add(marker)
+                            }
+                        }
+                    }
+                    else -> {} // no-op for other fence types
                 }
             }
         }

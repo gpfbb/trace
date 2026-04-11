@@ -554,6 +554,7 @@ class MainActivity : ComponentActivity() {
         // 如果点击的是同一个围栏，取消高亮
         if (highlightedFenceId == fenceId) {
             highlightedFenceId = null
+            app?.setHighlightedFenceId(null)
             // 重置所有围栏的样式
             circleOverlays.forEach { (_, circle) ->
                 circle.strokeColor = AndroidColor.parseColor("#FF0000")
@@ -590,6 +591,7 @@ class MainActivity : ComponentActivity() {
 
         // 设置新的高亮（使用黄色高亮）
         highlightedFenceId = fenceId
+        app?.setHighlightedFenceId(fenceId)
         if (circleOverlays.containsKey(fenceId)) {
             val circle = circleOverlays[fenceId]
             circle?.strokeColor = AndroidColor.parseColor("#FFFF00")

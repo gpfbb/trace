@@ -63,6 +63,7 @@ fun MapScreen(app: TrackMasterApplication) {
 
     val fenceStateVersion by app.fenceStateVersion.collectAsState()
     val highlightedFenceId by app.highlightedFenceId.collectAsState()
+    val displayedFenceId by app.displayedFenceId.collectAsState()
 
     LaunchedEffect(fenceStateVersion) {
         localFences = app.geoFences.toList()
@@ -112,29 +113,25 @@ fun MapScreen(app: TrackMasterApplication) {
             currentLocation = localLocation,
             fences = localFences,
             currentMatchedFenceIds = localMatchedIds,
-            selectedFenceId = selectedFence?.id,
             highlightedFenceId = highlightedFenceId,
+            displayedFenceId = displayedFenceId,
             isDrawingMode = isDrawingMode,
             drawingPoints = drawingPoints,
             selectedFenceType = selectedFenceType,
             isEditingFence = isEditingFence,
             editingPoints = editingPoints,
-            onMapClick = onMapClick,
-            onFenceClick = { fence ->
-                // 点击围栏时选中之
-                selectedFence = fence
-                showEditDialog = true
-            }
+            onMapClick = onMapClick
         )
 
         TopStatusIsland(
             currentMatchedFenceIds = localMatchedIds,
             fences = localFences,
             highlightedFenceId = highlightedFenceId,
+            displayedFenceId = displayedFenceId,
             onFenceListClick = { showFenceList = true },
             onFenceClick = { fenceId ->
-                // 切换高亮状态：点击同一围栏则取消高亮，否则高亮该围栏
-                app.setHighlightedFenceId(if (highlightedFenceId == fenceId) null else fenceId)
+                // 切换显示状态：点击同一围栏则取消显示，否则显示该围栏的点（只读）
+                app.setDisplayedFenceId(if (displayedFenceId == fenceId) null else fenceId)
             },
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -328,12 +325,11 @@ fun MapScreen(app: TrackMasterApplication) {
             highlightedFenceId = highlightedFenceId,
             onDismiss = {
                 showFenceList = false
-                // 关闭对话框时清除高亮
-                app.setHighlightedFenceId(null)
+                // 关闭对话框时保持高亮状态，直到用户再次点击同一围栏
             },
             onHighlightClick = { fence ->
-                // 切换高亮状态
-                app.setHighlightedFenceId(if (highlightedFenceId == fence.id) null else fence.id)
+                // 【修复】点击列表围栏时显示围栏的所有点，不要高亮
+                app.setDisplayedFenceId(if (displayedFenceId == fence.id) null else fence.id)
             },
             onEditClick = { fence ->
                 selectedFence = fence
@@ -404,6 +400,7 @@ private fun TopStatusIsland(
     currentMatchedFenceIds: Set<String>,
     fences: List<GeoFence>,
     highlightedFenceId: String?,
+    displayedFenceId: String?,
     onFenceListClick: () -> Unit,
     onFenceClick: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -453,7 +450,7 @@ private fun TopStatusIsland(
                 Text(
                     text = smallestFence.name,
                     fontSize = 14.sp,
-                    color = if (highlightedFenceId == smallestFence.id) NeonAmber else Color.White,
+                    color = if (displayedFenceId == smallestFence.id) NeonAmber else Color.White,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable { onFenceClick(smallestFence.id) }
                 )

@@ -838,6 +838,45 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         return result
     }
 
+    /**
+     * 更新开放停留记录的累积时长
+     * 用于在应用关闭前保存当前累积的时长，以便在应用重启后恢复正确的计时状态
+     */
+    fun updateOpenStayAccumulatedDuration(fenceId: String, accumulatedDuration: Long): Int {
+        val db = writableDatabase
+        val values = ContentValues()
+        values.put(KEY_DURATION, accumulatedDuration)
+
+        val result = db.update(
+            TABLE_STAYS,
+            values,
+            "$KEY_FENCE_ID = ? AND $KEY_EXIT_TIME IS NULL",
+            arrayOf(fenceId)
+        )
+        Log.d("GeoFenceDB", "更新开放停留累积时长: fenceId=$fenceId, duration=$accumulatedDuration, updatedRows=$result")
+        return result
+    }
+
+    /**
+     * 关闭开放停留记录（设置退出时间和时长）
+     * 用于 onFenceExit 时关闭对应的开放记录，而不是插入新记录
+     */
+    fun closeOpenStayRecord(fenceId: String, exitTime: Date, durationSeconds: Long): Int {
+        val db = writableDatabase
+        val values = ContentValues()
+        values.put(KEY_EXIT_TIME, exitTime.time)
+        values.put(KEY_DURATION, durationSeconds)
+
+        val result = db.update(
+            TABLE_STAYS,
+            values,
+            "$KEY_FENCE_ID = ? AND $KEY_EXIT_TIME IS NULL",
+            arrayOf(fenceId)
+        )
+        Log.d("GeoFenceDB", "关闭开放停留记录: fenceId=$fenceId, exitTime=$exitTime, duration=$durationSeconds, updatedRows=$result")
+        return result
+    }
+
     fun getStayRecordsByFence(fenceId: String): List<FenceStayRecord> {
         val records = mutableListOf<FenceStayRecord>()
         val db = readableDatabase

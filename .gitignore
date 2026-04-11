@@ -89,3 +89,7 @@ lint-results*.html
 
 # Android Profiling
 *.hprof
+
+# Gradle distribution and wrapper files
+gradle.zip
+gradle-9.0.0/

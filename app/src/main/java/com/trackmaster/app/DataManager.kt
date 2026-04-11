@@ -570,7 +570,7 @@ class DataManager(private val context: Context) {
             val stayRecords = mutableListOf<FenceStayRecord>()
             for (i in 0 until staysArray.length()) {
                 val obj = staysArray.getJSONObject(i)
-                val id = obj.optString("id", null).takeIf { it.isNotEmpty() }
+                val id: String? = obj.optString("id", null).takeIf { it.isNotEmpty() }
                 val enterTime = try {
                     dateTimeFormat.parse(obj.getString("enterTime")) ?: Date()
                 } catch (e: Exception) {

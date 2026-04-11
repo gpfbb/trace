@@ -190,10 +190,8 @@ fun RotatingLoader(
             .size(size.dp)
             .rotate(rotation)
     ) {
-        // 创建三段弧形
+        // 创建三段弧形（仅实现一段）
         val sweepAngle1 = 90f
-        val sweepAngle2 = 90f
-        val sweepAngle3 = 180f
 
         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
             drawArc(
@@ -290,17 +288,6 @@ fun AnimatedProgressBar(
         foregroundColor.copy(alpha = 0.7f),
         foregroundColor.copy(alpha = 1f),
         foregroundColor.copy(alpha = 0.7f)
-    )
-
-    val transition = rememberInfiniteTransition(label = "progressShimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 200f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "progressShimmerTranslate"
     )
 
     Box(

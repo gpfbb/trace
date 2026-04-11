@@ -38,7 +38,6 @@ fun TrackMasterNavHost(
     modifier: Modifier = Modifier
 ) {
     val app: TrackMasterApplication = koinInject()
-    val currentTheme = ThemeManager.getCurrentTheme()
     val bgColor = backgroundColor()
 
     val startDestination by remember {

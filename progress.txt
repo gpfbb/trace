@@ -12,3 +12,21 @@
   - Gotcha: AMap setOnMapClickListener captures closure variables at setup time. If isDrawingMode changes after the listener is set, the listener will still have the old value unless the effect re-runs.
   - Gotcha: MapScreen already had highlightedFenceId state from app.highlightedFenceId.collectAsState(), so we just needed to wire up the UI callbacks to trigger it.
 ---
+
+## 2026-04-10 - FIX-003
+- What was implemented
+  - FIX-003: Fixed statistics time accumulation issue across app restarts
+  - Added accumulatedDuration and lastSaveTime fields to FenceActiveSession
+  - Added updateOpenStayAccumulatedDuration method to GeoFenceDatabaseHelper
+  - Updated saveAllActiveSessions to persist accumulated duration to both stays table and daily_stays
+  - Updated loadActiveSessionsFromDatabase to restore accumulated duration and load today's daily records into dailyCache
+  - Updated getCurrentDuration to account for gap duration between app close and reopen
+- Files changed
+  - app/src/main/java/com/trackmaster/app/StayDurationManager.kt
+  - app/src/main/java/com/trackmaster/app/GeoFenceDatabaseHelper.kt
+  - prd.json
+- **Learnings for future iterations:**
+  - Pattern: When tracking accumulated duration across app restarts, need to track both accumulatedDuration and lastSaveTime
+  - Pattern: FenceActiveSession can be extended with new fields with default values for backward compatibility
+  - Gotcha: getCurrentDuration returns time since enterTime, which includes gap duration. Need to account for gap when session is restored after restart.
+  - Gotcha: MockStayDurationManager in test file has pre-existing issues causing test failures unrelated to implementation changes

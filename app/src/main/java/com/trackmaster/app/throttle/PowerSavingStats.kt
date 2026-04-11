@@ -14,6 +14,7 @@ class PowerSavingStats {
     // 已移除未使用的详细统计追踪
     // 如需恢复详细统计，请从 git 历史恢复此前版本
 
+    @Suppress("UNUSED_PARAMETER")
     fun recordLocation(
         timestamp: Long,
         powerMode: PowerMode,
@@ -25,6 +26,7 @@ class PowerSavingStats {
         // 已禁用：详细统计未持久化且未用于UI显示
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun recordPerformanceMetrics(
         memoryUsageKB: Long,
         cpuUsagePercent: Double,

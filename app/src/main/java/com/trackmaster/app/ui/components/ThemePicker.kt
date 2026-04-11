@@ -91,12 +91,6 @@ private fun ThemeOptionCard(
     val textPrimary = getThemeTextPrimary(theme)
     val textTertiary = getThemeTextTertiary(theme)
 
-    val borderColor by animateColorAsState(
-        targetValue = if (isSelected) primary else Color.Transparent,
-        animationSpec = tween(200),
-        label = "border"
-    )
-
     Card(
         modifier = Modifier
             .fillMaxWidth()

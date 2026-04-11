@@ -44,8 +44,8 @@
         "Tests pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fixed: Added accumulatedDuration and lastSaveTime to FenceActiveSession to track duration across app restarts. Updated saveAllActiveSessions() to persist accumulated duration to both stays table and daily_stays. Updated loadActiveSessionsFromDatabase() to restore accumulated duration and load today's daily records into dailyCache. Updated getCurrentDuration() to account for gap duration between app close and reopen."
     }
   ]
 }

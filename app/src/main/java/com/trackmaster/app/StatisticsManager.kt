@@ -84,8 +84,9 @@ class StatisticsManager(private val context: Context) {
                 calendar.time = timeRange.startTime
                 val year = calendar.get(Calendar.YEAR)
                 val month = calendar.get(Calendar.MONTH)
-                val monthlyRecords = stayDurationManager?.getMonthlyRecords(year, month) ?: emptyMap()
-                
+                val parentMap = app?.fenceTreeManager?.getParentMap() ?: emptyMap()
+                val monthlyRecords = stayDurationManager?.getMonthlyRecordsWithAggregation(year, month, parentMap) ?: emptyMap()
+
                 for ((fenceId, duration) in monthlyRecords) {
                     val fence = fenceMap[fenceId]
                     val builder = statsMap.getOrPut(fenceId) {
@@ -103,8 +104,9 @@ class StatisticsManager(private val context: Context) {
                 val calendar = Calendar.getInstance()
                 calendar.time = timeRange.startTime
                 val year = calendar.get(Calendar.YEAR)
-                val yearlyRecords = stayDurationManager?.getYearlyRecords(year) ?: emptyMap()
-                
+                val parentMap = app?.fenceTreeManager?.getParentMap() ?: emptyMap()
+                val yearlyRecords = stayDurationManager?.getYearlyRecordsWithAggregation(year, parentMap) ?: emptyMap()
+
                 for ((fenceId, duration) in yearlyRecords) {
                     val fence = fenceMap[fenceId]
                     val builder = statsMap.getOrPut(fenceId) {
