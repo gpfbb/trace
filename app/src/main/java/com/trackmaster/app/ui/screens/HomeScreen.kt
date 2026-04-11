@@ -1,6 +1,7 @@
 package com.trackmaster.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -170,16 +171,31 @@ fun HomeScreen(
         }
 
         item {
-            Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp)) {
-                GlassButton(onClick = onNavigateToMap, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.Map, contentDescription = null, tint = Color.White)
-                    Spacer(Modifier.width(8.dp))
-                    Text("查看地图", color = Color.White)
-                }
-                GlassButton(onClick = onNavigateToStatistics, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.BarChart, contentDescription = null, tint = Color.White)
-                    Spacer(Modifier.width(8.dp))
-                    Text("查看统计", color = Color.White)
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToStatistics() }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.BarChart,
+                        contentDescription = null,
+                        tint = primaryColor(),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "查看统计",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
                 }
             }
         }

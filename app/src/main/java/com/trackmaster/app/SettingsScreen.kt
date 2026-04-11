@@ -236,6 +236,118 @@ fun SettingsPage(
                 HorizontalDivider(color = Color(0x30FFFFFF))
             }
 
+            // 重新计算父子关系
+            var showRecalculateDialog by remember { mutableStateOf(false) }
+            var recalculateMessage by remember { mutableStateOf<String?>(null) }
+
+            SettingsMenuCard(
+                icon = Icons.Default.AccountTree,
+                title = "重新计算父子关系",
+                description = "根据几何位置自动判断围栏包含关系",
+                tint = NeonBlue,
+                onClick = { showRecalculateDialog = true }
+            )
+
+            if (showRecalculateDialog) {
+                AlertDialog(
+                    onDismissRequest = { showRecalculateDialog = false },
+                    title = { Text("重新计算父子关系") },
+                    text = {
+                        Column {
+                            Text("这将根据几何位置自动判断围栏的父子包含关系，确定继续？")
+                            if (recalculateMessage != null) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    recalculateMessage!!,
+                                    color = if (recalculateMessage!!.startsWith("重新计算完成")) Success else Danger,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                try {
+                                    app.fenceTreeManager.clearAll()
+                                    val fences = app.geoFences
+                                    val coreFences = fences.mapNotNull { fence ->
+                                        val type = try {
+                                            com.trackmaster.app.core.GeoFenceType.valueOf(fence.type.name)
+                                        } catch (_: Exception) { null }
+                                        if (type != null) {
+                                            // 计算中心点：圆形用center，多边形用重心
+                                            val centerPoint: com.trackmaster.app.core.GeoPoint? = when (type) {
+                                                com.trackmaster.app.core.GeoFenceType.CIRCLE -> fence.center?.let {
+                                                    com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
+                                                }
+                                                com.trackmaster.app.core.GeoFenceType.POLYGON -> {
+                                                    // 计算多边形重心
+                                                    val pts = fence.points
+                                                    if (pts != null && pts.size >= 3) {
+                                                        var latSum = 0.0
+                                                        var lonSum = 0.0
+                                                        for (p in pts) {
+                                                            latSum += p.latitude
+                                                            lonSum += p.longitude
+                                                        }
+                                                        com.trackmaster.app.core.GeoPoint(
+                                                            latSum / pts.size,
+                                                            lonSum / pts.size
+                                                        )
+                                                    } else null
+                                                }
+                                            }
+                                            com.trackmaster.app.core.Geofence(
+                                                id = fence.id,
+                                                name = fence.name,
+                                                type = type,
+                                                polygon = fence.points?.map {
+                                                    com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
+                                                } ?: emptyList(),
+                                                center = centerPoint,
+                                                radius = fence.radius?.toDouble()
+                                            )
+                                        } else null
+                                    }
+
+                                    var relationshipCount = 0
+                                    android.util.Log.d("SettingsPage", "开始计算父子关系，coreFences数量: ${coreFences.size}")
+                                    for (fenceA in coreFences) {
+                                        for (fenceB in coreFences) {
+                                            if (fenceA.id == fenceB.id) continue
+                                            val bInA = GeoMath.isFenceContainedByFence(fenceB, fenceA)
+                                            val aInB = GeoMath.isFenceContainedByFence(fenceA, fenceB)
+                                            android.util.Log.d("SettingsPage", "检查 ${fenceB.name} in ${fenceA.name}: $bInA, 反向: $aInB")
+                                            if (bInA) {
+                                                if (!aInB) {
+                                                    app.fenceTreeManager.setParent(fenceB.id, fenceA.id)
+                                                    relationshipCount++
+                                                    android.util.Log.d("SettingsPage", "设置父子关系: ${fenceB.name} -> ${fenceA.name}")
+                                                }
+                                            }
+                                        }
+                                    }
+                                    android.util.Log.d("SettingsPage", "重新计算完成，建立了 $relationshipCount 对父子关系")
+                                    recalculateMessage = "重新计算完成，建立了 $relationshipCount 对父子关系"
+                                } catch (e: Exception) {
+                                    recalculateMessage = "重新计算失败: ${e.message}"
+                                }
+                            }
+                        ) {
+                            Text("确定", color = Success)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showRecalculateDialog = false }) {
+                            Text("取消", color = Color.Gray)
+                        }
+                    }
+                )
+            }
+
+            HorizontalDivider(color = Color(0x30FFFFFF))
+
             // 省电效果统计
             Card(
                 modifier = Modifier

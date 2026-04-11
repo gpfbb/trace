@@ -14,6 +14,21 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +37,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.amap.api.location.AMapLocation
 import com.amap.api.maps.model.LatLng
 import com.trackmaster.app.data.GeoFence
@@ -321,6 +338,7 @@ fun MapScreen(app: TrackMasterApplication) {
     if (showFenceList) {
         FenceListDialog(
             fences = localFences,
+            fenceTreeManager = app.fenceTreeManager,
             currentMatchedIds = localMatchedIds,
             highlightedFenceId = highlightedFenceId,
             onDismiss = {
@@ -715,6 +733,7 @@ private fun CreateFenceDialog(
 @Composable
 private fun FenceListDialog(
     fences: List<GeoFence>,
+    fenceTreeManager: com.trackmaster.app.core.FenceTreeManager,
     currentMatchedIds: Set<String>,
     highlightedFenceId: String?,
     onDismiss: () -> Unit,
@@ -722,63 +741,244 @@ private fun FenceListDialog(
     onEditClick: (GeoFence) -> Unit,
     onDeleteClick: (GeoFence) -> Unit
 ) {
-    AlertDialog(
+    var expandedFenceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    // 获取父级映射 - 使用 version 作为 key 确保重新计算后能刷新
+    val parentMap by remember(fenceTreeManager.version) {
+        mutableStateOf(fenceTreeManager.getParentMap())
+    }
+
+    // 计算围栏深度
+    fun calculateDepth(fence: GeoFence): Int {
+        var depth = 0
+        var currentId: String? = parentMap[fence.id]
+        while (currentId != null) {
+            depth++
+            currentId = parentMap[currentId]
+        }
+        return depth
+    }
+
+    // 检查是否有子围栏
+    fun hasChildren(fence: GeoFence): Boolean {
+        return parentMap.values.contains(fence.id)
+    }
+
+    // 构建可见围栏的扁平列表（用于 LazyColumn）
+    fun buildVisibleFenceList(
+        allFences: List<GeoFence>,
+        pMap: Map<String, String>,
+        expanded: Set<String>
+    ): List<Pair<GeoFence, Int>> {
+        if (allFences.isEmpty()) return emptyList()
+
+        // 构建 parentId -> children 映射
+        val childrenMap = mutableMapOf<String?, MutableList<String>>()
+        for (fence in allFences) {
+            val parentId = pMap[fence.id]
+            childrenMap.getOrPut(parentId) { mutableListOf() }.add(fence.id)
+        }
+
+        val result = mutableListOf<Pair<GeoFence, Int>>()
+
+        // 递归添加可见围栏
+        fun addVisible(parentId: String?, depth: Int) {
+            val children = childrenMap[parentId] ?: return
+            for (childId in children) {
+                val child = allFences.find { it.id == childId }
+                if (child != null) {
+                    result.add(child to depth)
+                    // 如果这个围栏被展开了，递归添加子围栏
+                    if (childId in expanded) {
+                        addVisible(childId, depth + 1)
+                    }
+                }
+            }
+        }
+
+        // 从顶级围栏开始（parentId 为 null）
+        addVisible(null, 0)
+        return result
+    }
+
+    // 根据 expandedFenceIds 过滤可见围栏，构建扁平化列表
+    val visibleFences by remember(expandedFenceIds, fences, parentMap) {
+        mutableStateOf(buildVisibleFenceList(fences, parentMap, expandedFenceIds))
+    }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("围栏列表 (${fences.size})") },
-        text = {
-            if (fences.isEmpty()) {
-                Text("暂无围栏", color = Color.Gray)
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(fences.size) { i ->
-                        val fence = fences[i]
-                        val matched = fence.id in currentMatchedIds
-                        val isHighlighted = fence.id == highlightedFenceId
-                        Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    when {
-                                        isHighlighted -> NeonAmber.copy(alpha = 0.2f)
-                                        matched -> Success.copy(alpha = 0.1f)
-                                        else -> Color.Transparent
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .fillMaxHeight(0.7f),
+            shape = RoundedCornerShape(28.dp),
+            color = glassPanel()
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // 标题栏
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Map,
+                            contentDescription = null,
+                            tint = NeonBlue,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = "围栏列表 (${visibleFences.size})",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "关闭",
+                            tint = Color.Gray
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
+
+                if (visibleFences.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Filled.LocationOff,
+                                contentDescription = null,
+                                tint = Color.Gray,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text("暂无围栏", color = Color.Gray, fontSize = 16.sp)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        items(visibleFences.size) { i ->
+                            val (fence, depth) = visibleFences[i]
+                            val matched = fence.id in currentMatchedIds
+                            val isHighlighted = fence.id == highlightedFenceId
+                            val indentPadding = (depth * 16).dp
+                            val fenceHasChildren = hasChildren(fence)
+                            val isExpanded = fence.id in expandedFenceIds
+
+                            Column {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            when {
+                                                isHighlighted -> NeonAmber.copy(alpha = 0.2f)
+                                                matched -> Success.copy(alpha = 0.1f)
+                                                else -> Color.Transparent
+                                            }
+                                        )
+                                        .clickable { onHighlightClick(fence) }
+                                        .padding(start = indentPadding + 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (fenceHasChildren) {
+                                        IconButton(
+                                            onClick = {
+                                                expandedFenceIds = if (isExpanded) {
+                                                    expandedFenceIds - fence.id
+                                                } else {
+                                                    expandedFenceIds + fence.id
+                                                }
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                                contentDescription = if (isExpanded) "收起" else "展开",
+                                                tint = NeonBlue,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Spacer(Modifier.width(24.dp))
                                     }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(AndroidColor.parseColor(fence.color)))
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            fence.name,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (isHighlighted) NeonAmber else Color.White
+                                        )
+                                        Text(
+                                            when (fence.type) {
+                                                GeoFenceType.CIRCLE -> "圆形 ${fence.radius?.toInt() ?: 0}m"
+                                                GeoFenceType.POLYGON -> "多边形 ${fence.points?.size ?: 0}顶点"
+                                            },
+                                            fontSize = 12.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                    if (matched) {
+                                        Icon(
+                                            imageVector = Icons.Filled.CheckCircle,
+                                            contentDescription = "已命中",
+                                            tint = Success,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    if (isHighlighted) {
+                                        Icon(
+                                            imageVector = Icons.Filled.LocationOn,
+                                            contentDescription = "已高亮",
+                                            tint = NeonAmber,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    IconButton(onClick = { onEditClick(fence) }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = primaryColor(), modifier = Modifier.size(18.dp))
+                                    }
+                                    IconButton(onClick = { onDeleteClick(fence) }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "删除", tint = Danger, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+
+                                HorizontalDivider(
+                                    color = Color.Gray.copy(alpha = 0.15f),
+                                    modifier = Modifier.padding(start = indentPadding + 48.dp, end = 12.dp)
                                 )
-                                .clickable { onHighlightClick(fence) }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(Modifier.size(24.dp).clip(CircleShape).background(Color(AndroidColor.parseColor(fence.color))))
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    fence.name,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (isHighlighted) NeonAmber else Color.White
-                                )
-                                Text(
-                                    when (fence.type) {
-                                        GeoFenceType.CIRCLE -> "圆形 ${fence.radius?.toInt() ?: 0}m"
-                                        GeoFenceType.POLYGON -> "多边形 ${fence.points?.size ?: 0}顶点"
-                                    },
-                                    fontSize = 12.sp,
-                                    color = Color.Gray
-                                )
-                            }
-                            if (matched) Icon(Icons.Filled.CheckCircle, contentDescription = "已命中", tint = Success)
-                            if (isHighlighted) Icon(Icons.Filled.LocationOn, contentDescription = "已高亮", tint = NeonAmber)
-                            IconButton(onClick = { onEditClick(fence) }) {
-                                Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = primaryColor())
-                            }
-                            IconButton(onClick = { onDeleteClick(fence) }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "删除", tint = Danger)
                             }
                         }
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
-    )
+        }
+    }
 }
 
 @Composable

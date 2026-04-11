@@ -1,19 +1,21 @@
 package com.trackmaster.app
 
+import android.graphics.Color as AndroidColor
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
@@ -58,24 +60,41 @@ fun StatisticsScreen(
 
     var selectedTimeDimension by remember { mutableStateOf(TimeDimension.DAY) }
     var statistics by remember { mutableStateOf<List<FenceStatistics>>(emptyList()) }
+    var statisticsTree by remember { mutableStateOf<List<FenceStatisticTree>>(emptyList()) }
+    var expandedFenceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var isLoading by remember { mutableStateOf(true) }
-    
+
     var selectedYear by remember { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
     var selectedMonth by remember { mutableStateOf(Calendar.getInstance().get(Calendar.MONTH)) }
     var selectedDay by remember { mutableStateOf(Calendar.getInstance().get(Calendar.DAY_OF_MONTH)) }
-    
+
     var showDatePicker by remember { mutableStateOf(false) }
     var showMonthPicker by remember { mutableStateOf(false) }
     var showYearPicker by remember { mutableStateOf(false) }
-    
-    val isToday = remember(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
-        val today = Calendar.getInstance()
-        selectedTimeDimension == TimeDimension.DAY &&
-            selectedYear == today.get(Calendar.YEAR) &&
-            selectedMonth == today.get(Calendar.MONTH) &&
-            selectedDay == today.get(Calendar.DAY_OF_MONTH)
+
+    // 使用 derivedStateOf 确保 isToday 每次都基于当前时间重新计算
+    val isToday by remember {
+        derivedStateOf {
+            val today = Calendar.getInstance()
+            selectedTimeDimension == TimeDimension.DAY &&
+                selectedYear == today.get(Calendar.YEAR) &&
+                selectedMonth == today.get(Calendar.MONTH) &&
+                selectedDay == today.get(Calendar.DAY_OF_MONTH)
+        }
     }
-    
+
+    // 递归展开所有节点ID
+    fun flattenTreeIds(node: FenceStatisticTree): List<String> {
+        return listOf(node.fenceId) + node.children.flatMap { flattenTreeIds(it) }
+    }
+
+    // 树加载后默认展开所有节点
+    LaunchedEffect(statisticsTree) {
+        if (statisticsTree.isNotEmpty() && expandedFenceIds.isEmpty()) {
+            expandedFenceIds = statisticsTree.flatMap { flattenTreeIds(it) }.toSet()
+        }
+    }
+
     val timeRange = remember(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
         when (selectedTimeDimension) {
             TimeDimension.DAY -> statisticsManager.getDateRange(selectedYear, selectedMonth, selectedDay)
@@ -83,22 +102,56 @@ fun StatisticsScreen(
             TimeDimension.YEAR -> statisticsManager.getYearRange(selectedYear)
         }
     }
-    
+
     LaunchedEffect(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
         isLoading = true
         statistics = statisticsManager.getStatistics(selectedTimeDimension, timeRange)
+        // 加载树形数据
+        statisticsTree = statisticsManager.buildFenceStatisticTree(selectedTimeDimension, timeRange)
         isLoading = false
     }
-    
-    LaunchedEffect(isToday, selectedTimeDimension, timeRange) {
-        if (isToday) {
-            while (currentCoroutineContext().isActive) {
-                delay(1000)
-                val newStatistics = statisticsManager.getStatistics(selectedTimeDimension, timeRange)
-                if (newStatistics != statistics) {
-                    statistics = newStatistics
-                }
+
+    // 实时更新：每秒刷新一次统计数据
+    // 每日视图：实时更新当前这一天的数据（跨午夜的活跃会话也计算在内）
+    // 每月/每年视图：每10秒自动刷新一次
+    LaunchedEffect(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
+        var lastUpdateTime = 0L
+        while (currentCoroutineContext().isActive) {
+            val now = System.currentTimeMillis()
+            val today = Calendar.getInstance()
+            val isTodayNow = selectedTimeDimension == TimeDimension.DAY &&
+                    selectedYear == today.get(Calendar.YEAR) &&
+                    selectedMonth == today.get(Calendar.MONTH) &&
+                    selectedDay == today.get(Calendar.DAY_OF_MONTH)
+
+            // 每日视图且是今天：每秒更新
+            // 每月/每年视图：每10秒更新一次
+            val shouldUpdate = when (selectedTimeDimension) {
+                TimeDimension.DAY -> isTodayNow
+                TimeDimension.MONTH, TimeDimension.YEAR -> now - lastUpdateTime >= 10_000
             }
+
+            if (shouldUpdate) {
+                val currentTimeRange = when (selectedTimeDimension) {
+                    TimeDimension.DAY -> statisticsManager.getDateRange(
+                        today.get(Calendar.YEAR),
+                        today.get(Calendar.MONTH),
+                        today.get(Calendar.DAY_OF_MONTH)
+                    )
+                    TimeDimension.MONTH -> statisticsManager.getMonthRange(selectedYear, selectedMonth)
+                    TimeDimension.YEAR -> statisticsManager.getYearRange(selectedYear)
+                }
+                val newStatistics = statisticsManager.getStatistics(selectedTimeDimension, currentTimeRange)
+                if (newStatistics.map { it.fenceId to it.totalDurationSeconds } !=
+                    statistics.map { it.fenceId to it.totalDurationSeconds }) {
+                    android.util.Log.d("StatisticsScreen", "实时更新统计数据: ${newStatistics.size} 项")
+                    statistics = newStatistics
+                    statisticsTree = statisticsManager.buildFenceStatisticTree(selectedTimeDimension, currentTimeRange)
+                }
+                lastUpdateTime = now
+            }
+
+            delay(1000)
         }
     }
     
@@ -208,13 +261,16 @@ fun StatisticsScreen(
                     Column(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        DurationProgressSection(
-                            statistics = statistics,
-                            statisticsManager = statisticsManager
-                        )
-
-                        LeaderboardSection(
-                            statistics = statistics,
+                        FenceTreeSection(
+                            tree = statisticsTree,
+                            expandedIds = expandedFenceIds,
+                            onToggleExpand = { fenceId ->
+                                expandedFenceIds = if (fenceId in expandedFenceIds) {
+                                    expandedFenceIds - fenceId
+                                } else {
+                                    expandedFenceIds + fenceId
+                                }
+                            },
                             statisticsManager = statisticsManager
                         )
                     }
@@ -554,6 +610,206 @@ fun TimeDimensionSelector(
                             FontWeight.Normal
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun FenceTreeSection(
+    tree: List<FenceStatisticTree>,
+    expandedIds: Set<String>,
+    onToggleExpand: (String) -> Unit,
+    statisticsManager: StatisticsManager
+) {
+    val totalDuration = tree.sumOf { it.totalDurationSeconds }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0x4D000000)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "围栏停留时长",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = NeonCoral
+                )
+                Text(
+                    "总时长: ${statisticsManager.formatDuration(totalDuration)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFFBDBDBD)
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                tree.forEachIndexed { index, node ->
+                    FenceTreeItem(
+                        node = node,
+                        index = index,
+                        expandedIds = expandedIds,
+                        onToggleExpand = onToggleExpand,
+                        statisticsManager = statisticsManager,
+                        totalDuration = totalDuration
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FenceTreeItem(
+    node: FenceStatisticTree,
+    index: Int,
+    expandedIds: Set<String>,
+    onToggleExpand: (String) -> Unit,
+    statisticsManager: StatisticsManager,
+    totalDuration: Long
+) {
+    val isExpanded = node.fenceId in expandedIds
+    val indentPadding = (node.depth * 16).dp
+    val percentage = if (totalDuration > 0) {
+        node.totalDurationSeconds * 100f / totalDuration
+    } else 0f
+
+    Column {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = indentPadding),
+            colors = CardDefaults.cardColors(
+                containerColor = if (node.depth == 0) Color(0x332A221C) else Color(0x1A2A221C)
+            ),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(0.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (node.children.isNotEmpty()) {
+                            onToggleExpand(node.fenceId)
+                        }
+                    }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 展开/收起图标
+                if (node.children.isNotEmpty()) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (isExpanded) "收起" else "展开",
+                        tint = NeonBlue,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Spacer(Modifier.width(20.dp))
+                }
+
+                // 颜色指示器
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(
+                            try {
+                                Color(AndroidColor.parseColor(node.color))
+                            } catch (e: Exception) {
+                                chartColors[index % chartColors.size]
+                            }
+                        )
+                )
+
+                // 名称和时长
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = node.fenceName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (node.depth == 0) FontWeight.Bold else FontWeight.Medium,
+                            color = Color(0xFFE0E0E0),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (node.children.isNotEmpty()) {
+                            Text(
+                                text = "(${node.children.size})",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = NeonBlue
+                            )
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${"%.1f".format(percentage)}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NeonCoral
+                        )
+                        Text(
+                            text = statisticsManager.formatDuration(node.totalDurationSeconds),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFBDBDBD)
+                        )
+                    }
+                }
+
+                // 进度条
+                Box(
+                    modifier = Modifier
+                        .width(50.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0x332A221C))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(percentage / 100f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(
+                                try {
+                                    Color(AndroidColor.parseColor(node.color))
+                                } catch (e: Exception) {
+                                    chartColors[index % chartColors.size]
+                                }
+                            )
+                    )
+                }
+            }
+        }
+
+        // 子节点
+        if (isExpanded && node.children.isNotEmpty()) {
+            node.children.forEach { child ->
+                FenceTreeItem(
+                    node = child,
+                    index = 0,
+                    expandedIds = expandedIds,
+                    onToggleExpand = onToggleExpand,
+                    statisticsManager = statisticsManager,
+                    totalDuration = node.totalDurationSeconds
+                )
             }
         }
     }

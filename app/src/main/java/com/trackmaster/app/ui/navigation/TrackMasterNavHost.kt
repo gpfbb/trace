@@ -48,6 +48,7 @@ fun TrackMasterNavHost(
     }
 
     var currentRoute by remember { mutableStateOf<String?>(null) }
+    var showStatisticsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(navController) {
         navController.currentBackStackEntryFlow.collect { entry ->
@@ -111,7 +112,7 @@ fun TrackMasterNavHost(
             ) {
                 HomeScreen(
                     onNavigateToMap = { navController.navigate(Screen.Map.route) },
-                    onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) }
+                    onNavigateToStatistics = { showStatisticsDialog = true }
                 )
             }
 
@@ -257,6 +258,14 @@ fun TrackMasterNavHost(
                     .align(androidx.compose.ui.Alignment.BottomCenter)
                     .padding(bottom = 20.dp)
                     .padding(horizontal = 32.dp)
+            )
+        }
+
+        // 统计对话框 - 作为浮动窗口显示
+        if (showStatisticsDialog) {
+            StatisticsScreen(
+                onDismiss = { showStatisticsDialog = false },
+                statisticsManager = app.statisticsManager
             )
         }
     }
