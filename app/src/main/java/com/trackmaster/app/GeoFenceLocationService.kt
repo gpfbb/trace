@@ -1,5 +1,6 @@
 package com.trackmaster.app
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -10,6 +11,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.amap.api.location.AMapLocation
@@ -42,6 +44,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         private const val STOP_THRESHOLD = 3
         // 停止定位后，每 N 分钟检查一次是否需要恢复
         private const val CHECK_INTERVAL_WHEN_STOPPED = 5 // 5分钟
+
+        // AlarmManager 相关
+        const val ACTION_WAKEUP = "com.trackmaster.app.ACTION_LOCATION_WAKEUP"
+        private const val ALARM_REQUEST_CODE = 1001
+        // 唤醒间隔：5分钟（与 CHECK_INTERVAL_WHEN_STOPPED 一致）
+        private const val WAKEUP_INTERVAL_MS = CHECK_INTERVAL_WHEN_STOPPED * 60 * 1000L
     }
 
     private val binder = LocalBinder()
@@ -306,14 +314,18 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 Log.d(TAG, "省电: 临时检查需要处理，恢复定位")
                 isLocationClientStopped = false
                 consecutiveNotProcessCount = 0
+                // 取消 Alarm 唤醒（恢复正常后不再需要）
+                cancelWakeupAlarm()
                 resumeLocationWithNormalMode()
             } else {
                 // 不需要处理，继续停止
-                Log.d(TAG, "省电: 临时检查不需要处理，继续停止")
+                Log.d(TAG, "省电: 临时检查不需要处理，继续停止，调度 Alarm")
                 isLocationClientStopped = true
                 consecutiveNotProcessCount = 0
                 lastResumeCheckTime = now
                 stopLocation()
+                // 调度 AlarmManager 定期唤醒
+                scheduleNextWakeup()
             }
             return
         }
@@ -331,6 +343,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             if (shouldProcess) {
                 // 需要处理，重置计数器
                 consecutiveNotProcessCount = 0
+                // 取消 Alarm 唤醒（恢复正常后不再需要）
+                cancelWakeupAlarm()
                 Log.d(TAG, "省电: 需要处理，重置计数")
             } else {
                 // 不需要处理，增加计数器
@@ -339,14 +353,94 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
 
                 if (consecutiveNotProcessCount >= STOP_THRESHOLD) {
                     // 连续 N 次不需要处理，停止定位
-                    Log.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不需要处理，停止定位")
+                    Log.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不需要处理，停止定位，调度 Alarm")
                     isLocationClientStopped = true
                     lastResumeCheckTime = now
                     stopLocation()
+                    // 调度 AlarmManager 定期唤醒
+                    scheduleNextWakeup()
                 }
             }
         }
     }
+
+    /**
+     * 调度下一次 AlarmManager 唤醒
+     * 用于在定位服务停止后，定期唤醒检查是否需要恢复
+     */
+    fun scheduleNextWakeup() {
+        try {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(this, WakeupReceiver::class.java).apply {
+                action = ACTION_WAKEUP
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                this,
+                ALARM_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            // 使用 ELAPSED_REALTIME_WAKEUP，系统休眠时也能唤醒
+            val triggerTime = SystemClock.elapsedRealtime() + WAKEUP_INTERVAL_MS
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // 使用 setExactAndAllowWhileIdle 确保在 Doze 模式下也能唤醒
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setExact(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            }
+            Log.d(TAG, "已调度 AlarmManager 唤醒，${WAKEUP_INTERVAL_MS / 1000 / 60}分钟后")
+        } catch (e: Exception) {
+            Log.e(TAG, "调度 Alarm 失败", e)
+        }
+    }
+
+    /**
+     * 取消待执行的 AlarmManager 唤醒
+     */
+    fun cancelWakeupAlarm() {
+        try {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(this, WakeupReceiver::class.java).apply {
+                action = ACTION_WAKEUP
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                this,
+                ALARM_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+            Log.d(TAG, "已取消 AlarmManager 唤醒")
+        } catch (e: Exception) {
+            Log.e(TAG, "取消 Alarm 失败", e)
+        }
+    }
+
+    /**
+     * 供 WakeupService 调用：执行一次唤醒定位检查
+     */
+    fun performWakeupLocation() {
+        Log.d(TAG, "执行唤醒定位检查")
+        isTemporaryCheck = true
+        lastResumeCheckTime = System.currentTimeMillis()
+        temporaryResumeForCheck()
+    }
+
+    /**
+     * 返回定位服务是否正在运行（定位客户端是否活跃）
+     */
+    fun isRunning(): Boolean = !isLocationClientStopped
 
     private fun resumeLocation() {
         try {

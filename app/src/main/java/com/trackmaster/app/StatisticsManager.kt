@@ -97,13 +97,17 @@ class StatisticsManager(private val context: Context) {
             val sessionEnded = false // 活跃会话没有结束时间
             val overlapsWithRange = session.enterTime <= timeRange.endTime && !sessionEnded
             if (overlapsWithRange) {
-                // 计算实时停留时长（从进入到现在）
-                val currentDuration = (now.time - session.enterTime.time) / 1000 + session.accumulatedDuration
-                android.util.Log.d("StatisticsManager", "Active session $fenceId (${session.fenceName}): duration=${currentDuration}s, enterTime=${session.enterTime}")
+                // 【修复】跨天会话只计算在时间范围内的部分，避免单日超过24小时
+                // 计算该会话在当前日期范围内的有效时长
+                val effectiveStartTime = maxOf(session.enterTime, timeRange.startTime)
+                val effectiveEndTime = minOf(now, timeRange.endTime)
+                val effectiveDurationSeconds = maxOf(0L, (effectiveEndTime.time - effectiveStartTime.time) / 1000)
+
+                android.util.Log.d("StatisticsManager", "Active session $fenceId (${session.fenceName}): duration=${effectiveDurationSeconds}s, enterTime=${session.enterTime}, effectiveRange=${effectiveStartTime}-${effectiveEndTime}")
                 val builder = statsMap.getOrPut(fenceId) {
                     FenceStatisticsBuilder(fenceId = fenceId, fenceName = session.fenceName)
                 }
-                builder.addDuration(currentDuration)
+                builder.addDuration(effectiveDurationSeconds)
                 // 如果这个围栏之前没有被记录进入（当前活跃），也算一次进入
                 if (!filteredRecords.any { it.fenceId == fenceId }) {
                     builder.incrementEnterCount()
