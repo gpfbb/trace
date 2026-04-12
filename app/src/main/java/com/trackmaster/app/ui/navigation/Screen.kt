@@ -55,19 +55,9 @@ sealed class Screen(val route: String) {
     object CategoryManager : Screen("category_manager")
 
     /**
-     * 数据管理页
+     * 数据导入导出页（统一入口：围栏 + 统计 + 日志清理）
      */
-    object DataManagement : Screen("data_management")
-
-    /**
-     * 围栏导入导出页
-     */
-    object FenceExportImport : Screen("fence_export_import")
-
-    /**
-     * 停留记录导入导出页
-     */
-    object StatsExportImport : Screen("stats_export_import")
+    object DataImportExport : Screen("data_import_export")
 }
 
 /**

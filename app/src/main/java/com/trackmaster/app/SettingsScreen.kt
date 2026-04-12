@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.trackmaster.app.core.PowerMode
 import com.trackmaster.app.core.GeoMath
-import com.trackmaster.app.throttle.PowerSavingStats
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -37,9 +36,7 @@ import com.trackmaster.app.ui.theme.*
 @Composable
 fun SettingsPage(
     @Suppress("UNUSED_PARAMETER") onNavigateBack: (() -> Unit)? = null,
-    onOpenDataManagement: (() -> Unit)? = null,
-    onOpenFenceExportImport: (() -> Unit)? = null,
-    onOpenStatsExportImport: (() -> Unit)? = null,
+    onOpenDataImportExport: (() -> Unit)? = null,
     hideNavBar: Boolean = false
 ) {
     val context = LocalContext.current
@@ -57,34 +54,17 @@ fun SettingsPage(
     var boundaryBuffer by remember { mutableStateOf(prefs.boundaryBuffer) }
     var driftThreshold by remember { mutableStateOf(prefs.driftThreshold) }
 
-    // 省电统计状态
-    var showPowerSavingStats by remember { mutableStateOf(false) }
-
-    // 实时更新省电统计
-    var totalLocations by remember { mutableStateOf(prefs.totalLocations) }
-    var processedLocations by remember { mutableStateOf(prefs.processedLocations) }
-
-    // 缓存统计状态
-    var cacheStats by remember { mutableStateOf<GeoMath.CacheStats?>(null) }
-
-    // 省电算法统计
-    var powerSavingStats: PowerSavingStats? by remember { mutableStateOf(null) }
 
     LaunchedEffect(Unit) {
         permissionStatus = permissionManager.checkPermissions()
     }
 
-    // 定期刷新省电统计 - 使用 lifecycle-aware 效果
+    // 定期刷新权限状态
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                totalLocations = prefs.totalLocations
-                processedLocations = prefs.processedLocations
-                cacheStats = GeoMath.getCacheStats()
-                powerSavingStats = try {
-                    app.engine.getScheduler().stats
-                } catch (e: Exception) { null }
+                permissionStatus = permissionManager.checkPermissions()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -203,35 +183,13 @@ fun SettingsPage(
 
             HorizontalDivider(color = Color(0x30FFFFFF))
 
-            if (onOpenDataManagement != null) {
+            if (onOpenDataImportExport != null) {
                 SettingsMenuCard(
                     icon = Icons.Default.Folder,
-                    title = "数据与日志管理",
-                    description = "导出、导入或删除历史数据",
+                    title = "数据导入导出",
+                    description = "围栏与统计数据的导入导出",
                     tint = primaryColor(),
-                    onClick = onOpenDataManagement
-                )
-                HorizontalDivider(color = Color(0x30FFFFFF))
-            }
-
-            if (onOpenFenceExportImport != null) {
-                SettingsMenuCard(
-                    icon = Icons.Default.Share,
-                    title = "围栏导入导出",
-                    description = "导出或导入围栏数据（支持分享）",
-                    tint = NeonAmber,
-                    onClick = onOpenFenceExportImport
-                )
-                HorizontalDivider(color = Color(0x30FFFFFF))
-            }
-
-            if (onOpenStatsExportImport != null) {
-                SettingsMenuCard(
-                    icon = Icons.Default.Timeline,
-                    title = "停留记录导入导出",
-                    description = "导出或导入停留统计数据（支持分享）",
-                    tint = NeonBlue,
-                    onClick = onOpenStatsExportImport
+                    onClick = onOpenDataImportExport
                 )
                 HorizontalDivider(color = Color(0x30FFFFFF))
             }
@@ -344,73 +302,6 @@ fun SettingsPage(
                         }
                     }
                 )
-            }
-
-            HorizontalDivider(color = Color(0x30FFFFFF))
-
-            // 省电效果统计
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showPowerSavingStats = !showPowerSavingStats },
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0x4D000000)
-                ),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(0.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.BatterySaver,
-                            contentDescription = "省电统计",
-                            tint = Success,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "省电效果统计",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = Color(0xFFE0E0E0)
-                            )
-                            Text(
-                                "查看定位请求次数和省电效果",
-                                fontSize = 13.sp,
-                                color = Color(0xFFBDBDBD)
-                            )
-                        }
-                        Icon(
-                            imageVector = if (showPowerSavingStats) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (showPowerSavingStats) "收起" else "展开",
-                            tint = Color(0xFFBDBDBD),
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-
-                    if (showPowerSavingStats) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        PowerSavingStatsSection(
-                            totalLocations = totalLocations,
-                            processedLocations = processedLocations,
-                            cacheStats = cacheStats,
-                            prefs = prefs,
-                            onReset = {
-                                prefs.resetStats()
-                                totalLocations = 0
-                                processedLocations = 0
-                            },
-                            onClearCache = {
-                                GeoMath.clearCirclePolygonCache()
-                                cacheStats = GeoMath.getCacheStats()
-                            },
-                            stats = powerSavingStats
-                        )
-                    }
-                }
             }
 
             HorizontalDivider(color = Color(0x30FFFFFF))
@@ -562,9 +453,7 @@ private fun SettingsMenuCard(
 @Composable
 fun SettingsScreen(
     onDismiss: () -> Unit,
-    onOpenDataManagement: (() -> Unit)? = null,
-    onOpenFenceExportImport: (() -> Unit)? = null,
-    onOpenStatsExportImport: (() -> Unit)? = null
+    onOpenDataImportExport: (() -> Unit)? = null
 ) {
     GlassDialog(
         onDismissRequest = onDismiss,
@@ -583,9 +472,7 @@ fun SettingsScreen(
         text = {
             SettingsPage(
                 onNavigateBack = onDismiss,
-                onOpenDataManagement = onOpenDataManagement,
-                onOpenFenceExportImport = onOpenFenceExportImport,
-                onOpenStatsExportImport = onOpenStatsExportImport,
+                onOpenDataImportExport = onOpenDataImportExport,
                 hideNavBar = true
             )
         },
@@ -846,228 +733,6 @@ fun InfoSection() {
             fontSize = 13.sp,
             color = Color(0xFFBDBDBD),
             lineHeight = 18.sp
-        )
-    }
-}
-
-@Suppress("UNUSED_PARAMETER")
-@Composable
-fun PowerSavingStatsSection(
-    totalLocations: Int,
-    processedLocations: Int,
-    cacheStats: GeoMath.CacheStats?,
-    prefs: AppPreferences,
-    onReset: () -> Unit,
-    onClearCache: () -> Unit,
-    stats: PowerSavingStats? = null
-) {
-    val savedPercentage = prefs.getSavedPercentage()
-    val performanceModeTotal = prefs.getPerformanceModeEstimate()
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // 今日定位请求统计
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0x4D2A221C)
-            ),
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(0.dp)
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    "今日定位请求",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = primaryColor()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(
-                            "实际请求",
-                            fontSize = 12.sp,
-                            color = Color(0xFFBDBDBD)
-                        )
-                        Text(
-                            "%,d 次".format(processedLocations),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Success
-                        )
-                    }
-                    Column {
-                        Text(
-                            "性能模式",
-                            fontSize = 12.sp,
-                            color = Color(0xFFBDBDBD)
-                        )
-                        Text(
-                            "%,d 次".format(performanceModeTotal),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Danger
-                        )
-                    }
-                    Column {
-                        Text(
-                            "节省",
-                            fontSize = 12.sp,
-                            color = Color(0xFFBDBDBD)
-                        )
-                        Text(
-                            "%.1f%%".format(savedPercentage),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Info
-                        )
-                    }
-                }
-            }
-        }
-
-        // 缓存性能统计
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0x4D1B5E20)
-            ),
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(0.dp)
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    "圆形围栏缓存性能",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = Color(0xFF81C784)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                if (cacheStats != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(
-                                "缓存命中率",
-                                fontSize = 12.sp,
-                                color = Color(0xFFBDBDBD)
-                            )
-                            Text(
-                                "%.1f%%".format(cacheStats.hitRate * 100),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = when {
-                                    cacheStats.totalRequests == 0L -> Info
-                                    cacheStats.hitRate >= 0.8 -> Success
-                                    else -> Warning
-                                }
-                            )
-                        }
-                        Column {
-                            Text(
-                                "缓存大小",
-                                fontSize = 12.sp,
-                                color = Color(0xFFBDBDBD)
-                            )
-                            Text(
-                                "%,d 项".format(cacheStats.cacheSize),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Info
-                            )
-                        }
-                        Column {
-                            Text(
-                                "总请求",
-                                fontSize = 12.sp,
-                                color = Color(0xFFBDBDBD)
-                            )
-                            Text(
-                                "%,d 次".format(cacheStats.totalRequests),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = primaryColor()
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(
-                                "命中次数",
-                                fontSize = 11.sp,
-                                color = Color(0xFF9E9E9E)
-                            )
-                            Text(
-                                "%,d".format(cacheStats.hits),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Success
-                            )
-                        }
-                        Column {
-                            Text(
-                                "未命中次数",
-                                fontSize = 11.sp,
-                                color = Color(0xFF9E9E9E)
-                            )
-                            Text(
-                                "%,d".format(cacheStats.misses),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Danger
-                            )
-                        }
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "等待缓存数据...",
-                            fontSize = 14.sp,
-                            color = Color(0xFF9E9E9E),
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                        )
-                    }
-                }
-            }
-        }
-
-        // 操作按钮行
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            GlassButton(
-                onClick = onReset,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("重置统计", color = Color.White)
-            }
-            GlassButton(
-                onClick = onClearCache,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("清除缓存", color = Color(0xFF81C784))
-            }
-        }
-
-        // 省电效果说明
-        Text(
-            "💡 说明：基于使用时间计算省电百分比。性能模式假设每 2 秒定位一次。重置后将重新开始计数。",
-            fontSize = 12.sp,
-            color = Color(0xFFBBDEFB),
-            lineHeight = 16.sp
         )
     }
 }

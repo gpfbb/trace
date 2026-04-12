@@ -1,7 +1,10 @@
 package com.trackmaster.app
 
+import android.content.ContentValues
 import android.content.Context
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFencePoint
 import com.trackmaster.app.core.GeoFenceType
@@ -29,7 +32,8 @@ data class DataExportResult(
     val message: String,
     val exportedFences: Int = 0,
     val exportedEvents: Int = 0,
-    val exportedStays: Int = 0
+    val exportedStays: Int = 0,
+    val exportedDailyStays: Int = 0
 )
 
 data class DataImportResult(
@@ -45,14 +49,17 @@ class DataManager(private val context: Context) {
     private val dbHelper = (context.applicationContext as TrackMasterApplication).dbHelper
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-    private val exportDir = File(
-        context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS),
-        "TrackMaster_Exports"
-    )
-    
+    // 使用公共 Downloads 目录，卸载 App 后文件仍可访问
+    // Android 10+ 直接写到公共 Downloads（通过 MediaStore）
+    // Android 9 及以下写到公共 Downloads 目录
+    private val usePublicDownloads: Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+
     init {
-        if (!exportDir.exists()) {
-            exportDir.mkdirs()
+        // 确保目录存在（仅影响 Android 9 及以下）
+        if (usePublicDownloads) {
+            @Suppress("DEPRECATION")
+            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrackMaster")
+            if (!dir.exists()) dir.mkdirs()
         }
     }
     
@@ -62,28 +69,28 @@ class DataManager(private val context: Context) {
     ): DataExportResult = withContext(Dispatchers.IO) {
         try {
             onProgress?.invoke(5, "准备导出...")
-            
+
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val fileName = "TrackMaster_Export_$timestamp.json"
-            val exportFile = File(exportDir, fileName)
-            
+
             onProgress?.invoke(10, "读取数据...")
-            
+
             val allFences = dbHelper.getAllFences()
             val allEvents = dbHelper.getAllEvents()
             val allStays = dbHelper.getAllStayRecords()
-            
+            val allDailyStays = dbHelper.getAllDailyStayRecords()
+
             onProgress?.invoke(20, "过滤数据...")
-            
+
             val filteredEvents = filterEvents(allEvents, options)
             val filteredStays = filterStays(allStays, options)
-            
+
             onProgress?.invoke(40, "生成导出文件...")
-            
+
             val json = JSONObject()
             json.put("version", "1.0")
             json.put("exportTime", dateTimeFormat.format(Date()))
-            
+
             val fencesArray = JSONArray()
             allFences.forEach { fence ->
                 val fenceJson = JSONObject()
@@ -92,7 +99,7 @@ class DataManager(private val context: Context) {
                 fenceJson.put("type", fence.type.name)
                 fenceJson.put("categoryId", fence.categoryId)
                 fenceJson.put("createdAt", dateTimeFormat.format(fence.createdAt))
-                
+
                 if (fence.type == GeoFenceType.CIRCLE) {
                     fenceJson.put("centerLat", fence.center?.latitude)
                     fenceJson.put("centerLng", fence.center?.longitude)
@@ -107,13 +114,13 @@ class DataManager(private val context: Context) {
                     }
                     fenceJson.put("points", pointsArray)
                 }
-                
+
                 fencesArray.put(fenceJson)
             }
             json.put("fences", fencesArray)
-            
+
             onProgress?.invoke(60, "处理事件数据...")
-            
+
             val eventsArray = JSONArray()
             filteredEvents.forEach { event ->
                 val eventJson = JSONObject()
@@ -129,9 +136,9 @@ class DataManager(private val context: Context) {
                 eventsArray.put(eventJson)
             }
             json.put("events", eventsArray)
-            
+
             onProgress?.invoke(80, "处理停留记录...")
-            
+
             val staysArray = JSONArray()
             filteredStays.forEach { stay ->
                 val stayJson = JSONObject()
@@ -143,22 +150,64 @@ class DataManager(private val context: Context) {
                 staysArray.put(stayJson)
             }
             json.put("stays", staysArray)
-            
-            onProgress?.invoke(90, "写入文件...")
-            
-            FileWriter(exportFile).use { writer ->
-                writer.write(json.toString(2))
+
+            // 每日汇总数据
+            val dailyStaysArray = JSONArray()
+            allDailyStays.forEach { daily ->
+                val dailyJson = JSONObject()
+                dailyJson.put("date", daily.date)
+                dailyJson.put("fenceId", daily.fenceId)
+                dailyJson.put("fenceName", daily.fenceName)
+                dailyJson.put("duration", daily.totalDurationSeconds)
+                dailyStaysArray.put(dailyJson)
             }
-            
+            json.put("dailyStays", dailyStaysArray)
+
+            onProgress?.invoke(90, "写入 Downloads 文件夹...")
+
+            val jsonContent = json.toString(2)
+            val savedFileName: String
+            val savedPath: String
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+：通过 MediaStore 写入公共 Downloads
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/TrackMaster")
+                }
+                val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                    ?: throw Exception("无法创建文件")
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(jsonContent.toByteArray(Charsets.UTF_8))
+                }
+                savedFileName = fileName
+                savedPath = "Downloads/TrackMaster/$fileName"
+            } else {
+                // Android 9 及以下：直接写到公共 Downloads
+                @Suppress("DEPRECATION")
+                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrackMaster")
+                if (!dir.exists()) dir.mkdirs()
+                val exportFile = File(dir, fileName)
+                FileWriter(exportFile).use { writer -> writer.write(jsonContent) }
+                savedFileName = exportFile.name
+                savedPath = exportFile.absolutePath
+            }
+
+            // 同步写一份到私有缓存（供"已导出文件"列表展示）
+            val cacheFile = File(exportCacheDir, fileName)
+            cacheFile.writeText(jsonContent)
+
             onProgress?.invoke(100, "导出完成")
-            
+
             DataExportResult(
                 success = true,
-                filePath = exportFile.absolutePath,
-                message = "导出成功！文件已保存至: ${exportFile.name}",
+                filePath = savedPath,
+                message = "导出成功！文件已保存至: $savedFileName\n路径: Downloads/TrackMaster/",
                 exportedFences = allFences.size,
                 exportedEvents = filteredEvents.size,
-                exportedStays = filteredStays.size
+                exportedStays = filteredStays.size,
+                exportedDailyStays = allDailyStays.size
             )
         } catch (e: Exception) {
             DataExportResult(
@@ -168,6 +217,10 @@ class DataManager(private val context: Context) {
         }
     }
     
+    /** 从备份文件导入（自动识别模板或完整备份）
+     * 模板格式 [ {...} ] → 生成新 UUID
+     * 完整备份 {"version": "1.0", ...} → 保留原始 ID（遇冲突则生成新ID）
+     */
     suspend fun importData(filePath: String): DataImportResult = withContext(Dispatchers.IO) {
         try {
             val file = File(filePath)
@@ -177,17 +230,35 @@ class DataManager(private val context: Context) {
                     message = "文件不存在"
                 )
             }
-            
-            val json = JSONObject(file.readText())
-            
+
+            val content = file.readText()
+            // 模板格式: [ {...} ] 纯数组；完整备份: {"version": ...}
+            val isTemplate = content.trimStart().startsWith("[")
+            if (isTemplate) {
+                // 模板分享：始终生成新 UUID
+                return@withContext DataImportResult(
+                    success = true,
+                    message = "围栏导入成功",
+                    importedFences = importFencesFromJson(filePath)
+                )
+            }
+
+            val json = JSONObject(content)
+
             var importedFences = 0
             var importedEvents = 0
             var importedStays = 0
-            
+
             val fencesArray = json.optJSONArray("fences") ?: JSONArray()
             for (i in 0 until fencesArray.length()) {
                 val fenceJson = fencesArray.getJSONObject(i)
-                val id = fenceJson.getString("id")
+                val originalId = fenceJson.optString("id", null)
+                // 完整备份：原ID不冲突则用，否则生成新的
+                val fenceId = if (originalId != null && dbHelper.getFenceById(originalId) == null) {
+                    originalId
+                } else {
+                    UUID.randomUUID().toString()
+                }
                 val name = fenceJson.getString("name")
                 val type = GeoFenceType.valueOf(fenceJson.getString("type"))
                 val categoryId = fenceJson.optString("categoryId", Category.UNASSIGNED_ID)
@@ -196,10 +267,10 @@ class DataManager(private val context: Context) {
                 } catch (e: Exception) {
                     Date()
                 }
-                
+
                 val fence = if (type == GeoFenceType.CIRCLE) {
                     GeoFence(
-                        id = id,
+                        id = fenceId,
                         name = name,
                         type = type,
                         center = GeoFencePoint(
@@ -223,7 +294,7 @@ class DataManager(private val context: Context) {
                         )
                     }
                     GeoFence(
-                        id = id,
+                        id = fenceId,
                         name = name,
                         type = type,
                         points = points,
@@ -231,7 +302,7 @@ class DataManager(private val context: Context) {
                         createdAt = createdAt
                     )
                 }
-                
+
                 dbHelper.insertFence(fence)
                 importedFences++
             }
@@ -296,6 +367,15 @@ class DataManager(private val context: Context) {
             0
         }
     }
+
+    /** 仅删除旧日志（events），保留 stays 和围栏数据 */
+    suspend fun deleteEventsBefore(beforeDate: Date): Int = withContext(Dispatchers.IO) {
+        try {
+            dbHelper.deleteEventsBefore(beforeDate)
+        } catch (e: Exception) {
+            0
+        }
+    }
     
     fun getStorageInfo(): StorageInfo {
         val fences = dbHelper.getAllFences().size
@@ -313,8 +393,13 @@ class DataManager(private val context: Context) {
         )
     }
     
+    // 导出的文件缓存在应用私有目录（用于列表展示）
+    private val exportCacheDir: File
+        get() = File(context.getExternalFilesDir(null), "exports").also { if (!it.exists()) it.mkdirs() }
+
+    /** 获取已导出文件列表（来自应用私有缓存） */
     fun getExportFiles(): List<File> {
-        return exportDir.listFiles()?.sortedByDescending { it.lastModified() } ?: emptyList()
+        return exportCacheDir.listFiles()?.sortedByDescending { it.lastModified() } ?: emptyList()
     }
     
     private fun filterEvents(events: List<GeoFenceEvent>, options: DataExportOptions): List<GeoFenceEvent> {
@@ -347,14 +432,14 @@ class DataManager(private val context: Context) {
     // 围栏 JSON 导入导出（轻量版，仅围栏定义）
     // ============================================================
 
-    /** 导出围栏为 JSON 文件（仅围栏定义，不含事件/停留） */
+    /** 导出围栏为 JSON 文件（模板分享用，不含ID，导入时自动分配新ID） */
     suspend fun exportFencesToJson(): String? = withContext(Dispatchers.IO) {
         try {
             val fences = dbHelper.getAllFences()
             val jsonArray = JSONArray()
             fences.forEach { fence ->
                 val obj = JSONObject()
-                // 不包含 id，导入时生成新 ID
+                // 不包含 id —— 模板分享不需要，导入时自动分配新UUID
                 obj.put("name", fence.name)
                 obj.put("type", fence.type.name)
                 obj.put("categoryId", fence.categoryId)
@@ -376,15 +461,38 @@ class DataManager(private val context: Context) {
             }
 
             val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
-            val file = File(exportDir, "trackmaster_fences_$dateStr.json")
-            file.writeText(jsonArray.toString(2))
-            file.absolutePath
+            val fileName = "trackmaster_fences_$dateStr.json"
+            val jsonContent = jsonArray.toString(2)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/TrackMaster")
+                }
+                val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                    ?: return@withContext null
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(jsonContent.toByteArray(Charsets.UTF_8))
+                }
+                "Downloads/TrackMaster/$fileName"
+            } else {
+                @Suppress("DEPRECATION")
+                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrackMaster")
+                if (!dir.exists()) dir.mkdirs()
+                val file = File(dir, fileName)
+                file.writeText(jsonContent)
+                file.absolutePath
+            }
         } catch (e: Exception) {
             null
         }
     }
 
-    /** 从 JSON 文件导入围栏 */
+    /** 从 JSON 文件导入围栏（自动识别模板或完整备份）
+     * @param filePath JSON 文件路径
+     * 内部自动处理：模板无ID则生成新UUID，完整备份有ID则保留（遇冲突则生成新ID）
+     */
     suspend fun importFencesFromJson(filePath: String): Int = withContext(Dispatchers.IO) {
         try {
             val file = File(filePath)
@@ -411,11 +519,13 @@ class DataManager(private val context: Context) {
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
                 val type = GeoFenceType.valueOf(obj.getString("type"))
-                // 生成新 ID，不使用导入的 ID
-                val newId = UUID.randomUUID().toString()
+                // 优先保留原始 ID，若与已有围栏冲突则生成新 ID
+                val originalId = obj.optString("id", null)
+                val existingFence = originalId?.let { dbHelper.getFenceById(it) }
+                val fenceId = existingFence?.id ?: originalId ?: UUID.randomUUID().toString()
                 val fence = if (type == GeoFenceType.CIRCLE) {
                     GeoFence(
-                        id = newId,
+                        id = fenceId,
                         name = obj.getString("name"),
                         type = type,
                         center = GeoFencePoint(obj.getDouble("centerLat"), obj.getDouble("centerLng")),
@@ -430,7 +540,7 @@ class DataManager(private val context: Context) {
                         pts.add(GeoFencePoint(pj.getDouble("lat"), pj.getDouble("lng")))
                     }
                     GeoFence(
-                        id = newId,
+                        id = fenceId,
                         name = obj.getString("name"),
                         type = type,
                         points = pts,
@@ -458,7 +568,6 @@ class DataManager(private val context: Context) {
         try {
             val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
             val fileName = "trackmaster_stats_$dateStr.json"
-            val exportFile = File(exportDir, fileName)
 
             // 读取所有数据
             val allStays = dbHelper.getAllStayRecords()
@@ -513,13 +622,33 @@ class DataManager(private val context: Context) {
             }
             json.put("events", eventsArray)
 
-            FileWriter(exportFile).use { writer ->
-                writer.write(json.toString(2))
+            val jsonContent = json.toString(2)
+            val savedPath: String
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/TrackMaster")
+                }
+                val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                    ?: throw Exception("无法创建文件")
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(jsonContent.toByteArray(Charsets.UTF_8))
+                }
+                savedPath = "Downloads/TrackMaster/$fileName"
+            } else {
+                @Suppress("DEPRECATION")
+                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrackMaster")
+                if (!dir.exists()) dir.mkdirs()
+                val exportFile = File(dir, fileName)
+                FileWriter(exportFile).use { writer -> writer.write(jsonContent) }
+                savedPath = exportFile.absolutePath
             }
 
             StatsExportResult(
                 success = true,
-                filePath = exportFile.absolutePath,
+                filePath = savedPath,
                 fileName = fileName,
                 message = "导出成功",
                 staysCount = allStays.size,

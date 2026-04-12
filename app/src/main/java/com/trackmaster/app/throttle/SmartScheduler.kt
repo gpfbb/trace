@@ -133,7 +133,6 @@ data class ScheduleDecision(
 class SmartScheduler(
     fences: List<Geofence>,
     config: ThrottleConfig = ThrottleConfig(),
-    val stats: PowerSavingStats = PowerSavingStats(),
 ) {
     var config = config
         private set
@@ -306,16 +305,6 @@ class SmartScheduler(
                 }
             }
         }
-
-        // 记录统计信息
-        stats.recordLocation(
-            timestamp = ts,
-            powerMode = mode,
-            shouldProcess = decision.shouldProcess,
-            level = decision.level,
-            intervalMs = decision.nextIntervalMs,
-            inBoundaryBuffer = decision.inBoundaryBuffer
-        )
 
         return decision
     }

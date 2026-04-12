@@ -435,6 +435,60 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         return fences
     }
 
+    /** 根据 ID 查询单个围栏 */
+    fun getFenceById(fenceId: String): GeoFence? {
+        // 先查缓存
+        fenceCache[fenceId]?.let { return it }
+
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_FENCES, null,
+            "$KEY_ID = ?", arrayOf(fenceId),
+            null, null, null
+        )
+
+        try {
+            if (cursor.moveToFirst()) {
+                val id = cursor.getString(cursor.getColumnIndexOrThrow(KEY_ID))
+                val name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_NAME))
+                val type = GeoFenceType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(KEY_TYPE)))
+                val pointsJson = cursor.getString(cursor.getColumnIndexOrThrow(KEY_POINTS))
+                val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(KEY_CREATED_AT)))
+                val categoryId = if (cursor.getColumnIndex(KEY_CATEGORY_ID) >= 0) {
+                    cursor.getString(cursor.getColumnIndexOrThrow(KEY_CATEGORY_ID))
+                } else {
+                    Category.UNASSIGNED_ID
+                }
+                val color = if (cursor.getColumnIndex(KEY_COLOR) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_COLOR))) {
+                    cursor.getString(cursor.getColumnIndex(KEY_COLOR))
+                } else "#FF0000"
+                val alpha = if (cursor.getColumnIndex(KEY_ALPHA) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_ALPHA))) {
+                    cursor.getFloat(cursor.getColumnIndex(KEY_ALPHA))
+                } else 0.3f
+                val center = if (cursor.getColumnIndex(KEY_CENTER_LAT) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_CENTER_LAT))) {
+                    GeoFencePoint(
+                        cursor.getDouble(cursor.getColumnIndex(KEY_CENTER_LAT)),
+                        cursor.getDouble(cursor.getColumnIndex(KEY_CENTER_LNG))
+                    )
+                } else null
+                val radius = if (cursor.getColumnIndex(KEY_RADIUS) >= 0 && !cursor.isNull(cursor.getColumnIndex(KEY_RADIUS))) {
+                    cursor.getFloat(cursor.getColumnIndex(KEY_RADIUS))
+                } else null
+                val points = if (!pointsJson.isNullOrEmpty()) jsonToPoints(pointsJson) else null
+
+                return GeoFence(
+                    id = id, name = name, type = type,
+                    center = center, radius = radius, points = points,
+                    categoryId = categoryId, createdAt = createdAt,
+                    color = color, alpha = alpha
+                ).also { fenceCache[fenceId] = it }
+            }
+        } finally {
+            cursor.close()
+        }
+        return null
+    }
+
     fun insertCategory(category: Category): Long {
         val db = writableDatabase
         val values = ContentValues()
@@ -1485,9 +1539,10 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
     /**
      * 从JSON文件导入围栏
      * @param jsonContent JSON文件内容
+     * @param preserveId 是否保留原始 ID（完整备份=true，分享模板=false始终用新ID）
      * @return 成功导入的围栏数量，失败返回-1
      */
-    fun importFencesFromJson(jsonContent: String): Int {
+    fun importFencesFromJson(jsonContent: String, preserveId: Boolean = false): Int {
         try {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
             val wrapper = org.json.JSONObject(jsonContent)
@@ -1538,7 +1593,12 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                     } else Date()
 
                     val fence = GeoFence(
-                        id = UUID.randomUUID().toString(),
+                        id = if (preserveId) {
+                            val existing = fenceJson.optString("id", null)
+                            if (existing != null && getFenceById(existing) == null) existing else UUID.randomUUID().toString()
+                        } else {
+                            UUID.randomUUID().toString()
+                        },
                         name = fenceJson.getString("name"),
                         type = type,
                         center = center,

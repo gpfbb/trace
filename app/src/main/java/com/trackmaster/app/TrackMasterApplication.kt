@@ -928,9 +928,10 @@ class TrackMasterApplication : Application() {
         return dbHelper.generateFencesJson(fences)
     }
 
-    /** 导入围栏并刷新所有相关状态 */
-    fun importFencesAndRefresh(jsonContent: String): Int {
-        val count = dbHelper.importFencesFromJson(jsonContent)
+    /** 导入围栏并刷新所有相关状态
+     * @param preserveId 完整备份导入时保留原始 ID（用于维持父子关系），分享模板导入时用 false */
+    fun importFencesAndRefresh(jsonContent: String, preserveId: Boolean = false): Int {
+        val count = dbHelper.importFencesFromJson(jsonContent, preserveId)
         if (count >= 0) {
             // 刷新Application的围栏数据
             geoFences.clear()

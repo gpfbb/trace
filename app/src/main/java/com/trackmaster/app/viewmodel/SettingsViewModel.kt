@@ -11,7 +11,6 @@ import com.trackmaster.app.core.GeoFenceType
 import com.trackmaster.app.core.GeoMath
 import com.trackmaster.app.core.Geofence
 import com.trackmaster.app.core.PowerMode
-import com.trackmaster.app.throttle.PowerSavingStats
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -44,18 +43,6 @@ class SettingsViewModel(
 
     private val _driftThreshold = MutableStateFlow(prefs.driftThreshold)
     val driftThreshold: StateFlow<Double> = _driftThreshold
-
-    private val _totalLocations = MutableStateFlow(prefs.totalLocations)
-    val totalLocations: StateFlow<Int> = _totalLocations
-
-    private val _processedLocations = MutableStateFlow(prefs.processedLocations)
-    val processedLocations: StateFlow<Int> = _processedLocations
-
-    private val _cacheStats = MutableStateFlow<GeoMath.CacheStats?>(null)
-    val cacheStats: StateFlow<GeoMath.CacheStats?> = _cacheStats
-
-    private val _powerSavingStats = MutableStateFlow<PowerSavingStats?>(null)
-    val powerSavingStats: StateFlow<PowerSavingStats?> = _powerSavingStats
 
     private val _isRecalculating = MutableStateFlow(false)
     val isRecalculating: StateFlow<Boolean> = _isRecalculating
@@ -91,36 +78,10 @@ class SettingsViewModel(
         app.updateEngineConfig()
     }
 
-    fun resetStats() {
-        prefs.resetStats()
-        _totalLocations.value = 0
-        _processedLocations.value = 0
-    }
-
-    fun clearCache() {
-        GeoMath.clearCirclePolygonCache()
-        _cacheStats.value = GeoMath.getCacheStats()
-    }
-
-    fun refreshStats() {
-        _totalLocations.value = prefs.totalLocations
-        _processedLocations.value = prefs.processedLocations
-        _cacheStats.value = GeoMath.getCacheStats()
-        _powerSavingStats.value = app.engine.getScheduler().stats
-    }
-
     fun restoreDefaultSettings() {
         setStationaryThreshold(30.0)
         setBoundaryBuffer(200.0)
         setDriftThreshold(50.0)
-    }
-
-    fun getSavedPercentage(): Double {
-        return prefs.getSavedPercentage()
-    }
-
-    fun getPerformanceModeEstimate(): Long {
-        return prefs.getPerformanceModeEstimate()
     }
 
     fun recalculateParentChildRelationships() {

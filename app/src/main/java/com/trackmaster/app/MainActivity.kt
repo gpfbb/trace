@@ -940,12 +940,8 @@ fun MainScreen(
     val showSettingsDialog = remember { mutableStateOf(false) }
     // 控制分类管理对话框显示
     val showCategoryManagerDialog = remember { mutableStateOf(false) }
-    // 控制数据管理对话框显示
-    val showDataManagementDialog = remember { mutableStateOf(false) }
-    // 控制围栏导出导入对话框显示
-    val showFenceExportImportDialog = remember { mutableStateOf(false) }
-    // 控制停留记录导出导入对话框显示
-    val showStatsExportImportDialog = remember { mutableStateOf(false) }
+    // 控制数据导入导出对话框显示
+    val showDataImportExportDialog = remember { mutableStateOf(false) }
     // 热力图开关
     val heatmapEnabled = remember { mutableStateOf(false) }
     // 保存热力图覆盖层引用（避免每次创建新实例）
@@ -2582,127 +2578,23 @@ fun MainScreen(
     if (showSettingsDialog.value) {
         SettingsScreen(
             onDismiss = { showSettingsDialog.value = false },
-            onOpenDataManagement = {
+            onOpenDataImportExport = {
                 showSettingsDialog.value = false
-                showDataManagementDialog.value = true
-            },
-            onOpenFenceExportImport = {
-                showSettingsDialog.value = false
-                showFenceExportImportDialog.value = true
-            },
-            onOpenStatsExportImport = {
-                showSettingsDialog.value = false
-                showStatsExportImportDialog.value = true
+                showDataImportExportDialog.value = true
             }
         )
     }
 
-    // 数据管理对话框
-    if (showDataManagementDialog.value) {
+    // 数据导入导出对话框（统一入口）
+    if (showDataImportExportDialog.value) {
         DataManagementScreen(
-            onDismiss = { 
-                showDataManagementDialog.value = false
+            onDismiss = {
+                showDataImportExportDialog.value = false
                 mainActivity.refreshGeoFences()
                 refreshDataTrigger++
             },
-            dataManager = app.dataManager
-        )
-    }
-
-    // 围栏导出导入对话框
-    if (showFenceExportImportDialog.value) {
-        FenceExportImportDialog(
-            onDismiss = {
-                showFenceExportImportDialog.value = false
-            },
-            fences = mainActivity.getGeoFences(),
-            onExport = { selectedFences ->
-                val json = mainActivity.getDbHelper().generateFencesJson(selectedFences)
-                if (json != null) {
-                    try {
-                        val fileName = "TrackMaster_Fences_${java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())}.json"
-                        val file = java.io.File(context.getExternalFilesDir(null), fileName)
-                        file.writeText(json)
-
-                        val uri = androidx.core.content.FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            file
-                        )
-
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "application/json"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            putExtra(Intent.EXTRA_SUBJECT, "TrackMaster 围栏分享")
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "分享围栏").apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        })
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                message = "分享失败",
-                                duration = SnackbarDuration.Long
-                            )
-                        }
-                    }
-                } else {
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "导出失败",
-                            duration = SnackbarDuration.Long
-                        )
-                    }
-                }
-            },
-            onImport = { jsonContent ->
-                val count = mainActivity.getDbHelper().importFencesFromJson(jsonContent)
-                if (count >= 0) {
-                    Log.d("TrackMaster", "导入成功，准备刷新围栏...")
-                    mainActivity.refreshGeoFences()
-                    // 同步更新Application的围栏数据
-                    val trackMasterApp = mainActivity.application as TrackMasterApplication
-                    Log.d("TrackMaster", "刷新前 Application geoFences: ${trackMasterApp.geoFences.size}个")
-                    trackMasterApp.geoFences.clear()
-                    trackMasterApp.geoFences.addAll(mainActivity.getGeoFences())
-                    Log.d("TrackMaster", "刷新后 Application geoFences: ${trackMasterApp.geoFences.size}个")
-                    // 刷新Engine的围栏数据，使其包含新导入的围栏
-                    trackMasterApp.refreshEngineFences()
-
-                    // 导入后主动检查当前位置是否在围栏内
-                    trackMasterApp.checkAndUpdateFenceState()
-
-                    refreshDataTrigger++
-                    Log.d("TrackMaster", "导入完成，已触发刷新")
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "成功导入${count}个围栏",
-                            duration = SnackbarDuration.Long
-                        )
-                    }
-                } else {
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "导入失败：文件无效",
-                            duration = SnackbarDuration.Long
-                        )
-                    }
-                }
-            }
-        )
-    }
-
-    // 停留记录导出导入对话框
-    if (showStatsExportImportDialog.value) {
-        StatsExportImportScreen(
-            onDismiss = {
-                showStatsExportImportDialog.value = false
-            },
             dataManager = app.dataManager,
-            stayDurationManager = app.stayDurationManager
+            app = app
         )
     }
 

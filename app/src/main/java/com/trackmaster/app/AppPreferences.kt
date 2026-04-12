@@ -23,6 +23,7 @@ class AppPreferences(context: Context) {
 
         // 用户体验键
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_AUTO_CLEANUP_DAYS = "auto_cleanup_days"
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -134,4 +135,12 @@ class AppPreferences(context: Context) {
     var isOnboardingCompleted: Boolean
         get() = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
         set(value) = prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
+
+    /**
+     * 日志自动清理天数
+     * 超过此天数的日志事件将在下次清理时删除
+     */
+    var autoCleanupDays: Int
+        get() = prefs.getInt(KEY_AUTO_CLEANUP_DAYS, 7)
+        set(value) = prefs.edit().putInt(KEY_AUTO_CLEANUP_DAYS, value).apply()
 }

@@ -13,7 +13,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 class Repository(
     private val adapter: StorageAdapter,
-    private val batchSize: Int = 20,
+    private val batchSize: Int = 5,  // 降低到5条，减少 crash 时最多丢4条（原20条最坏丢19条）
 ) {
     private val writeBuffer = CopyOnWriteArrayList<StaySegment>()
     private val segmentCache = mutableMapOf<String, List<StaySegment>>()
