@@ -24,6 +24,8 @@ class AppPreferences(context: Context) {
         // 用户体验键
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_AUTO_CLEANUP_DAYS = "auto_cleanup_days"
+        // 地图类型：1=标准 2=卫星 3=夜景（对应 AMap.MAP_TYPE_ constants）
+        private const val KEY_MAP_TYPE = "map_type"
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -143,4 +145,9 @@ class AppPreferences(context: Context) {
     var autoCleanupDays: Int
         get() = prefs.getInt(KEY_AUTO_CLEANUP_DAYS, 7)
         set(value) = prefs.edit().putInt(KEY_AUTO_CLEANUP_DAYS, value).apply()
+
+    // 地图类型：1=标准 2=卫星 3=夜景
+    var mapType: Int
+        get() = prefs.getInt(KEY_MAP_TYPE, 1)
+        set(value) = prefs.edit().putInt(KEY_MAP_TYPE, value).apply()
 }

@@ -80,6 +80,7 @@ fun MapScreen(app: TrackMasterApplication) {
     var selectedAlpha by remember { mutableStateOf(0.3f) }
     var drawingPrecisionMode by remember { mutableStateOf(false) }
     var editingPrecisionMode by remember { mutableStateOf(false) }
+    var mapType by remember { mutableStateOf(app.appPreferences.mapType) }
 
     var showFenceList by remember { mutableStateOf(false) }
     var selectedFence by remember { mutableStateOf<GeoFence?>(null) }
@@ -173,6 +174,7 @@ fun MapScreen(app: TrackMasterApplication) {
             isEditingFence = isEditingFence,
             editingPoints = editingPoints,
             isPrecisionMode = drawingPrecisionMode || editingPrecisionMode,
+            mapType = mapType,
             onMapClick = onMapClick
         )
 
@@ -181,6 +183,11 @@ fun MapScreen(app: TrackMasterApplication) {
             fences = localFences,
             highlightedFenceId = highlightedFenceId,
             displayedFenceId = displayedFenceId,
+            mapType = mapType,
+            onMapTypeChange = { newType ->
+                mapType = newType
+                app.appPreferences.mapType = newType
+            },
             onFenceListClick = { showFenceList = true },
             onFenceClick = { fenceId ->
                 // 切换显示状态：点击同一围栏则取消显示，否则显示该围栏的点（只读）
@@ -476,6 +483,8 @@ private fun TopStatusIsland(
     fences: List<GeoFence>,
     highlightedFenceId: String?,
     displayedFenceId: String?,
+    mapType: Int,
+    onMapTypeChange: (Int) -> Unit,
     onFenceListClick: () -> Unit,
     onFenceClick: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -537,6 +546,25 @@ private fun TopStatusIsland(
 
             Spacer(Modifier.width(16.dp))
             Box(Modifier.width(1.dp).height(20.dp).background(Color.White.copy(alpha = 0.3f)))
+            Spacer(Modifier.width(16.dp))
+            // 地图图层切换按钮
+            val nextMapType = if (mapType >= 3) 1 else mapType + 1
+            val mapTypeIcon = when (mapType) {
+                2 -> Icons.Default.Satellite
+                3 -> Icons.Default.NightsStay
+                else -> Icons.Default.Map
+            }
+            val mapTypeDesc = when (mapType) {
+                1 -> "标准地图"
+                2 -> "卫星地图"
+                else -> "夜景地图"
+            }
+            Icon(
+                mapTypeIcon,
+                contentDescription = "切换地图图层($mapTypeDesc)",
+                tint = NeonAmber,
+                modifier = Modifier.size(20.dp).clickable { onMapTypeChange(nextMapType) }
+            )
             Spacer(Modifier.width(16.dp))
             Icon(
                 Icons.AutoMirrored.Filled.List,

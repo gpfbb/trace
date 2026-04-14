@@ -98,6 +98,7 @@ fun AMapViewWrapper(
     isEditingFence: Boolean = false,
     editingPoints: List<GeoFencePoint> = emptyList(),
     isPrecisionMode: Boolean = false,
+    mapType: Int = 1,
     onMapClick: (Double, Double) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
@@ -129,6 +130,12 @@ fun AMapViewWrapper(
         mapPresenter.setOnMapClickListener { lat, lng ->
             onMapClick(lat, lng)
         }
+    }
+
+    // 地图类型切换
+    LaunchedEffect(mapType, isMapReady) {
+        if (!isMapReady) return@LaunchedEffect
+        mapPresenter.configureMap(mapType = mapType, trafficEnabled = false)
     }
 
     // 精确模式下，跟踪相机中心点
