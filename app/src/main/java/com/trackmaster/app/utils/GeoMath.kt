@@ -476,6 +476,133 @@ object GeoMath {
         }
     }
 
+    // ============================================================
+    // 围栏相交检测
+    // ============================================================
+
+    /**
+     * 围栏相交检测结果
+     */
+    data class FenceIntersection(
+        val fenceA: Geofence,
+        val fenceB: Geofence,
+        val description: String
+    )
+
+    /**
+     * 检测两个围栏的边界是否相交
+     * 注意：此函数检测"边界交叉"（partial overlap），不是"包含关系"
+     * @return true = 两围栏边界相交
+     */
+    fun fencesIntersect(fenceA: Geofence, fenceB: Geofence): Boolean {
+        return when {
+            // 圆形 vs 圆形
+            fenceA.type == GeoFenceType.CIRCLE && fenceB.type == GeoFenceType.CIRCLE -> {
+                val cA = fenceA.center ?: return false
+                val rA = fenceA.radius ?: return false
+                val cB = fenceB.center ?: return false
+                val rB = fenceB.radius ?: return false
+                val dist = haversine(cA, cB)
+                // 相交：两圆重叠但不是包含关系
+                dist < rA + rB && dist > kotlin.math.abs(rA - rB)
+            }
+            // 多边形 vs 多边形
+            fenceA.type == GeoFenceType.POLYGON && fenceB.type == GeoFenceType.POLYGON -> {
+                val polyA = fenceA.polygon
+                val polyB = fenceB.polygon
+                if (polyA.size < 3 || polyB.size < 3) return false
+
+                // 快速 BBox 预检
+                val bboxA = computeBBox(polyA)
+                val bboxB = computeBBox(polyB)
+                if (!bboxesIntersect(bboxA, bboxB)) return false
+
+                // 检测边是否相交
+                val nA = polyA.size
+                val nB = polyB.size
+                for (i in 0 until nA) {
+                    val p1 = polyA[i]
+                    val q1 = polyA[(i + 1) % nA]
+                    for (j in 0 until nB) {
+                        val p2 = polyB[j]
+                        val q2 = polyB[(j + 1) % nB]
+                        if (segmentsIntersect(p1, q1, p2, q2)) return true
+                    }
+                }
+                false
+            }
+            // 圆形 vs 多边形
+            fenceA.type == GeoFenceType.CIRCLE && fenceB.type == GeoFenceType.POLYGON -> {
+                circlePolygonIntersect(fenceA, fenceB)
+            }
+            // 多边形 vs 圆形
+            fenceA.type == GeoFenceType.POLYGON && fenceB.type == GeoFenceType.CIRCLE -> {
+                circlePolygonIntersect(fenceB, fenceA)
+            }
+            else -> false
+        }
+    }
+
+    /**
+     * 圆形与多边形边界是否相交
+     */
+    private fun circlePolygonIntersect(circleFence: Geofence, polygonFence: Geofence): Boolean {
+        val center = circleFence.center ?: return false
+        val radius = circleFence.radius ?: return false
+        val poly = polygonFence.polygon
+        if (poly.size < 3) return false
+
+        // 1. 圆心在多边形内部 → 边界一定相交（因为圆在多边形内部）
+        if (pointInPolygon(center.lat, center.lng, poly)) return true
+
+        // 2. 检测多边形边是否与圆相交
+        val n = poly.size
+        for (i in 0 until n) {
+            val p1 = poly[i]
+            val p2 = poly[(i + 1) % n]
+            // 点到线段的距离
+            val dist = distanceToSegment(center, p1, p2)
+            if (dist <= radius) return true
+        }
+        return false
+    }
+
+    /**
+     * BBox 是否相交
+     */
+    private fun bboxesIntersect(a: BBox, b: BBox): Boolean {
+        return a.minLng <= b.maxLng && a.maxLng >= b.minLng &&
+               a.minLat <= b.maxLat && a.maxLat >= b.minLat
+    }
+
+    /**
+     * 检测所有围栏之间的相交情况
+     * @return 相交的围栏对列表
+     */
+    fun detectFenceIntersections(fences: List<Geofence>): List<FenceIntersection> {
+        val intersections = mutableListOf<FenceIntersection>()
+        for (i in fences.indices) {
+            for (j in i + 1 until fences.size) {
+                val a = fences[i]
+                val b = fences[j]
+                if (fencesIntersect(a, b)) {
+                    val desc = when {
+                        a.type == GeoFenceType.CIRCLE && b.type == GeoFenceType.CIRCLE ->
+                            "${a.name}(圆形) 与 ${b.name}(圆形) 边界相交"
+                        a.type == GeoFenceType.POLYGON && b.type == GeoFenceType.POLYGON ->
+                            "${a.name}(多边形) 与 ${b.name}(多边形) 边界相交"
+                        a.type == GeoFenceType.CIRCLE ->
+                            "${a.name}(圆形) 与 ${b.name}(多边形) 边界相交"
+                        else ->
+                            "${a.name}(多边形) 与 ${b.name}(圆形) 边界相交"
+                    }
+                    intersections.add(FenceIntersection(a, b, desc))
+                }
+            }
+        }
+        return intersections
+    }
+
     /**
      * 判断两个线段 (p1,q1) 和 (p2,q2) 是否相交
      * 使用方向性检测算法

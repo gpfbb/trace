@@ -44,6 +44,7 @@ class AMapPresenter(
 
     private var onMapClickListener: ((Double, Double) -> Unit)? = null
     private var onMarkerClickListener: ((String) -> Boolean)? = null
+    private var onCameraCenterChangeListener: ((Double, Double) -> Unit)? = null
 
     private var isDrawingModeEnabled = false
     private var onPolygonCompleteListener: ((List<MapLocation>) -> Unit)? = null
@@ -79,6 +80,13 @@ class AMapPresenter(
         aMap.setOnMapClickListener { latLng ->
             onMapClickListener?.invoke(latLng.latitude, latLng.longitude)
         }
+
+        aMap.setOnCameraChangeListener(object : AMap.OnCameraChangeListener {
+            override fun onCameraChange(p0: CameraPosition) {}
+            override fun onCameraChangeFinish(p0: CameraPosition) {
+                onCameraCenterChangeListener?.invoke(p0.target.latitude, p0.target.longitude)
+            }
+        })
 
         aMap.setOnMarkerClickListener { marker ->
             val markerId = markerOverlays.entries.find { it.value == marker }?.key
@@ -257,6 +265,10 @@ class AMapPresenter(
 
     override fun setFenceFillColor(color: Int) {
         fenceFillColor = color
+    }
+
+    fun setOnCameraCenterChangeListener(listener: (Double, Double) -> Unit) {
+        onCameraCenterChangeListener = listener
     }
 
     override fun refresh() {

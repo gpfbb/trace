@@ -3,6 +3,7 @@ package com.trackmaster.app.ui.components
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import com.amap.api.maps.MapView
 import kotlin.math.sin
@@ -16,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as AndroidColor
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
@@ -29,6 +31,7 @@ import com.trackmaster.app.mapstraction.MapMarker
 import com.trackmaster.app.mapstraction.MarkerIcon
 import com.trackmaster.app.mapstraction.amap.AMapPresenter
 import com.trackmaster.app.locationservice.Location
+import com.trackmaster.app.ui.theme.NeonAmber
 
 private const val TAG = "AMapViewWrapper"
 
@@ -94,6 +97,7 @@ fun AMapViewWrapper(
     selectedFenceType: GeoFenceType = GeoFenceType.CIRCLE,
     isEditingFence: Boolean = false,
     editingPoints: List<GeoFencePoint> = emptyList(),
+    isPrecisionMode: Boolean = false,
     onMapClick: (Double, Double) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
@@ -109,6 +113,9 @@ fun AMapViewWrapper(
     var previewPolygon by remember { mutableStateOf<PolygonWrapper?>(null) }
     val editingMarkers = remember { mutableStateListOf<MarkerWrapper>() }
     val displayedMarkers = remember { mutableStateListOf<MarkerWrapper>() }
+    var cameraCenterLat by remember { mutableStateOf(0.0) }
+    var cameraCenterLng by remember { mutableStateOf(0.0) }
+    var hasCameraMoved by remember { mutableStateOf(false) }
 
     // 初始化地图
     var isMapReady by remember { mutableStateOf(false) }
@@ -124,14 +131,54 @@ fun AMapViewWrapper(
         }
     }
 
-    // 首次进入时自动定位到用户当前位置
-    LaunchedEffect(currentLocation, isMapReady) {
+    // 精确模式下，跟踪相机中心点
+    LaunchedEffect(isPrecisionMode, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
-        if (currentLocation != null) {
-            val lat = currentLocation.latitude
-            val lng = currentLocation.longitude
-            if (lat != 0.0 || lng != 0.0) {
-                mapPresenter.moveCamera(lat, lng, 16f)
+        if (isPrecisionMode) {
+            mapPresenter.setOnCameraCenterChangeListener { lat, lng ->
+                cameraCenterLat = lat
+                cameraCenterLng = lng
+                hasCameraMoved = true
+            }
+        }
+    }
+
+    // 精确模式下，点击使用相机中心点而非实际点击位置
+    LaunchedEffect(isPrecisionMode, isMapReady) {
+        if (!isMapReady) return@LaunchedEffect
+        mapPresenter.setOnMapClickListener { lat, lng ->
+            if (isPrecisionMode && hasCameraMoved) {
+                onMapClick(cameraCenterLat, cameraCenterLng)
+            } else {
+                onMapClick(lat, lng)
+            }
+        }
+    }
+
+    // 选中围栏时，摄像机跳转到围栏位置
+    LaunchedEffect(displayedFenceId, isMapReady) {
+        if (!isMapReady) return@LaunchedEffect
+        val fid = displayedFenceId ?: return@LaunchedEffect
+        val fence = fences.find { it.id == fid } ?: return@LaunchedEffect
+        when (fence.type) {
+            GeoFenceType.CIRCLE -> {
+                val c = fence.center ?: return@LaunchedEffect
+                mapPresenter.moveCamera(c.latitude, c.longitude, 16f)
+            }
+            GeoFenceType.POLYGON -> {
+                val pts = fence.points ?: return@LaunchedEffect
+                if (pts.isEmpty()) return@LaunchedEffect
+                var minLat = Double.MAX_VALUE; var maxLat = -Double.MAX_VALUE
+                var minLng = Double.MAX_VALUE; var maxLng = -Double.MAX_VALUE
+                pts.forEach { p ->
+                    if (p.latitude < minLat) minLat = p.latitude
+                    if (p.latitude > maxLat) maxLat = p.latitude
+                    if (p.longitude < minLng) minLng = p.longitude
+                    if (p.longitude > maxLng) maxLng = p.longitude
+                }
+                val centerLat = (minLat + maxLat) / 2
+                val centerLng = (minLng + maxLng) / 2
+                mapPresenter.moveCamera(centerLat, centerLng, 16f)
             }
         }
     }
@@ -325,6 +372,36 @@ fun AMapViewWrapper(
                 mapView
             },
             modifier = Modifier.fillMaxSize()
+        )
+        // 精确模式十字准星
+        if (isPrecisionMode && (isDrawingMode || isEditingFence)) {
+            CrosshairOverlay()
+        }
+    }
+}
+
+@Composable
+private fun CrosshairOverlay() {
+    val primaryColor = NeonAmber
+    Canvas(Modifier.fillMaxSize()) {
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        val crossSize = 24.dp.toPx()
+        val strokeWidth = 2.dp.toPx()
+
+        // 横线
+        drawLine(
+            color = primaryColor,
+            start = androidx.compose.ui.geometry.Offset(centerX - crossSize, centerY),
+            end = androidx.compose.ui.geometry.Offset(centerX + crossSize, centerY),
+            strokeWidth = strokeWidth
+        )
+        // 竖线
+        drawLine(
+            color = primaryColor,
+            start = androidx.compose.ui.geometry.Offset(centerX, centerY - crossSize),
+            end = androidx.compose.ui.geometry.Offset(centerX, centerY + crossSize),
+            strokeWidth = strokeWidth
         )
     }
 }

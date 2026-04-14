@@ -39,6 +39,7 @@ fun ThemePickerDialog(
         },
         text = {
             Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
@@ -259,4 +260,9 @@ fun getThemeTextTertiary(theme: AppTheme): Color = when (theme) {
     AppTheme.DREAM_PURPLE -> Color(0xFFB39DDB)    // 浅紫
     AppTheme.SUNSET_ORANGE -> Color(0xFFFFAB91)    // 橙灰
     AppTheme.GLACIER_BLUE -> Color(0xFF81D4FA)    // 冰蓝灰
+    AppTheme.CYBER_TEAL -> Color(0xFF00CED1)    // 青灰
+    AppTheme.MINT_FRESH -> Color(0xFF81C784)    // 绿灰
+    AppTheme.ROSE_GOLD -> Color(0xFFF48FB1)    // 粉灰
+    AppTheme.SPACE_GRAY -> Color(0xFFB0BEC5)    // 银灰
+    AppTheme.LAVENDER -> Color(0xFFCE93D8)    // 紫灰
 }

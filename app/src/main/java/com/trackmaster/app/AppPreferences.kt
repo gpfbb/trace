@@ -33,7 +33,7 @@ class AppPreferences(context: Context) {
     // ============================================================
 
     var stationaryThreshold: Double
-        get() = prefs.getFloat(KEY_STATIONARY_THRESHOLD, 20.0f).toDouble()
+        get() = prefs.getFloat(KEY_STATIONARY_THRESHOLD, 30.0f).toDouble()
         set(value) = prefs.edit().putFloat(KEY_STATIONARY_THRESHOLD, value.toFloat()).apply()
 
     var boundaryBuffer: Double

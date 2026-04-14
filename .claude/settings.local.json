@@ -9,7 +9,15 @@
       "Bash(printf '{\"\"always_on\"\": false, \"\"feedback_frequency\"\": 0}')",
       "Bash(\"C:/Users/14708/.pua/config.json\")",
       "Read(//c/Users/14708/.pua/**)",
-      "Bash(curl -s -X POST https://pua-skill.pages.dev/api/stats -H \"Content-Type: application/json\" -d '{\"\"event\"\":\"\"session_start\"\",\"\"flavor\"\":\"\"alibaba\"\",\"\"version\"\":\"\"3.1.0\"\"}')"
+      "Bash(curl -s -X POST https://pua-skill.pages.dev/api/stats -H \"Content-Type: application/json\" -d '{\"\"event\"\":\"\"session_start\"\",\"\"flavor\"\":\"\"alibaba\"\",\"\"version\"\":\"\"3.1.0\"\"}')",
+      "Bash(xargs grep:*)",
+      "Bash(./gradlew.bat :app:compileDebugKotlin --no-daemon)",
+      "Bash(powershell.exe -Command \"$env:JAVA_HOME=''''C:\\\\Program Files\\\\Java\\\\latest\\\\jdk-25''''; .\\\\gradlew.bat :app:compileDebugKotlin --no-daemon\")",
+      "Bash(cmd.exe /c \"set JAVA_HOME=C:\\\\Program Files\\\\Java\\\\jdk-25&& .\\\\gradlew.bat :app:compileDebugKotlin --no-daemon\")",
+      "Bash(JAVA_HOME=\"C:/Program Files/Java/jdk-25\" ./gradlew.bat :app:compileDebugKotlin --no-daemon)",
+      "Read(//c/Program Files/Java/**)",
+      "Read(//c/Program Files/**)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Java/latest/jdk-25\" ./gradlew.bat :app:compileDebugKotlin --no-daemon)"
     ]
   }
 }

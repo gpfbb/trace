@@ -269,6 +269,25 @@ fun SettingsPage(
                                         } else null
                                     }
 
+                                    // 第一步：检测围栏相交
+                                    val intersections = GeoMath.detectFenceIntersections(coreFences)
+                                    android.util.Log.d("SettingsPage", "相交检测完成，发现 ${intersections.size} 对相交")
+                                    if (intersections.isNotEmpty()) {
+                                        val msg = buildString {
+                                            appendLine("⚠️ 发现 ${intersections.size} 对相交的围栏，无法计算父子关系：")
+                                            intersections.take(10).forEach { pair ->
+                                                appendLine("  • ${pair.description}")
+                                            }
+                                            if (intersections.size > 10) {
+                                                appendLine("  • ...还有 ${intersections.size - 10} 对")
+                                            }
+                                        }
+                                        recalculateMessage = msg
+                                        return@TextButton
+                                    }
+
+                                    // 第二步：检测通过，执行父子关系计算
+                                    app.fenceTreeManager.clearAll()
                                     var relationshipCount = 0
                                     android.util.Log.d("SettingsPage", "开始计算父子关系，coreFences数量: ${coreFences.size}")
                                     for (fenceA in coreFences) {
@@ -820,7 +839,7 @@ fun AdvancedSettingsSection(
                 )
             )
             Text(
-                "判定为静止的距离阈值。值越大越容易判定为静止，越省电。小围栏建议20-50米避免室内误判。",
+                "判定为静止的距离阈值。值越大越容易判定为静止，越省电。小围栏建议30-50米。",
                 fontSize = 11.sp,
                 color = Color(0xFF9E9E9E)
             )

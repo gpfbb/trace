@@ -4,9 +4,11 @@ import android.graphics.Color as AndroidColor
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -76,21 +78,39 @@ fun MapScreen(app: TrackMasterApplication) {
     var drawingPoints by remember { mutableStateOf<List<GeoFencePoint>>(emptyList()) }
     var selectedColor by remember { mutableStateOf("#FF0000") }
     var selectedAlpha by remember { mutableStateOf(0.3f) }
+    var drawingPrecisionMode by remember { mutableStateOf(false) }
+    var editingPrecisionMode by remember { mutableStateOf(false) }
 
     var showFenceList by remember { mutableStateOf(false) }
     var selectedFence by remember { mutableStateOf<GeoFence?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<GeoFence?>(null) }
+    var showRecalculateHint by remember { mutableStateOf(false) }
 
     var isEditingFence by remember { mutableStateOf(false) }
     var editingPoints by remember { mutableStateOf<List<GeoFencePoint>>(emptyList()) }
     var editingFence by remember { mutableStateOf<GeoFence?>(null) }
 
     val fenceColors = listOf(
-        "#FF0000", "#E91E63", "#9C27B0", "#673AB7", "#3F51B5",
-        "#2196F3", "#00BCD4", "#009688", "#4CAF50", "#8BC34A",
-        "#FF9800", "#FF5722", "#795548", "#607D8B", "#000000"
+        // 红色系
+        "#FF0000", "#E53935", "#D32F2F", "#C62828",
+        // 粉色系
+        "#E91E63", "#F06292", "#EC407A", "#FF4081",
+        // 紫色系
+        "#9C27B0", "#AB47BC", "#7B1FA2", "#BA68C8",
+        // 蓝色系
+        "#3F51B5", "#5C6BC0", "#2196F3", "#03A9F4", "#00BCD4",
+        // 青色系
+        "#009688", "#26A69A", "#00897B", "#4DB6AC",
+        // 绿色系
+        "#4CAF50", "#66BB6A", "#43A047", "#8BC34A", "#00E676",
+        // 黄色/金色系
+        "#FFEB3B", "#FFC107", "#FF9800",
+        // 橙/棕系
+        "#FF5722", "#FF7043", "#795548", "#8D6E63",
+        // 灰/中性
+        "#607D8B", "#78909C", "#90A4AE", "#000000"
     )
 
     val fenceStateVersion by app.fenceStateVersion.collectAsState()
@@ -152,6 +172,7 @@ fun MapScreen(app: TrackMasterApplication) {
             selectedFenceType = selectedFenceType,
             isEditingFence = isEditingFence,
             editingPoints = editingPoints,
+            isPrecisionMode = drawingPrecisionMode || editingPrecisionMode,
             onMapClick = onMapClick
         )
 
@@ -186,6 +207,8 @@ fun MapScreen(app: TrackMasterApplication) {
                 selectedColor = selectedColor,
                 selectedAlpha = selectedAlpha,
                 fenceColors = fenceColors,
+                isPrecisionMode = drawingPrecisionMode,
+                onPrecisionModeChange = { drawingPrecisionMode = it },
                 onFenceTypeChange = { selectedFenceType = it },
                 onColorChange = { selectedColor = it },
                 onAlphaChange = { selectedAlpha = it },
@@ -210,6 +233,8 @@ fun MapScreen(app: TrackMasterApplication) {
             EditingToolbar(
                 fence = editingFence,
                 editingPoints = editingPoints,
+                isPrecisionMode = editingPrecisionMode,
+                onPrecisionModeChange = { editingPrecisionMode = it },
                 onUndo = { editingPoints = editingPoints.dropLast(1) },
                 onCancel = {
                     isEditingFence = false
@@ -241,11 +266,11 @@ fun MapScreen(app: TrackMasterApplication) {
         ) {
             if (isEditingFence && editingFence != null) {
                 SmallFloatingActionButton(
-                    onClick = { },
-                    containerColor = NeonBlue,
+                    onClick = { editingPoints = editingPoints.dropLast(1) },
+                    containerColor = NeonAmber,
                     contentColor = Color.White
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "点击地图添加点")
+                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "撤回")
                 }
             }
 
@@ -344,8 +369,25 @@ fun MapScreen(app: TrackMasterApplication) {
                 app.checkAndUpdateFenceState()
 
                 showCreateDialog = false
+                showRecalculateHint = true
                 drawingPoints = emptyList()
                 isDrawingMode = false
+            }
+        )
+    }
+
+    // 创建成功后引导去设置重新计算父子关系
+    if (showRecalculateHint) {
+        AlertDialog(
+            onDismissRequest = { showRecalculateHint = false },
+            title = { Text("围栏创建成功") },
+            text = {
+                Text("建议前往「设置 → 重新计算父子关系」建立围栏的嵌套层级，统计时会自动累加子围栏的停留时长。")
+            },
+            confirmButton = {
+                Button(onClick = { showRecalculateHint = false }) {
+                    Text("知道了")
+                }
             }
         )
     }
@@ -513,6 +555,8 @@ private fun DrawingToolbar(
     selectedColor: String,
     selectedAlpha: Float,
     fenceColors: List<String>,
+    isPrecisionMode: Boolean,
+    onPrecisionModeChange: (Boolean) -> Unit,
     onFenceTypeChange: (GeoFenceType) -> Unit,
     onColorChange: (String) -> Unit,
     onAlphaChange: (Float) -> Unit,
@@ -548,6 +592,14 @@ private fun DrawingToolbar(
                         onClick = { onFenceTypeChange(GeoFenceType.POLYGON) },
                         label = { Text("多边形", fontSize = 12.sp) },
                         leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                        modifier = Modifier.height(32.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    FilterChip(
+                        selected = isPrecisionMode,
+                        onClick = { onPrecisionModeChange(!isPrecisionMode) },
+                        label = { Text("精确", fontSize = 12.sp) },
+                        leadingIcon = { Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(14.dp)) },
                         modifier = Modifier.height(32.dp)
                     )
                 }
@@ -586,20 +638,24 @@ private fun DrawingToolbar(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 颜色选择器
+                // 颜色选择器（可横向滚动）
                 Text("颜色:", fontSize = 10.sp, color = Color.Gray)
                 Spacer(Modifier.width(6.dp))
-                fenceColors.take(6).forEach { c ->
-                    val sel = selectedColor == c
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(Color(AndroidColor.parseColor(c)))
-                            .then(if (sel) Modifier.background(Color.White.copy(alpha = 0.5f), CircleShape) else Modifier)
-                            .clickable { onColorChange(c) }
-                    )
-                    Spacer(Modifier.width(3.dp))
+                Row(
+                    modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    fenceColors.forEach { c ->
+                        val sel = selectedColor == c
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(AndroidColor.parseColor(c)))
+                                .then(if (sel) Modifier.background(Color.White.copy(alpha = 0.5f), CircleShape) else Modifier)
+                                .clickable { onColorChange(c) }
+                        )
+                    }
                 }
 
                 Spacer(Modifier.width(8.dp))
@@ -656,6 +712,8 @@ private fun DrawingToolbar(
 private fun EditingToolbar(
     fence: GeoFence?,
     editingPoints: List<GeoFencePoint>,
+    isPrecisionMode: Boolean,
+    onPrecisionModeChange: (Boolean) -> Unit,
     onUndo: () -> Unit,
     onCancel: () -> Unit,
     onSave: (GeoFence) -> Unit
@@ -669,6 +727,13 @@ private fun EditingToolbar(
                     fontSize = 12.sp,
                     color = NeonBlue,
                     modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = isPrecisionMode,
+                    onClick = { onPrecisionModeChange(!isPrecisionMode) },
+                    label = { Text("精确", fontSize = 11.sp) },
+                    leadingIcon = { Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                    modifier = Modifier.height(28.dp)
                 )
                 IconButton(onClick = onUndo) {
                     Icon(
@@ -736,6 +801,11 @@ private fun CreateFenceDialog(
                     }
                     GeoFenceType.POLYGON -> Text("顶点: ${points.size} 个", fontSize = 14.sp, color = Color.Gray)
                 }
+                Text(
+                    "💡 提示：围栏支持嵌套（父子关系），不支持相交。相交的两个围栏无法计算父子关系。",
+                    fontSize = 11.sp,
+                    color = NeonBlue
+                )
             }
         },
         confirmButton = {
@@ -1023,8 +1093,11 @@ private fun EditFenceDialog(
                 )
 
                 Text("颜色", fontSize = 12.sp, color = Color.Gray)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    fenceColors.take(8).forEach { c ->
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    fenceColors.forEach { c ->
                         val sel = color == c
                         Box(
                             Modifier.size(28.dp).clip(CircleShape)

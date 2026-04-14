@@ -143,6 +143,91 @@ object GlacierBlueScheme {
     val textTertiary = Color(0xFF81D4FA)  // 冰蓝灰
 }
 
+/** 方案9: 赛博青 - 赛博朋克风格，青绿光效 */
+object CyberTealScheme {
+    val primary = Color(0xFF00F5D4)    // 电光青
+    val primaryVariant = Color(0xFF00D9FF) // 亮青
+    val accent = Color(0xFFFF006E)       // 霓虹粉点缀
+
+    val background = Color(0xFF050A0F)   // 深空黑
+    val surface = Color(0xFF0A1628)     // 深蓝黑卡片
+
+    val glassPanel = Color(0xB30A1628)
+    val glassBorder = Color(0x3300F5D4)
+
+    val textPrimary = Color(0xFFE0FFFF)   // 青白
+    val textSecondary = Color(0xFF7FDBFF) // 浅青
+    val textTertiary = Color(0xFF00CED1)  // 青灰
+}
+
+/** 方案10: 薄荷绿 - 小清新薄荷，清爽自然 */
+object MintFreshScheme {
+    val primary = Color(0xFF26C485)    // 薄荷绿
+    val primaryVariant = Color(0xFF4AE29A) // 亮薄荷
+    val accent = Color(0xFFFFD93D)       // 柠檬黄点缀
+
+    val background = Color(0xFF0A1F14)   // 深绿黑
+    val surface = Color(0xFF0D2B1C)     // 深绿卡片
+
+    val glassPanel = Color(0xB30D2B1C)
+    val glassBorder = Color(0x3326C485)
+
+    val textPrimary = Color(0xFFE8F5E9)   // 浅绿白
+    val textSecondary = Color(0xFFA5D6A7) // 浅绿灰
+    val textTertiary = Color(0xFF81C784)  // 绿灰
+}
+
+/** 方案11: 玫瑰金 - 玫瑰金色系，优雅温柔 */
+object RoseGoldScheme {
+    val primary = Color(0xFFE91E63)    // 玫瑰粉
+    val primaryVariant = Color(0xFFF48FB1) // 浅玫瑰
+    val accent = Color(0xFFFFAB91)       // 珊瑚橙点缀
+
+    val background = Color(0xFF1A0A10)   // 深酒红黑
+    val surface = Color(0xFF2D0F1A)     // 深玫瑰卡片
+
+    val glassPanel = Color(0xB32D0F1A)
+    val glassBorder = Color(0x33E91E63)
+
+    val textPrimary = Color(0xFFFCE4EC)   // 粉白
+    val textSecondary = Color(0xFFF8BBD0) // 浅粉
+    val textTertiary = Color(0xFFF48FB1)  // 粉灰
+}
+
+/** 方案12: 深空灰 - 深空灰色系，科技质感 */
+object SpaceGrayScheme {
+    val primary = Color(0xFF90A4AE)    // 银灰
+    val primaryVariant = Color(0xFFB0BEC5) // 浅银灰
+    val accent = Color(0xFFFFCA28)       // 金色点缀
+
+    val background = Color(0xFF0D0D0D)   // 纯黑
+    val surface = Color(0xFF1A1A1A)     // 深灰卡片
+
+    val glassPanel = Color(0xB31A1A1A)
+    val glassBorder = Color(0x1AFFFFFF)
+
+    val textPrimary = Color(0xFFECEFF1)   // 银白
+    val textSecondary = Color(0xFFCFD8DC) // 浅银灰
+    val textTertiary = Color(0xFFB0BEC5)  // 银灰
+}
+
+/** 方案13: 薰衣草紫 - 薰衣草紫色，文艺浪漫 */
+object LavenderScheme {
+    val primary = Color(0xFF9C27B0)    // 薰衣草紫
+    val primaryVariant = Color(0xFFBA68C8) // 浅紫
+    val accent = Color(0xFFFFEB3B)       // 黄色点缀
+
+    val background = Color(0xFF12081A)   // 深紫黑
+    val surface = Color(0xFF1E0F2E)     // 深紫卡片
+
+    val glassPanel = Color(0xB31E0F2E)
+    val glassBorder = Color(0x339C27B0)
+
+    val textPrimary = Color(0xFFF3E5F5)   // 紫白
+    val textSecondary = Color(0xFFE1BEE7) // 浅紫
+    val textTertiary = Color(0xFFCE93D8)  // 紫灰
+}
+
 /** 主题枚举 */
 enum class AppTheme(
     val displayName: String,
@@ -155,7 +240,12 @@ enum class AppTheme(
     AURORA_GREEN("极光绿", "翡翠翠绿，自然清新"),
     DREAM_PURPLE("梦幻紫", "紫罗兰色，魔法浪漫"),
     SUNSET_ORANGE("落日橙", "暖橙粉色，温馨浪漫"),
-    GLACIER_BLUE("冰川蓝", "冰蓝银色，清冷优雅")
+    GLACIER_BLUE("冰川蓝", "冰蓝银色，清冷优雅"),
+    CYBER_TEAL("赛博青", "电光青绿，赛博朋克"),
+    MINT_FRESH("薄荷绿", "清爽薄荷，清新自然"),
+    ROSE_GOLD("玫瑰金", "玫瑰粉金，优雅温柔"),
+    SPACE_GRAY("深空灰", "银灰科技，简约质感"),
+    LAVENDER("薰衣草紫", "薰衣草紫，文艺浪漫")
 }
 
 /** 获取主题配色 */
@@ -168,4 +258,9 @@ fun getThemeColors(theme: AppTheme) = when (theme) {
     AppTheme.DREAM_PURPLE -> DreamPurpleScheme
     AppTheme.SUNSET_ORANGE -> SunsetOrangeScheme
     AppTheme.GLACIER_BLUE -> GlacierBlueScheme
+    AppTheme.CYBER_TEAL -> CyberTealScheme
+    AppTheme.MINT_FRESH -> MintFreshScheme
+    AppTheme.ROSE_GOLD -> RoseGoldScheme
+    AppTheme.SPACE_GRAY -> SpaceGrayScheme
+    AppTheme.LAVENDER -> LavenderScheme
 }
