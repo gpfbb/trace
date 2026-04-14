@@ -17,7 +17,7 @@ import java.util.UUID
  * - 管理绘制模式（圆形/多边形）
  * - 管理临时绘制点
  * - 管理编辑中的围栏
- * - 管理地图设置（地图类型、交通、热度图）
+ * - 管理地图类型
  */
 class MapViewModel(
     private val application: Application
@@ -55,12 +55,6 @@ class MapViewModel(
 
     private val _mapType = MutableStateFlow(1) // AMap.MAP_TYPE_NORMAL
     val mapType: StateFlow<Int> = _mapType
-
-    private val _trafficEnabled = MutableStateFlow(false)
-    val trafficEnabled: StateFlow<Boolean> = _trafficEnabled
-
-    private val _heatmapEnabled = MutableStateFlow(false)
-    val heatmapEnabled: StateFlow<Boolean> = _heatmapEnabled
 
     // ============================================================
     // 围栏操作
@@ -214,19 +208,5 @@ class MapViewModel(
      */
     fun setMapType(type: Int) {
         _mapType.value = type
-    }
-
-    /**
-     * 切换交通图层
-     */
-    fun toggleTraffic() {
-        _trafficEnabled.value = !_trafficEnabled.value
-    }
-
-    /**
-     * 切换热力图
-     */
-    fun toggleHeatmap() {
-        _heatmapEnabled.value = !_heatmapEnabled.value
     }
 }

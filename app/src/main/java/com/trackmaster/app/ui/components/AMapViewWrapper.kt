@@ -113,7 +113,6 @@ fun AMapViewWrapper(
     var previewCircle by remember { mutableStateOf<CircleWrapper?>(null) }
     var previewPolygon by remember { mutableStateOf<PolygonWrapper?>(null) }
     val editingMarkers = remember { mutableStateListOf<MarkerWrapper>() }
-    val displayedMarkers = remember { mutableStateListOf<MarkerWrapper>() }
     var cameraCenterLat by remember { mutableStateOf(0.0) }
     var cameraCenterLng by remember { mutableStateOf(0.0) }
     var hasCameraMoved by remember { mutableStateOf(false) }
@@ -135,7 +134,7 @@ fun AMapViewWrapper(
     // 地图类型切换
     LaunchedEffect(mapType, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
-        mapPresenter.configureMap(mapType = mapType, trafficEnabled = false)
+        mapPresenter.configureMap(mapType = mapType)
     }
 
     // 精确模式下，跟踪相机中心点

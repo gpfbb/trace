@@ -11,8 +11,6 @@ import com.amap.api.maps.MapView
 import com.amap.api.maps.model.*
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.trackmaster.app.core.DailySummary
-import com.trackmaster.app.core.Geofence
 import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.mapstraction.MapBounds
 import com.trackmaster.app.mapstraction.MapCircle
@@ -38,9 +36,6 @@ class AMapPresenter(
 
     // 临时绘制标记（绘制模式）
     private val tempMarkerOverlays = mutableMapOf<String, Marker>()
-
-    // 热力图
-    private var heatmapOverlay: HeatmapOverlayImpl? = null
 
     private var onMapClickListener: ((Double, Double) -> Unit)? = null
     private var onMarkerClickListener: ((String) -> Boolean)? = null
@@ -368,31 +363,18 @@ class AMapPresenter(
     // 热力图管理
     // ============================================================
 
-    fun setHeatmapData(fences: List<Geofence>, summaries: List<DailySummary>, maxDurationMin: Int = 0) {
-        if (heatmapOverlay == null) {
-            heatmapOverlay = HeatmapOverlayImpl(aMap)
-        }
-        heatmapOverlay?.update(fences, summaries, maxDurationMin)
-    }
-
-    fun clearHeatmap() {
-        heatmapOverlay?.clear()
-    }
-
     // ============================================================
     // 地图配置
     // ============================================================
 
     fun configureMap(
         mapType: Int,
-        trafficEnabled: Boolean,
         zoomControlsEnabled: Boolean = true,
         compassEnabled: Boolean = true,
         scaleControlsEnabled: Boolean = true,
         myLocationEnabled: Boolean = true
     ) {
         aMap.mapType = mapType
-        aMap.isTrafficEnabled = trafficEnabled
         aMap.uiSettings.isZoomControlsEnabled = zoomControlsEnabled
         aMap.uiSettings.isCompassEnabled = compassEnabled
         aMap.uiSettings.isScaleControlsEnabled = scaleControlsEnabled
@@ -460,7 +442,6 @@ class AMapPresenter(
 
     private fun cleanup() {
         clearAll()
-        heatmapOverlay = null
         onMapClickListener = null
         onMarkerClickListener = null
         onPolygonCompleteListener = null
