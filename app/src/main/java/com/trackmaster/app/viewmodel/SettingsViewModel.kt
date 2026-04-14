@@ -6,9 +6,8 @@ import androidx.lifecycle.ViewModel
 import com.trackmaster.app.AppPreferences
 import com.trackmaster.app.PermissionManager
 import com.trackmaster.app.TrackMasterApplication
-import com.trackmaster.app.core.FenceMapper
 import com.trackmaster.app.core.GeoFenceType
-import com.trackmaster.app.core.GeoMath
+import com.trackmaster.app.utils.GeoMath
 import com.trackmaster.app.core.Geofence
 import com.trackmaster.app.core.PowerMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,7 +96,7 @@ class SettingsViewModel(
         try {
             app.fenceTreeManager.clearAll()
 
-            val coreFences = FenceMapper.toCoreList(fences)
+            val coreFences = fences.map { GeoMath.buildEngineGeofence(it) }
             if (coreFences.isEmpty()) {
                 _recalculateMessage.value = "围栏转换失败"
                 return

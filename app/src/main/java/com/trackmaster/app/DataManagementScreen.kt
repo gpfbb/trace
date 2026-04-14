@@ -249,6 +249,10 @@ fun DataManagementScreen(
                             val result = dataManager.importData(file.absolutePath)
                             isImporting = false
                             if (result.success) {
+                                // 【关键修复】模板导入（仅围栏）后立即刷新引擎和内存数据，无需重启
+                                if (result.importedFences > 0) {
+                                    app.importFencesAndRefresh(file.readText(), preserveId = false)
+                                }
                                 successMessage = """
                                     导入成功！
 

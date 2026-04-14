@@ -1,8 +1,11 @@
-package com.trackmaster.app
+package com.trackmaster.app.model
 
 import java.util.Date
 import java.util.UUID
 
+/**
+ * 围栏分类
+ */
 data class Category(
     val id: String = UUID.randomUUID().toString(),
     val name: String,

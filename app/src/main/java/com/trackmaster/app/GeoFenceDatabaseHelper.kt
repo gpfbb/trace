@@ -8,6 +8,7 @@ import android.util.Log
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFencePoint
 import com.trackmaster.app.core.GeoFenceType
+import com.trackmaster.app.model.Category
 import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.data.DailyFenceStats
 import com.trackmaster.app.data.FenceStayRecord
@@ -1203,11 +1204,22 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
     fun saveDailyStayRecord(record: DailyStayRecord) {
         val db = writableDatabase
+
+        // 【关键修复】UPSERT 模式：累加而非替换
+        // 解决同一围栏同一天多次进入/退出时，CONFLICT_REPLACE 导致历史时长丢失的问题
+        val existing = getDailyStayRecord(record.date, record.fenceId)
+        val newDuration = if (existing != null) {
+            // 累加到已有时长（处理跨天、多次进入等场景）
+            existing.totalDurationSeconds + record.totalDurationSeconds
+        } else {
+            record.totalDurationSeconds
+        }
+
         val values = ContentValues()
         values.put(KEY_DAILY_DATE, record.date)
         values.put(KEY_DAILY_FENCE_ID, record.fenceId)
         values.put(KEY_DAILY_FENCE_NAME, record.fenceName)
-        values.put(KEY_DAILY_DURATION, record.totalDurationSeconds)
+        values.put(KEY_DAILY_DURATION, newDuration)
         values.put(KEY_DAILY_LAST_UPDATED, record.lastUpdated.time)
 
         db.insertWithOnConflict(
@@ -1216,7 +1228,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             values,
             SQLiteDatabase.CONFLICT_REPLACE
         )
-        Log.d("GeoFenceDB", "保存日统计: ${record.fenceName}, 日期=${record.date}, 时长=${record.totalDurationSeconds}秒")
+        Log.d("GeoFenceDB", "保存日统计: ${record.fenceName}, 日期=${record.date}, 累加时长=${record.totalDurationSeconds}秒, 总计=${newDuration}秒")
     }
 
     fun getDailyStayRecord(dateKey: String, fenceId: String): DailyStayRecord? {

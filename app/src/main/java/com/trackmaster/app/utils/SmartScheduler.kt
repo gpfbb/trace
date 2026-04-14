@@ -1,15 +1,15 @@
-package com.trackmaster.app.throttle
+package com.trackmaster.app.utils
 
 import com.trackmaster.app.core.AccelerometerData
 import com.trackmaster.app.core.ActivityResult
 import com.trackmaster.app.core.ActivityType
 import com.trackmaster.app.core.BBox
-import com.trackmaster.app.core.GeoMath
+import com.trackmaster.app.utils.GeoMath
 import com.trackmaster.app.core.GeoPoint
 import com.trackmaster.app.core.Geofence
 import com.trackmaster.app.core.LocationFix
 import com.trackmaster.app.core.PowerMode
-import com.trackmaster.app.core.buildFenceTree
+import com.trackmaster.app.utils.buildFenceTree
 import kotlin.math.cos
 import kotlin.math.PI
 import kotlin.math.sqrt
@@ -32,15 +32,15 @@ data class LocationHistoryRecord(
 
 data class ThrottleConfig(
     /** 漂移过滤阈值（米），accuracy > 此值丢弃 */
-    val driftThresholdM: Double = 80.0,
+    val driftThresholdM: Double = 30.0,
     /** 静止判定：距离阈值倍率（精度半径 × 此值） */
     val stationaryAccuracyMultiplier: Double = 2.0,
     /** 静止判定：最小距离阈值（米），越大越容易判定静止 */
-    val stationaryMinDistanceM: Double = 100.0,
+    val stationaryMinDistanceM: Double = 20.0,
     /** 静止判定：加速度方差阈值，越大越容易判定静止 */
-    val stationaryAccelVariance: Double = 0.5,
+    val stationaryAccelVariance: Double = 1.0,
     /** 静止判定：速度阈值（米/秒），越大越容易判定静止 */
-    val stationarySpeedThreshold: Double = 1.5,
+    val stationarySpeedThreshold: Double = 0.3,
     /** 静止判定：时间窗口大小（定位点数） */
     val stationaryWindowSize: Int = 5,
     /** 静止判定：需要在窗口内有多少个点满足条件才判定为静止 */
@@ -48,7 +48,7 @@ data class ThrottleConfig(
     /** 阶梯降频各阶段（静止分钟 → 间隔ms） */
     val throttleSteps: List<ThrottleStep> = DEFAULT_THROTTLE_STEPS,
     /** 立即重置距离阈值（米），位移超过此值立即重置降频 */
-    val resetDistanceM: Double = 200.0,
+    val resetDistanceM: Double = 50.0,
     /** 边界 Buffer 区宽度（米），省电模式下只有非常接近围栏边界才提频 */
     val boundaryBufferM: Double = 10.0,
     /** SLC 兜底位移阈值（米） */
@@ -67,17 +67,14 @@ data class ThrottleStep(
 /**
  * 均衡模式降频阶梯
  * 适用于 BALANCED 模式
- * 优化：更快的降频，更长的间隔
+ * 优化：更激进的降频，静止2分钟即降到3分钟/次，5分钟降到8分钟/次
  */
 val BALANCED_THROTTLE_STEPS = listOf(
-    ThrottleStep(afterMin = 0, intervalMs = 30_000L),     // 0-1min: 30s/次
-    ThrottleStep(afterMin = 1, intervalMs = 90_000L),      // 1-3min: 90s/次
-    ThrottleStep(afterMin = 3, intervalMs = 180_000L),     // 3-5min: 3min/次
-    ThrottleStep(afterMin = 5, intervalMs = 300_000L),     // 5-10min: 5min/次
-    ThrottleStep(afterMin = 10, intervalMs = 480_000L),     // 10-20min: 8min/次
-    ThrottleStep(afterMin = 20, intervalMs = 600_000L),     // 20-40min: 10min/次
-    ThrottleStep(afterMin = 40, intervalMs = 900_000L),    // 40-60min: 15min/次
-    ThrottleStep(afterMin = 60, intervalMs = 1200_000L),   // ≥60min: 20min/次
+    ThrottleStep(afterMin = 0, intervalMs = 60_000L),     // 0-1min: 1min/次
+    ThrottleStep(afterMin = 1, intervalMs = 120_000L),    // 1-2min: 2min/次
+    ThrottleStep(afterMin = 2, intervalMs = 180_000L),     // 2-5min: 3min/次
+    ThrottleStep(afterMin = 5, intervalMs = 480_000L),     // 5-10min: 8min/次
+    ThrottleStep(afterMin = 10, intervalMs = 600_000L),   // ≥10min: 10min/次
 )
 
 /**
@@ -90,9 +87,9 @@ val POWERSAVE_THROTTLE_STEPS = listOf(
     ThrottleStep(afterMin = 3, intervalMs = 300_000L),      // 3-5min: 5min/次
     ThrottleStep(afterMin = 5, intervalMs = 480_000L),     // 5-10min: 8min/次
     ThrottleStep(afterMin = 10, intervalMs = 600_000L),    // 10-20min: 10min/次
-    ThrottleStep(afterMin = 20, intervalMs = 900_000L),    // 20-40min: 15min/次
-    ThrottleStep(afterMin = 40, intervalMs = 1200_000L),   // 40-60min: 20min/次
-    ThrottleStep(afterMin = 60, intervalMs = 1800_000L),   // ≥60min: 30min/次
+    ThrottleStep(afterMin = 20, intervalMs = 900_000L),     // 20-40min: 15min/次
+    ThrottleStep(afterMin = 40, intervalMs = 1200_000L),    // 40-60min: 20min/次
+    ThrottleStep(afterMin = 60, intervalMs = 1800_000L),    // ≥60min: 30min/次
 )
 
 /**
@@ -128,7 +125,7 @@ data class ScheduleDecision(
  * 多源静止判定：距离 + 加速度方差综合判断
  * 阶梯降频：静止时间越长，定位间隔越大
  * 立即重置：位移/屏幕/活动识别触发恢复
- * 三模式兼容：performance / balanced / powersave
+ * 三模式兼容：balanced / powersave
  */
 class SmartScheduler(
     fences: List<Geofence>,
@@ -136,7 +133,7 @@ class SmartScheduler(
 ) {
     var config = config
         private set
-    
+
     fun updateConfig(newConfig: ThrottleConfig) {
         val bufferChanged = newConfig.boundaryBufferM != config.boundaryBufferM
         this.config = newConfig
@@ -202,10 +199,6 @@ class SmartScheduler(
      */
     private fun getCurrentThrottleSteps(): List<ThrottleStep> {
         return when (mode) {
-            PowerMode.PERFORMANCE -> {
-                // 性能模式：固定 5 秒间隔（极快响应）
-                listOf(ThrottleStep(afterMin = 0, intervalMs = 5_000L))
-            }
             PowerMode.BALANCED -> BALANCED_THROTTLE_STEPS
             PowerMode.POWERSAVE -> POWERSAVE_THROTTLE_STEPS
         }
@@ -218,9 +211,7 @@ class SmartScheduler(
     /** 设置电源模式 */
     fun setMode(mode: PowerMode) {
         this.mode = mode
-        // 切换模式时重置降频状态
-        // PERFORMANCE模式需要立即响应，所以重置到最高频率
-        // 其他模式根据静止状态自适应降频
+        // 切换模式时重置降频状态，根据静止状态自适应降频
         resetThrottle()
     }
 
@@ -231,82 +222,64 @@ class SmartScheduler(
      */
     fun evaluate(fix: LocationFix, accel: AccelerometerData? = null): ScheduleDecision {
         val ts = fix.timestamp
-        val decision: ScheduleDecision
 
-        // ---- 性能模式：不降频（但仍更新状态，避免切换模式时使用陈旧数据） ----
-        if (mode == PowerMode.PERFORMANCE) {
-            lastProcessedTs = ts
-            lastPoint = GeoPoint(fix.lat, fix.lng)
+        // ---- 漂移过滤 ----
+        if (fix.accuracy > config.driftThresholdM) {
+            return decision(false)
+        }
+
+        val currentPoint = GeoPoint(fix.lat, fix.lng)
+
+        // ---- 降频检查：是否到了该处理的时间 ----
+        val interval = getIntervalForLevel()
+        if (lastProcessedTs > 0 && ts - lastProcessedTs < interval) {
+            return decision(false)
+        }
+
+        // ---- 多源静止判定 ----
+        val distance = lastPoint?.let { GeoMath.haversine(it, currentPoint) } ?: Double.MAX_VALUE
+        val isStationary = checkStationary(distance, fix.accuracy, accel)
+
+        // ---- 边界 Buffer 检测（省电模式） ----
+        val inBuffer = mode == PowerMode.POWERSAVE && checkBoundaryBuffer(currentPoint)
+
+        // ---- 立即重置条件检查 ----
+        val shouldReset = distance > config.resetDistanceM
+
+        if (shouldReset) {
+            resetThrottle()
+        } else if (isStationary && !inBuffer) {
+            if (stationarySinceTs == 0L) {
+                stationarySinceTs = ts
+            }
+            accumulatedStationaryMs = ts - stationarySinceTs
+            updateThrottleLevel()
+        } else if (!isStationary) {
             stationarySinceTs = 0L
             accumulatedStationaryMs = 0L
             level = 0
-            decision = ScheduleDecision(
-                shouldProcess = true,
-                level = 0,
-                nextIntervalMs = config.baseIntervalMs,
-                inBoundaryBuffer = false,
-            )
-        } else {
-            // ---- 漂移过滤 ----
-            if (fix.accuracy > config.driftThresholdM) {
-                decision = decision(false)
-            } else {
-                val currentPoint = GeoPoint(fix.lat, fix.lng)
-
-                // ---- 降频检查：是否到了该处理的时间 ----
-                val interval = getIntervalForLevel()
-                if (lastProcessedTs > 0 && ts - lastProcessedTs < interval) {
-                    decision = decision(false)
-                } else {
-                    // ---- 多源静止判定 ----
-                    val distance = lastPoint?.let { GeoMath.haversine(it, currentPoint) } ?: Double.MAX_VALUE
-                    val isStationary = checkStationary(distance, fix.accuracy, accel)
-
-                    // ---- 边界 Buffer 检测（省电模式） ----
-                    val inBuffer = mode == PowerMode.POWERSAVE && checkBoundaryBuffer(currentPoint)
-
-                    // ---- 立即重置条件检查 ----
-                    val shouldReset = distance > config.resetDistanceM
-
-                    if (shouldReset) {
-                        resetThrottle()
-                    } else if (isStationary && !inBuffer) {
-                        if (stationarySinceTs == 0L) {
-                            stationarySinceTs = ts
-                        }
-                        accumulatedStationaryMs = ts - stationarySinceTs
-                        updateThrottleLevel()
-                    } else if (!isStationary) {
-                        stationarySinceTs = 0L
-                        accumulatedStationaryMs = 0L
-                        level = 0
-                    }
-
-                    // 省电模式下边界 Buffer 区临时提频
-                    if (inBuffer && level > 0) {
-                        level = 0
-                    }
-
-                    lastProcessedTs = ts
-                    lastPoint = currentPoint
-
-                    val historyRecord = LocationHistoryRecord(
-                        point = currentPoint,
-                        timestamp = ts,
-                        accuracy = fix.accuracy,
-                        speed = fix.speed
-                    )
-                    locationHistory.addLast(historyRecord)
-                    if (locationHistory.size > config.stationaryWindowSize) {
-                        locationHistory.removeFirst()
-                    }
-
-                    decision = decision(true, inBuffer)
-                }
-            }
         }
 
-        return decision
+        // 省电模式下边界 Buffer 区临时提频
+        if (inBuffer && level > 0) {
+            level = 0
+        }
+
+        lastProcessedTs = ts
+        lastPoint = currentPoint
+
+        val historyRecord = LocationHistoryRecord(
+            point = currentPoint,
+            timestamp = ts,
+            accuracy = fix.accuracy,
+            speed = fix.speed
+        )
+        locationHistory.addLast(historyRecord)
+        if (locationHistory.size > config.stationaryWindowSize) {
+            locationHistory.removeFirst()
+        }
+
+        return decision(true, inBuffer)
     }
 
     /** 活动识别回调，WALKING/DRIVING/CYCLING 时立即重置 */
@@ -397,7 +370,7 @@ class SmartScheduler(
             accuracyM * config.stationaryAccuracyMultiplier,
             config.stationaryMinDistanceM
         )
-        
+
         if (locationHistory.size >= 3) {
             val avgAccuracy = locationHistory.map { it.accuracy }.average()
             val smoothedThreshold = maxOf(
@@ -406,7 +379,7 @@ class SmartScheduler(
             )
             return maxOf(baseThreshold, smoothedThreshold)
         }
-        
+
         return baseThreshold
     }
 

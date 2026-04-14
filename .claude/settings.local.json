@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/14708/.claude/plugins/marketplaces/pua-skills/hooks/**)",
+      "Read(//c/Users/14708/.claude/plugins/cache/pua-skills/pua/3.1.0/hooks/**)",
+      "Bash(bash \"C:/Users/14708/.claude/plugins/cache/pua-skills/pua/3.1.0/hooks/session-restore.sh\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d[''''hookSpecificOutput''''][''''additionalContext''''][:300]\\)\")",
+      "Bash(mkdir -p \"C:/Users/14708/.pua\")",
+      "Bash(printf '{\"\"always_on\"\": false, \"\"feedback_frequency\"\": 0}')",
+      "Bash(\"C:/Users/14708/.pua/config.json\")",
+      "Read(//c/Users/14708/.pua/**)",
+      "Bash(curl -s -X POST https://pua-skill.pages.dev/api/stats -H \"Content-Type: application/json\" -d '{\"\"event\"\":\"\"session_start\"\",\"\"flavor\"\":\"\"alibaba\"\",\"\"version\"\":\"\"3.1.0\"\"}')"
+    ]
+  }
+}

@@ -1,8 +1,15 @@
 package com.trackmaster.app.di
 
+import android.database.sqlite.SQLiteOpenHelper
+import com.trackmaster.app.AppPreferences
+import com.trackmaster.app.GeoFenceDatabaseHelper
 import com.trackmaster.app.TrackMasterApplication
+import com.trackmaster.app.core.EngineHolder
+import com.trackmaster.app.core.FenceTreeManager
+import com.trackmaster.app.core.RepositoryHolder
 import com.trackmaster.app.storage.SqliteStorageAdapter
 import com.trackmaster.app.storage.StorageAdapter
+import com.trackmaster.app.utils.ThrottleConfig
 import com.trackmaster.app.viewmodel.HomeViewModel
 import com.trackmaster.app.viewmodel.MainViewModel
 import com.trackmaster.app.viewmodel.MapViewModel
@@ -43,8 +50,38 @@ val appModule = module {
      * SQLite 存储适配器
      * 负责将 StorageAdapter 接口实现委托给 GeoFenceDatabaseHelper
      */
+    single<SQLiteOpenHelper> { GeoFenceDatabaseHelper(get()) }
+    single<GeoFenceDatabaseHelper> { get<SQLiteOpenHelper>() as GeoFenceDatabaseHelper }
     single<StorageAdapter> {
         SqliteStorageAdapter(get())
+    }
+
+    // ============================================================
+    // Holder 层 (单例)
+    // ============================================================
+
+    single { RepositoryHolder(get()) }
+    single { get<RepositoryHolder>().repository }
+
+    // FenceTreeManager needs Context, use applicationContext
+    single { FenceTreeManager(androidContext()) }
+
+    single { AppPreferences(get()) }
+    single {
+        val prefs: AppPreferences = get()
+        ThrottleConfig(
+            driftThresholdM = prefs.driftThreshold,
+            stationaryMinDistanceM = prefs.stationaryThreshold,
+            boundaryBufferM = prefs.boundaryBuffer
+        )
+    }
+
+    single {
+        EngineHolder(
+            repository = get<RepositoryHolder>().repository,
+            throttleConfig = get(),
+            appPreferences = get()
+        )
     }
 
     // ============================================================

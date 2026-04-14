@@ -2,6 +2,7 @@ package com.trackmaster.app
 
 import android.content.Context
 import android.graphics.Color
+import com.trackmaster.app.data.GeoFenceAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -52,53 +53,81 @@ enum class TimeDimension {
 class StatisticsManager(private val context: Context) {
 
     private val dbHelper: GeoFenceDatabaseHelper
-        get() = GeoFenceDatabaseHelper(context)
+        get() = TrackMasterApplication.instance.dbHelper
 
     private val app: TrackMasterApplication
         get() = TrackMasterApplication.instance
 
     /**
-     * 获取统计数据（包含已完成记录 + 当前活跃会话的实时时长）
+     * 获取统计数据（基于 daily_stays 精确分天 + 当前活跃会话的实时时长）
+     *
+     * 【修复】使用 daily_stays 表获取已完成的分天时长数据，
+     * 而非 stays 表（会导致跨天停留的全部时长错误归入进入日）。
      */
     fun getStatistics(timeDimension: TimeDimension, timeRange: TimeRange): List<FenceStatistics> {
         android.util.Log.d("StatisticsManager", "getStatistics called: dimension=$timeDimension, range=${timeRange.startTime}-${timeRange.endTime}")
 
-        val records = dbHelper.getAllStayRecords()
-        val filteredRecords = records.filter { record ->
-            val enterTime = record.enterTime
-            enterTime >= timeRange.startTime && enterTime <= timeRange.endTime
+        // 1. 从 daily_stays 表获取已完成的分天时长数据
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val rangeStartDate = dateFormat.format(timeRange.startTime)
+        val rangeEndDate = dateFormat.format(timeRange.endTime)
+
+        // 获取时间范围内的所有 daily_stays 记录
+        val allDailyRecords = when (timeDimension) {
+            TimeDimension.DAY -> dbHelper.getDailyStayRecordsByDate(rangeStartDate)
+            TimeDimension.MONTH, TimeDimension.YEAR -> {
+                // 收集范围内所有日期的 daily_stays
+                val allRecords = mutableListOf<DailyStayRecord>()
+                val cal = Calendar.getInstance()
+                cal.time = timeRange.startTime
+                val endCal = Calendar.getInstance()
+                endCal.time = timeRange.endTime
+                while (!cal.after(endCal)) {
+                    val dateKey = dateFormat.format(cal.time)
+                    allRecords.addAll(dbHelper.getDailyStayRecordsByDate(dateKey))
+                    cal.add(Calendar.DAY_OF_MONTH, 1)
+                }
+                allRecords
+            }
         }
-        android.util.Log.d("StatisticsManager", "Filtered records: ${filteredRecords.size}")
+        android.util.Log.d("StatisticsManager", "Daily records: ${allDailyRecords.size}")
 
         val statsMap = mutableMapOf<String, FenceStatisticsBuilder>()
 
-        // 添加已完成的停留记录
-        for (record in filteredRecords) {
+        // 添加已完成的分天停留记录
+        for (record in allDailyRecords) {
             val fenceId = record.fenceId
-            val fenceName = record.fenceName ?: fenceId
-            val duration = record.durationSeconds ?: 0L
+            val fenceName = record.fenceName
 
             val builder = statsMap.getOrPut(fenceId) {
                 FenceStatisticsBuilder(fenceId = fenceId, fenceName = fenceName)
             }
-            builder.addDuration(duration)
-            builder.incrementEnterCount()
+            builder.addDuration(record.totalDurationSeconds)
+            // daily_stays 不记录进入次数，进入次数从 events 表单独统计
         }
 
-        // 添加当前活跃会话的实时时长（如果属于当前时间范围）
-        // 注意：对于日视图，即使 enterTime 是昨天（跨午夜），只要会话还在进行中，也应该计入
+        // 2. 从 events 表统计进入次数
+        val events = dbHelper.getEventsByTimeRange(timeRange.startTime, timeRange.endTime)
+        val enterCounts = events
+            .filter { it.action == GeoFenceAction.ENTER }
+            .groupBy { it.fenceId }
+            .mapValues { it.value.size }
+
+        // 将进入次数合并到 statsMap
+        for ((fenceId, count) in enterCounts) {
+            statsMap.getOrPut(fenceId) {
+                FenceStatisticsBuilder(fenceId = fenceId, fenceName = fenceId)
+            }.setEnterCountValue(count)
+        }
+
+        // 3. 添加当前活跃会话的实时时长（跨午夜的活跃会话只计算在时间范围内的部分）
         val activeSessions = app.stayDurationManager.activeSessions
         android.util.Log.d("StatisticsManager", "Active sessions: ${activeSessions.size}")
         val now = Date()
         for ((fenceId, session) in activeSessions) {
-            // 活跃会话在时间范围内的情况：
-            // 1. enterTime 在范围内（当天进入）
-            // 2. enterTime 在范围之前，但会话还在进行（跨午夜的情况）
-            val sessionEnded = false // 活跃会话没有结束时间
+            val sessionEnded = false
             val overlapsWithRange = session.enterTime <= timeRange.endTime && !sessionEnded
             if (overlapsWithRange) {
-                // 【修复】跨天会话只计算在时间范围内的部分，避免单日超过24小时
-                // 计算该会话在当前日期范围内的有效时长
                 val effectiveStartTime = maxOf(session.enterTime, timeRange.startTime)
                 val effectiveEndTime = minOf(now, timeRange.endTime)
                 val effectiveDurationSeconds = maxOf(0L, (effectiveEndTime.time - effectiveStartTime.time) / 1000)
@@ -108,8 +137,8 @@ class StatisticsManager(private val context: Context) {
                     FenceStatisticsBuilder(fenceId = fenceId, fenceName = session.fenceName)
                 }
                 builder.addDuration(effectiveDurationSeconds)
-                // 如果这个围栏之前没有被记录进入（当前活跃），也算一次进入
-                if (!filteredRecords.any { it.fenceId == fenceId }) {
+                // 如果之前没有被记录进入（当前活跃），也算一次进入
+                if (!enterCounts.containsKey(fenceId)) {
                     builder.incrementEnterCount()
                 }
             }
@@ -276,6 +305,10 @@ class StatisticsManager(private val context: Context) {
 
         fun incrementEnterCount() {
             enterCount++
+        }
+
+        fun setEnterCountValue(count: Int) {
+            enterCount = count
         }
 
         fun build(): FenceStatistics {

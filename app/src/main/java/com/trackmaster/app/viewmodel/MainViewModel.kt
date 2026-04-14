@@ -3,7 +3,7 @@ package com.trackmaster.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.amap.api.location.AMapLocation
+import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.storage.Repository
@@ -32,8 +32,8 @@ class MainViewModel(
     // 位置状态
     // ============================================================
 
-    private val _currentLocation = MutableStateFlow<AMapLocation?>(null)
-    val currentLocation: StateFlow<AMapLocation?> = _currentLocation
+    private val _currentLocation = MutableStateFlow<Location?>(null)
+    val currentLocation: StateFlow<Location?> = _currentLocation
 
     private val _locationStatus = MutableStateFlow("正在初始化...")
     val locationStatus: StateFlow<String> = _locationStatus
@@ -131,7 +131,7 @@ class MainViewModel(
  * 定位服务状态
  */
 data class LocationServiceState(
-    val lastLocation: AMapLocation? = null,
+    val lastLocation: Location? = null,
     val isFirstLocation: Boolean = true,
     val locationCount: Int = 0,
     val isRunning: Boolean = false

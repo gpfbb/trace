@@ -2,9 +2,13 @@ package com.trackmaster.app.core
 
 import android.util.Log
 import com.trackmaster.app.storage.Repository
-import com.trackmaster.app.throttle.SmartScheduler
-import com.trackmaster.app.throttle.ThrottleConfig
-import com.trackmaster.app.core.GeoMath.FenceState
+import com.trackmaster.app.utils.SmartScheduler
+import com.trackmaster.app.utils.ThrottleConfig
+import com.trackmaster.app.utils.GeoMath.FenceState
+import com.trackmaster.app.utils.DynamicBufferManager
+import com.trackmaster.app.utils.GeoMath
+import com.trackmaster.app.utils.buildFenceTree
+import com.trackmaster.app.core.GeoPoint
 import java.util.concurrent.atomic.AtomicInteger
 
 /**

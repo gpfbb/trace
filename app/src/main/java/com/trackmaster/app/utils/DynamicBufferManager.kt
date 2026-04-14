@@ -1,7 +1,7 @@
-package com.trackmaster.app.core
+package com.trackmaster.app.utils
 
 import android.util.Log
-import com.trackmaster.app.core.GeoMath.HysteresisConfig
+import com.trackmaster.app.utils.GeoMath.HysteresisConfig
 import com.trackmaster.app.core.PowerMode
 import kotlin.math.max
 import kotlin.math.min
@@ -38,7 +38,6 @@ class DynamicBufferManager {
 
         // 电量模式乘数
         private val POWER_MODE_MULTIPLIERS = mapOf(
-            PowerMode.PERFORMANCE to 0.8,  // 性能模式：较小缓冲区
             PowerMode.BALANCED to 1.0,     // 均衡模式：默认
             PowerMode.POWERSAVE to 1.5     // 省电模式：较大缓冲区
         )

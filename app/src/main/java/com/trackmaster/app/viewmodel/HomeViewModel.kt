@@ -3,6 +3,7 @@ package com.trackmaster.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.trackmaster.app.DailyStayRecord
 import com.trackmaster.app.data.FenceStayRecord
 import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.TrackMasterApplication
@@ -86,6 +87,13 @@ class HomeViewModel(
     init {
         refreshStats()
         startAutoRefresh()
+
+        // 监听围栏状态版本变化，立即刷新 UI
+        viewModelScope.launch {
+            app.fenceStateVersion.collect {
+                refreshStats()
+            }
+        }
     }
 
     /**
@@ -122,20 +130,25 @@ class HomeViewModel(
 
     /**
      * 更新今日统计
+     *
+     * 【修复】使用 daily_stays 表获取已完成的分天时长数据，
+     * 而非 stays 表（会导致跨天停留的全部时长错误归入进入日）。
      */
     private fun updateTodayStats() {
         val today = Calendar.getInstance()
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val todayStr = dateFormat.format(today.time)
 
-        val allRecords = app.dbHelper.getAllStayRecords()
-        val todayRecords = allRecords.filter { record ->
-            dateFormat.format(record.enterTime).startsWith(todayStr)
-        }
+        // 使用 daily_stays 表获取今日时长（正确分天的数据）
+        val todayDailyRecords = app.dbHelper.getDailyStayRecordsByDate(todayStr)
+        _todayTotalDuration.value = todayDailyRecords.sumOf { it.totalDurationSeconds }
 
-        _todayEnterCount.value = todayRecords.size
-        _todayExitCount.value = todayRecords.count { it.exitTime != null }
-        _todayTotalDuration.value = todayRecords.sumOf { it.durationSeconds ?: 0L }
+        // 进入/离开次数从 events 表统计
+        val todayEvents = app.geoFenceEvents.filter { event ->
+            dateFormat.format(event.time).startsWith(todayStr)
+        }
+        _todayEnterCount.value = todayEvents.count { it.action == GeoFenceAction.ENTER }
+        _todayExitCount.value = todayEvents.count { it.action == GeoFenceAction.EXIT }
     }
 
     /**
@@ -153,20 +166,31 @@ class HomeViewModel(
 
     /**
      * 更新月度 TOP 围栏
+     *
+     * 【修复】使用 daily_stays 表获取已完成的分天时长数据，
+     * 而非 stays 表（会导致跨天停留的全部时长错误归入进入日）。
      */
     private fun updateMonthTopFences() {
         val calendar = Calendar.getInstance()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+        // 收集当月所有日期的 daily_stays
+        val allDailyRecords = mutableListOf<DailyStayRecord>()
         calendar.set(Calendar.DAY_OF_MONTH, 1)
         val monthStart = calendar.time
+        val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
 
-        val allRecords = app.dbHelper.getAllStayRecords()
-        val monthRecords = allRecords.filter { it.enterTime >= monthStart }
+        for (day in 1..daysInMonth) {
+            calendar.set(Calendar.DAY_OF_MONTH, day)
+            val dateKey = dateFormat.format(calendar.time)
+            allDailyRecords.addAll(app.dbHelper.getDailyStayRecordsByDate(dateKey))
+        }
 
         // 按围栏分组计算总时长
-        val fenceDurations = monthRecords
+        val fenceDurations = allDailyRecords
             .groupBy { it.fenceName }
             .mapValues { (_, records) ->
-                records.sumOf { it.durationSeconds ?: 0L }
+                records.sumOf { it.totalDurationSeconds }
             }
             .map { FenceDurationStats(it.key, it.value) }
             .sortedByDescending { it.totalDurationSeconds }

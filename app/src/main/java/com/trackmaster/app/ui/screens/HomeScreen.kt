@@ -75,14 +75,20 @@ fun HomeScreen(
                 todayEnterCount = todayEvents.count { it.action == GeoFenceAction.ENTER }
                 todayExitCount = todayEvents.count { it.action == GeoFenceAction.EXIT }
 
+                // 【关键修复】使用 daily_stays 表（按天合并的精确数据）替代 stays 表
+                // 避免 stays 表中可能存在的多条开放/重复记录导致时长叠加错误
                 val cal = Calendar.getInstance()
                 cal.set(Calendar.DAY_OF_MONTH, 1)
-                val monthStart = cal.time
-                val allRecords = app.dbHelper.getAllStayRecords()
-                val monthRecords = allRecords.filter { it.enterTime >= monthStart }
-                val top = monthRecords
+                val allDailyRecords = mutableListOf<com.trackmaster.app.DailyStayRecord>()
+                val nowCal = Calendar.getInstance()
+                while (!cal.after(nowCal)) {
+                    val dateKey = dateFormat.format(cal.time)
+                    allDailyRecords.addAll(app.dbHelper.getDailyStayRecordsByDate(dateKey))
+                    cal.add(Calendar.DAY_OF_MONTH, 1)
+                }
+                val top = allDailyRecords
                     .groupBy { it.fenceName }
-                    .mapValues { (_, recs) -> recs.sumOf { it.durationSeconds ?: 0L } }
+                    .mapValues { (_, recs) -> recs.sumOf { it.totalDurationSeconds } }
                     .entries
                     .sortedByDescending { it.value }
                     .take(3)

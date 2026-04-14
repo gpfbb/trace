@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFencePoint
 import com.trackmaster.app.core.GeoFenceType
+import com.trackmaster.app.model.Category
 import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.data.GeoFenceEvent
 import com.trackmaster.app.data.FenceStayRecord
@@ -531,6 +532,8 @@ class DataManager(private val context: Context) {
                         center = GeoFencePoint(obj.getDouble("centerLat"), obj.getDouble("centerLng")),
                         radius = obj.getDouble("radius").toFloat(),
                         categoryId = obj.optString("categoryId", Category.UNASSIGNED_ID),
+                        color = obj.optString("color", "#FF0000"),
+                        alpha = obj.optDouble("alpha", 0.3).toFloat(),
                     )
                 } else {
                     val pts = mutableListOf<GeoFencePoint>()
@@ -545,6 +548,8 @@ class DataManager(private val context: Context) {
                         type = type,
                         points = pts,
                         categoryId = obj.optString("categoryId", Category.UNASSIGNED_ID),
+                        color = obj.optString("color", "#FF0000"),
+                        alpha = obj.optDouble("alpha", 0.3).toFloat(),
                     )
                 }
                 dbHelper.insertFence(fence)

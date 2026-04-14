@@ -85,7 +85,7 @@ data class ActivityResult(
 // ============================================================
 
 /** 电源模式 */
-enum class PowerMode { PERFORMANCE, BALANCED, POWERSAVE }
+enum class PowerMode { BALANCED, POWERSAVE }
 
 // ============================================================
 // 停留片段
@@ -128,6 +128,3 @@ data class VizNode(
     val value: Int? = null,
     val children: List<VizNode>? = null,
 )
-
-// 注：GeoFenceEvent、GeoFenceAction、FenceStayRecord、DailyFenceStats
-// 暂保留在 MainActivity.kt 中，Phase 5 集成时统一迁移。

@@ -7,7 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.trackmaster.app.core.PowerMode
-import com.trackmaster.app.core.GeoMath
+import com.trackmaster.app.utils.GeoMath
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -650,16 +650,9 @@ fun LocationModeSection(
 
         LocationModeItem(
             title = "均衡模式",
-            description = "智能平衡：静止30秒/次起，逐渐降至8分钟/次。边界500米内临时提频",
+            description = "智能平衡：静止1分钟/次起，2分钟降至3分钟/次，5分钟降至8分钟/次，10分钟以上10分钟/次",
             isSelected = selectedMode == PowerMode.BALANCED,
             onClick = { onModeSelected(PowerMode.BALANCED) }
-        )
-
-        LocationModeItem(
-            title = "性能模式",
-            description = "最高频率(5秒/次)，实时性和精度最好，但耗电高，适合导航追踪",
-            isSelected = selectedMode == PowerMode.PERFORMANCE,
-            onClick = { onModeSelected(PowerMode.PERFORMANCE) }
         )
     }
 }
@@ -774,9 +767,9 @@ fun AdvancedSettingsSection(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "• 静止判定: 30m (平衡省电和响应)\n" +
-                            "• 边界缓冲: 200m (减少误判)\n" +
-                            "• 漂移检测: 50m/s (过滤异常点)",
+                    "• 静止判定: 20m (小围栏推荐10-30m)\n" +
+                            "• 边界缓冲: 10m (小围栏推荐3-20m)\n" +
+                            "• 漂移检测: 30m (过滤低精度GPS点)",
                     fontSize = 12.sp,
                     color = Color(0xFFC8E6C9),
                     lineHeight = 18.sp
@@ -788,8 +781,8 @@ fun AdvancedSettingsSection(
         GlassButton(
             onClick = {
                 onStationaryThresholdChange(30.0)
-                onBoundaryBufferChange(200.0)
-                onDriftThresholdChange(50.0)
+                onBoundaryBufferChange(10.0)
+                onDriftThresholdChange(30.0)
             },
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -818,7 +811,7 @@ fun AdvancedSettingsSection(
             Slider(
                 value = stationaryThreshold.toFloat(),
                 onValueChange = { onStationaryThresholdChange(it.toDouble()) },
-                valueRange = 30f..150f,
+                valueRange = 10f..80f,
                 steps = 11,
                 colors = SliderDefaults.colors(
                     thumbColor = primaryColor(),
@@ -827,7 +820,7 @@ fun AdvancedSettingsSection(
                 )
             )
             Text(
-                "判定为静止的距离阈值。值越大越容易判定为静止，越省电。建议设置80-100米。",
+                "判定为静止的距离阈值。值越大越容易判定为静止，越省电。小围栏建议20-50米避免室内误判。",
                 fontSize = 11.sp,
                 color = Color(0xFF9E9E9E)
             )
@@ -855,8 +848,8 @@ fun AdvancedSettingsSection(
             Slider(
                 value = boundaryBuffer.toFloat(),
                 onValueChange = { onBoundaryBufferChange(it.toDouble()) },
-                valueRange = 10f..200f,
-                steps = 18,
+                valueRange = 3f..100f,
+                steps = 9,
                 colors = SliderDefaults.colors(
                     thumbColor = primaryColor(),
                     activeTrackColor = primaryColor(),
@@ -864,7 +857,7 @@ fun AdvancedSettingsSection(
                 )
             )
             Text(
-                "省电模式边界缓冲距离。值越大越省电，但进出围栏检测延迟。极小值(10-50米)可快速检测但耗电略高。",
+                "围栏边界扩展区域。小围栏建议3-20米，过大(如100m+)会导致室内外判断失误。",
                 fontSize = 11.sp,
                 color = Color(0xFF9E9E9E)
             )
@@ -883,7 +876,7 @@ fun AdvancedSettingsSection(
                     color = Color(0xFFE0E0E0)
                 )
                 Text(
-                    "${driftThreshold.toInt()}m/s",
+                    "${driftThreshold.toInt()}m",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = primaryColor()
@@ -892,8 +885,8 @@ fun AdvancedSettingsSection(
             Slider(
                 value = driftThreshold.toFloat(),
                 onValueChange = { onDriftThresholdChange(it.toDouble()) },
-                valueRange = 10f..100f,
-                steps = 8,
+                valueRange = 10f..50f,
+                steps = 7,
                 colors = SliderDefaults.colors(
                     thumbColor = primaryColor(),
                     activeTrackColor = primaryColor(),
@@ -901,7 +894,7 @@ fun AdvancedSettingsSection(
                 )
             )
             Text(
-                "定位漂移判定的速度阈值。值越大越不容易误判为漂移，但可能错过真实漂移。",
+                "GPS精度过滤阈值。定位点精度超过此值会被丢弃，防止误判。小围栏建议15-30米。",
                 fontSize = 11.sp,
                 color = Color(0xFF9E9E9E)
             )

@@ -7,8 +7,8 @@
 将现有围栏数据转换为 `Geofence[]` 格式：
 
 ```ts
-import type { Geofence } from './modules/geofence-tracker';
-import { computeBBox, populateDepth } from './modules/geofence-tracker';
+import type { Geofence } from './core/types';
+import { computeBBox, populateDepth } from './utils/GeoMath';
 
 // 定义多边形顶点 [lng, lat]
 let fences: Geofence[] = [
@@ -35,7 +35,7 @@ fences = populateDepth(fences);
 实现 `StorageAdapter` 接口对接你现有的数据库（SQLite / Room / IndexedDB）：
 
 ```ts
-import type { StorageAdapter } from './modules/geofence-tracker';
+import type { StorageAdapter } from './storage/Repository';
 
 class MyDBAdapter implements StorageAdapter {
   async insertSegments(segs) { /* DB 批量插入 */ }
@@ -53,7 +53,7 @@ class MyDBAdapter implements StorageAdapter {
 ### 步骤 3：3 行代码启用
 
 ```ts
-import { GeofenceTrackerModule } from './modules/geofence-tracker';
+import { GeofenceTrackerModule } from './adapters/ExistingAppBridge';
 
 const tracker = new GeofenceTrackerModule(fences, myLocationAdapter, myStorageAdapter);
 await tracker.init();

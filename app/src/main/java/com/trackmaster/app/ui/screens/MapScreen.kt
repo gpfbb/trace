@@ -40,21 +40,36 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.amap.api.location.AMapLocation
-import com.amap.api.maps.model.LatLng
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFencePoint
 import com.trackmaster.app.core.GeoFenceType
 import com.trackmaster.app.LocationServiceState
+import com.trackmaster.app.locationservice.Location
+import com.trackmaster.app.locationservice.LocationType
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.ui.components.AMapViewWrapper
 import com.trackmaster.app.ui.theme.*
 import java.util.UUID
 
+private fun AMapLocation.toLocation(): Location = Location(
+    latitude = latitude,
+    longitude = longitude,
+    accuracy = accuracy,
+    speed = speed,
+    bearing = bearing,
+    timestamp = time,
+    locationType = when (locationType) {
+        1 -> LocationType.GPS
+        2 -> LocationType.NETWORK
+        else -> LocationType.UNKNOWN
+    }
+)
+
 @Composable
 fun MapScreen(app: TrackMasterApplication) {
     var localFences by remember { mutableStateOf(app.geoFences.toList()) }
     var localMatchedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var localLocation by remember { mutableStateOf<AMapLocation?>(null) }
+    var localLocation by remember { mutableStateOf<Location?>(null) }
 
     var isDrawingMode by remember { mutableStateOf(false) }
     var selectedFenceType by remember { mutableStateOf(GeoFenceType.CIRCLE) }
@@ -113,13 +128,13 @@ fun MapScreen(app: TrackMasterApplication) {
         }
     }
 
-    val onMapClick: (LatLng) -> Unit = { latLng ->
+    val onMapClick: (Double, Double) -> Unit = { lat, lng ->
         when {
             isDrawingMode -> {
-                drawingPoints = drawingPoints + GeoFencePoint(latLng.latitude, latLng.longitude)
+                drawingPoints = drawingPoints + GeoFencePoint(lat, lng)
             }
             isEditingFence && editingFence != null -> {
-                editingPoints = editingPoints + GeoFencePoint(latLng.latitude, latLng.longitude)
+                editingPoints = editingPoints + GeoFencePoint(lat, lng)
             }
         }
     }

@@ -1,6 +1,12 @@
-package com.trackmaster.app.core
+package com.trackmaster.app.utils
 
 import android.util.Log
+import com.trackmaster.app.core.BBox
+import com.trackmaster.app.core.Geofence
+import com.trackmaster.app.core.GeoFenceType
+import com.trackmaster.app.core.GeoPoint
+import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFencePoint
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -386,32 +392,45 @@ object GeoMath {
                 val outerPoly = outer.polygon
                 if (innerPoly.size < 3 || outerPoly.size < 3) return false
 
-                // 1. 检测两多边形边界是否有交叉
-                val innerEdges = mutableListOf<Pair<GeoPoint, GeoPoint>>()
-                for (i in 0 until innerPoly.size - 1) {
-                    innerEdges.add(Pair(innerPoly[i], innerPoly[i + 1]))
-                }
-                val outerEdges = mutableListOf<Pair<GeoPoint, GeoPoint>>()
-                for (i in 0 until outerPoly.size - 1) {
-                    outerEdges.add(Pair(outerPoly[i], outerPoly[i + 1]))
+                // 1. 先用BBox快速判断：如果inner的BBox完全在outer的BBox内，继续精确检测
+                val innerBBox = computeBBox(innerPoly)
+                val outerBBox = computeBBox(outerPoly)
+                if (!pointInBBox(innerBBox.minLat, innerBBox.minLng, outerBBox) ||
+                    !pointInBBox(innerBBox.maxLat, innerBBox.maxLng, outerBBox)) {
+                    // inner的BBox不在outer内，直接返回false
+                    return false
                 }
 
-                // 检查每对边是否相交
-                for ((p1, q1) in innerEdges) {
-                    for ((p2, q2) in outerEdges) {
+                // 2. 检测两多边形边界是否有交叉（使用正确的闭合多边形边）
+                val nInner = innerPoly.size
+                val nOuter = outerPoly.size
+
+                // 检查inner的每条边与outer的每条边是否相交
+                for (i in 0 until nInner) {
+                    val p1 = innerPoly[i]
+                    val q1 = innerPoly[(i + 1) % nInner]
+                    for (j in 0 until nOuter) {
+                        val p2 = outerPoly[j]
+                        val q2 = outerPoly[(j + 1) % nOuter]
                         if (segmentsIntersect(p1, q1, p2, q2)) {
                             return false // 边界相交，不算包含
                         }
                     }
                 }
 
-                // 2. 边界不相交，检测顶点位置关系
+                // 3. 边界不相交，检测顶点位置关系
                 // 如果内多边形所有顶点都在外多边形内，返回true（被外包含）
-                val innerAllInside = innerPoly.all { pointInPolygon(it.lat, it.lng, outerPoly) }
+                // 注意：排除最后一个重复点（闭合多边形首尾相同）
+                val innerToCheck = if (innerPoly.size > 1 &&
+                    innerPoly.first() == innerPoly.last()) innerPoly.dropLast(1) else innerPoly
+                val outerToCheck = if (outerPoly.size > 1 &&
+                    outerPoly.first() == outerPoly.last()) outerPoly.dropLast(1) else outerPoly
+
+                val innerAllInside = innerToCheck.all { pointInPolygon(it.lat, it.lng, outerToCheck) }
                 if (innerAllInside) return true
 
                 // 如果外多边形所有顶点都在内多边形内，返回true（外包含内）
-                val outerAllInside = outerPoly.all { pointInPolygon(it.lat, it.lng, innerPoly) }
+                val outerAllInside = outerToCheck.all { pointInPolygon(it.lat, it.lng, innerToCheck) }
                 if (outerAllInside) return true
 
                 // 边界不相交且无包含关系
@@ -425,12 +444,14 @@ object GeoMath {
                 if (outerPoly.size < 3) return false
 
                 // 圆心必须在多边形内
-                if (!pointInPolygon(innerCenter.lat, innerCenter.lng, outerPoly)) return false
+                val centerInside = pointInPolygon(innerCenter.lat, innerCenter.lng, outerPoly)
+                if (!centerInside) return false
 
                 // 取圆上4个方向（N/E/S/W）的最远点，都必须在多边形内
                 val dLat = innerRadius / 111_320.0
                 val midLat = innerCenter.lat
-                val dLng = innerRadius / (111_320.0 * cos(midLat * DEG))
+                val cosMidLat = cos(midLat * DEG)
+                val dLng = innerRadius / (111_320.0 * cosMidLat)
 
                 val north = GeoPoint(innerCenter.lat + dLat, innerCenter.lng)
                 val south = GeoPoint(innerCenter.lat - dLat, innerCenter.lng)
@@ -684,6 +705,54 @@ object GeoMath {
                 }
             }
         }
+    }
+
+    /**
+     * 为围栏补充引擎用字段（polygon 近似多边形 + bbox 包围盒）
+     * 统一模型后，FenceMapper 的 toCore 逻辑移至此
+     * @param fence data.GeoFence (UI/DB层)
+     * @return core.Geofence (引擎层)
+     */
+    fun buildEngineGeofence(fence: GeoFence): Geofence {
+        val geoFenceType = try {
+            GeoFenceType.valueOf(fence.type.name)
+        } catch (_: Exception) {
+            return Geofence(
+                id = fence.id,
+                name = fence.name,
+                type = GeoFenceType.POLYGON,
+                polygon = emptyList(),
+                bbox = null,
+                center = null,
+                radius = null,
+                createdAt = fence.createdAt,
+            )
+        }
+
+        val polygon = when (geoFenceType) {
+            GeoFenceType.POLYGON -> fence.points?.map {
+                GeoPoint(it.latitude, it.longitude)
+            } ?: emptyList()
+            GeoFenceType.CIRCLE -> {
+                val c = fence.center
+                val r = fence.radius
+                if (c != null && r != null) {
+                    circleToPolygon(GeoPoint(c.latitude, c.longitude), r.toDouble(), 32)
+                } else emptyList()
+            }
+        }
+        val bbox = if (polygon.isNotEmpty()) computeBBox(polygon) else null
+        return Geofence(
+            id = fence.id,
+            name = fence.name,
+            type = geoFenceType,
+            polygon = polygon,
+            bbox = bbox,
+            center = fence.center?.let { GeoPoint(it.latitude, it.longitude) },
+            radius = fence.radius?.toDouble(),
+            category = if (fence.categoryId != "unassigned") fence.categoryId else null,
+            createdAt = fence.createdAt,
+        )
     }
 }
 
