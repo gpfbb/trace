@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
+import com.trackmaster.app.AppPreferences
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFencePoint
 import com.trackmaster.app.core.GeoFenceType
@@ -103,6 +104,7 @@ fun AMapViewWrapper(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val appPrefs = remember { AppPreferences(context) }
 
     // 创建 MapView 并传递给 AMapPresenter
     val mapView = remember { MapView(context) }
@@ -123,6 +125,33 @@ fun AMapViewWrapper(
         isMapReady = true
     }
 
+    // 退出时保存相机位置
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                mapPresenter.getCameraCenter()?.let { (lat, lng) ->
+                    appPrefs.cameraLatitude = lat
+                    appPrefs.cameraLongitude = lng
+                    appPrefs.cameraZoom = mapPresenter.getZoom() ?: 15f
+                    appPrefs.hasCameraPosition = true
+                }
+            } catch (e: Exception) { }
+        }
+    }
+
+    // 相机移动时实时保存位置（AMapViewWrapper 进入时判断 hasCameraPosition）
+    LaunchedEffect(isMapReady) {
+        if (!isMapReady) return@LaunchedEffect
+        mapPresenter.setOnCameraCenterChangeListener { lat, lng ->
+            try {
+                appPrefs.cameraLatitude = lat
+                appPrefs.cameraLongitude = lng
+                appPrefs.cameraZoom = mapPresenter.getZoom() ?: 15f
+                appPrefs.hasCameraPosition = true
+            } catch (e: Exception) { }
+        }
+    }
+
     // 生命周期由 AMapPresenter 内部管理，地图点击监听
     LaunchedEffect(isMapReady) {
         if (!isMapReady) return@LaunchedEffect
@@ -131,11 +160,14 @@ fun AMapViewWrapper(
         }
     }
 
-    // 进入地图页时，跳转到用户当前位置（仅首次）
-    LaunchedEffect(currentLocation, isMapReady) {
+    // 每次进入地图页：等待2秒让定位到达，然后触发定位跳转
+    LaunchedEffect(isMapReady) {
         if (!isMapReady) return@LaunchedEffect
-        val loc = currentLocation ?: return@LaunchedEffect
-        mapPresenter.showLocation(MapLocation(loc.latitude, loc.longitude))
+        kotlinx.coroutines.delay(2000)
+        val loc = currentLocation
+        if (loc != null) {
+            mapPresenter.showLocation(MapLocation(loc.latitude, loc.longitude))
+        }
     }
 
     // 地图类型切换

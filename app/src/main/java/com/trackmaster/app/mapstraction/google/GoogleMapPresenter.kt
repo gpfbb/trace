@@ -448,6 +448,11 @@ class GoogleMapPresenter(
      */
     private var hasCameraLockedToUser = false
 
+    /** 锁定相机跳转（恢复上次位置时调用，防止 setExternalLocation 再次跳转） */
+    fun lockCameraToUser() {
+        hasCameraLockedToUser = true
+    }
+
     /**
      * setExternalLocation 时检查是否需要相机跳转
      */
@@ -581,5 +586,9 @@ class GoogleMapPresenter(
         val map = googleMap ?: return null
         val target = map.cameraPosition.target
         return target.latitude to target.longitude
+    }
+
+    fun getZoom(): Float? {
+        return try { googleMap?.cameraPosition?.zoom } catch (e: Exception) { null }
     }
 }

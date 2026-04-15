@@ -1,6 +1,7 @@
 package com.trackmaster.app.ui.components
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
 import android.util.Log
@@ -10,6 +11,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import kotlinx.coroutines.flow.filterNotNull
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -17,6 +19,12 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.tasks.await
+import com.trackmaster.app.AppPreferences
 import com.google.android.gms.maps.MapView
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFencePoint
@@ -105,6 +113,7 @@ fun GoogleMapWrapper(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val appPrefs = remember { AppPreferences(context) }
 
     // 内部创建 Google Maps presenter
     val mapView: MapView = remember { MapView(context) }
@@ -124,6 +133,33 @@ fun GoogleMapWrapper(
 
     // 地图真正就绪后才会触发后续 LaunchedEffect
     val isMapReady by mapPresenter.isMapReady.collectAsState()
+
+    // 退出时保存相机位置
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                mapPresenter.getCameraCenter()?.let { (lat, lng) ->
+                    appPrefs.cameraLatitude = lat
+                    appPrefs.cameraLongitude = lng
+                    appPrefs.cameraZoom = mapPresenter.getZoom() ?: 17f
+                    appPrefs.hasCameraPosition = true
+                }
+            } catch (e: Exception) { }
+        }
+    }
+
+    // 相机移动时实时保存位置
+    LaunchedEffect(isMapReady) {
+        if (!isMapReady) return@LaunchedEffect
+        mapPresenter.setOnCameraCenterChangeListener { lat, lng ->
+            try {
+                appPrefs.cameraLatitude = lat
+                appPrefs.cameraLongitude = lng
+                appPrefs.cameraZoom = mapPresenter.getZoom() ?: 17f
+                appPrefs.hasCameraPosition = true
+            } catch (e: Exception) { }
+        }
+    }
 
     // ========== 位置权限处理 ==========
     var hasLocationPermission by remember { mutableStateOf(false) }
@@ -178,13 +214,52 @@ fun GoogleMapWrapper(
         }
     }
 
-    // 喂入位置给 Google Maps LocationSource（蓝点），只在进入地图页时跳转一次
-    LaunchedEffect(currentLocation, isMapReady) {
+    // 每次进入地图页：先请求一次 GPS，失败则用 AMap 位置兜底
+    LaunchedEffect(isMapReady, hasLocationPermission) {
         if (!isMapReady) return@LaunchedEffect
-        val loc = currentLocation ?: return@LaunchedEffect
-        Log.d("GoogleMapWrapper", "喂入位置到 Google Maps LocationSource: lat=${loc.latitude}")
-        mapPresenter.setExternalLocation(loc)
-        // 相机跳转由 setExternalLocation 内部首次触发，hasNavigatedToUser 不再需要控制
+
+        if (hasLocationPermission) {
+            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+            val deferred = kotlinx.coroutines.CompletableDeferred<android.location.Location?>()
+            fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { loc -> deferred.complete(loc) }
+                .addOnFailureListener { deferred.complete(null) }
+                .addOnCanceledListener { deferred.complete(null) }
+
+            val androidLoc = try { deferred.await() } catch (e: Exception) { null }
+            if (androidLoc != null) {
+                val gpsLoc = com.trackmaster.app.locationservice.Location(
+                    latitude = androidLoc.latitude,
+                    longitude = androidLoc.longitude,
+                    accuracy = androidLoc.accuracy,
+                    speed = androidLoc.speed,
+                    bearing = androidLoc.bearing,
+                    timestamp = androidLoc.time,
+                    locationType = com.trackmaster.app.locationservice.LocationType.GPS
+                )
+                mapPresenter.setExternalLocation(gpsLoc)
+                mapPresenter.showMyLocation()
+                Log.d("GoogleMapWrapper", "GPS精准定位成功: lat=${gpsLoc.latitude}, acc=${androidLoc.accuracy}m")
+                return@LaunchedEffect
+            }
+        }
+
+        // GPS 未就绪或无权限：用 AMap 当前位置
+        val loc = currentLocation
+        if (loc != null) mapPresenter.setExternalLocation(loc)
+        mapPresenter.showMyLocation()
+        Log.d("GoogleMapWrapper", "使用AMap/后备位置: lat=${loc?.latitude}")
+    }
+
+    // 【关键】持续监听 currentLocation 变化，实时喂给 Google Maps 显示蓝点
+    // 解决 AMap 位置晚到时 setExternalLocation 不会再触发的问题
+    LaunchedEffect(Unit) {
+        snapshotFlow { currentLocation }
+            .filterNotNull()
+            .collect { loc ->
+                Log.d("GoogleMapWrapper", "Location更新，喂入地图: lat=${loc.latitude}, acc=${loc.accuracy}m")
+                mapPresenter.setExternalLocation(loc)
+            }
     }
 
     // 地图点击监听

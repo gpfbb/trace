@@ -32,6 +32,10 @@ class AppPreferences(context: Context) {
         // 地图类型：1=标准 2=卫星 3=夜景（对应 AMap.MAP_TYPE_ constants）
         private const val KEY_MAP_TYPE = "map_type"
         private const val KEY_MAP_PROVIDER = "map_provider"
+        private const val KEY_CAMERA_LAT = "camera_lat"
+        private const val KEY_CAMERA_LNG = "camera_lng"
+        private const val KEY_CAMERA_ZOOM = "camera_zoom"
+        private const val KEY_HAS_CAMERA_POSITION = "has_camera_position"
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -170,4 +174,21 @@ class AppPreferences(context: Context) {
         }
 
     val sharedPreferences: SharedPreferences get() = prefs
+
+    // 相机位置（退出地图时保存，进入时恢复）
+    var hasCameraPosition: Boolean
+        get() = prefs.getBoolean(KEY_HAS_CAMERA_POSITION, false)
+        set(value) = prefs.edit().putBoolean(KEY_HAS_CAMERA_POSITION, value).apply()
+
+    var cameraLatitude: Double
+        get() = prefs.getFloat(KEY_CAMERA_LAT, 0f).toDouble()
+        set(value) = prefs.edit().putFloat(KEY_CAMERA_LAT, value.toFloat()).apply()
+
+    var cameraLongitude: Double
+        get() = prefs.getFloat(KEY_CAMERA_LNG, 0f).toDouble()
+        set(value) = prefs.edit().putFloat(KEY_CAMERA_LNG, value.toFloat()).apply()
+
+    var cameraZoom: Float
+        get() = prefs.getFloat(KEY_CAMERA_ZOOM, 15f)
+        set(value) = prefs.edit().putFloat(KEY_CAMERA_ZOOM, value).apply()
 }

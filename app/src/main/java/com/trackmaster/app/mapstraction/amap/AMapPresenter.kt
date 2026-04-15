@@ -77,8 +77,12 @@ class AMapPresenter(
         }
 
         aMap.setOnCameraChangeListener(object : AMap.OnCameraChangeListener {
-            override fun onCameraChange(p0: CameraPosition) {}
+            override fun onCameraChange(p0: CameraPosition) {
+                // 持续触发：拖动中持续保存相机中心点
+                onCameraCenterChangeListener?.invoke(p0.target.latitude, p0.target.longitude)
+            }
             override fun onCameraChangeFinish(p0: CameraPosition) {
+                // onCameraChange 已经处理持续保存，onCameraChangeFinish 仅作额外保障
                 onCameraCenterChangeListener?.invoke(p0.target.latitude, p0.target.longitude)
             }
         })
@@ -222,6 +226,19 @@ class AMapPresenter(
         } catch (e: Exception) {
             Log.e(TAG, "移动相机失败", e)
         }
+    }
+
+    fun getCameraCenter(): Pair<Double, Double>? {
+        return try {
+            val target = aMap.cameraPosition.target
+            target.latitude to target.longitude
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun getZoom(): Float? {
+        return try { aMap.cameraPosition.zoom } catch (e: Exception) { null }
     }
 
     override fun moveCameraWithBounds(bounds: MapBounds, padding: Int) {
