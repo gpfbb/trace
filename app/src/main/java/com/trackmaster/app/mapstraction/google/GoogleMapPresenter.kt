@@ -582,13 +582,13 @@ class GoogleMapPresenter(
 
     internal fun getGoogleMapInternal(): GoogleMap? = googleMap
 
-    fun getCameraCenter(): Pair<Double, Double>? {
+    override fun getCameraCenter(): Pair<Double, Double>? {
         val map = googleMap ?: return null
         val target = map.cameraPosition.target
         return target.latitude to target.longitude
     }
 
-    fun getZoom(): Float? {
+    override fun getZoom(): Float? {
         return try { googleMap?.cameraPosition?.zoom } catch (e: Exception) { null }
     }
 }

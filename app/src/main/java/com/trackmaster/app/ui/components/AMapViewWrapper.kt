@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.take
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as AndroidColor
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -135,7 +137,7 @@ fun AMapViewWrapper(
                     appPrefs.cameraZoom = mapPresenter.getZoom() ?: 15f
                     appPrefs.hasCameraPosition = true
                 }
-            } catch (e: Exception) { }
+            } catch (e: Exception) { Log.e(TAG, "保存相机位置失败", e) }
         }
     }
 
@@ -148,7 +150,7 @@ fun AMapViewWrapper(
                 appPrefs.cameraLongitude = lng
                 appPrefs.cameraZoom = mapPresenter.getZoom() ?: 15f
                 appPrefs.hasCameraPosition = true
-            } catch (e: Exception) { }
+            } catch (e: Exception) { Log.e(TAG, "保存相机位置失败", e) }
         }
     }
 
@@ -160,14 +162,15 @@ fun AMapViewWrapper(
         }
     }
 
-    // 每次进入地图页：等待2秒让定位到达，然后触发定位跳转
+    // 每次进入地图页：等 currentLocation 到达后跳转（reactive，无硬延迟）
     LaunchedEffect(isMapReady) {
         if (!isMapReady) return@LaunchedEffect
-        kotlinx.coroutines.delay(2000)
-        val loc = currentLocation
-        if (loc != null) {
-            mapPresenter.showLocation(MapLocation(loc.latitude, loc.longitude))
-        }
+        snapshotFlow { currentLocation }
+            .filterNotNull()
+            .take(1)
+            .collect { loc ->
+                mapPresenter.showLocation(MapLocation(loc.latitude, loc.longitude))
+            }
     }
 
     // 地图类型切换

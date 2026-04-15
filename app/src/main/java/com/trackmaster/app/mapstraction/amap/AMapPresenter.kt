@@ -228,7 +228,7 @@ class AMapPresenter(
         }
     }
 
-    fun getCameraCenter(): Pair<Double, Double>? {
+    override fun getCameraCenter(): Pair<Double, Double>? {
         return try {
             val target = aMap.cameraPosition.target
             target.latitude to target.longitude
@@ -237,7 +237,7 @@ class AMapPresenter(
         }
     }
 
-    fun getZoom(): Float? {
+    override fun getZoom(): Float? {
         return try { aMap.cameraPosition.zoom } catch (e: Exception) { null }
     }
 

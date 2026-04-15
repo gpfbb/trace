@@ -42,4 +42,8 @@ interface MapPresenter {
     fun setFenceFillColor(color: Int)
 
     fun refresh()
+
+    fun getCameraCenter(): Pair<Double, Double>?
+
+    fun getZoom(): Float?
 }
