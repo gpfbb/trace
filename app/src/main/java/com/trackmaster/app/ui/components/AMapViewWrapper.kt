@@ -131,6 +131,13 @@ fun AMapViewWrapper(
         }
     }
 
+    // 进入地图页时，跳转到用户当前位置（仅首次）
+    LaunchedEffect(currentLocation, isMapReady) {
+        if (!isMapReady) return@LaunchedEffect
+        val loc = currentLocation ?: return@LaunchedEffect
+        mapPresenter.showLocation(MapLocation(loc.latitude, loc.longitude))
+    }
+
     // 地图类型切换
     LaunchedEffect(mapType, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
