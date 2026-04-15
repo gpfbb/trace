@@ -4,15 +4,9 @@ import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import com.amap.api.maps.MapView
-import kotlin.math.sin
-import kotlin.math.cos
-import kotlin.math.sqrt
-import kotlin.math.atan2
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.take
@@ -37,55 +31,6 @@ import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.ui.theme.NeonAmber
 
 private const val TAG = "AMapViewWrapper"
-
-// 判断点是否在围栏内部
-private fun isLocationInsideFence(lat: Double, lng: Double, fence: GeoFence): Boolean {
-    return when (fence.type) {
-        GeoFenceType.CIRCLE -> {
-            val center = fence.center ?: return false
-            val radius = fence.radius ?: return false
-            val distance = calculateDistance(lat, lng, center.latitude, center.longitude)
-            distance <= radius
-        }
-        GeoFenceType.POLYGON -> {
-            val points = fence.points ?: return false
-            if (points.size < 3) return false
-            isPointInPolygon(lat, lng, points)
-        }
-    }
-}
-
-// 计算两点之间的距离（米）
-private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val R = 6371000.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-            sin(dLon / 2) * sin(dLon / 2)
-    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return R * c
-}
-
-// 判断点是否在多边形内部（射线法）
-private fun isPointInPolygon(x: Double, y: Double, points: List<GeoFencePoint>): Boolean {
-    var inside = false
-    val n = points.size
-    var j = n - 1
-
-    for (i in 0 until n) {
-        val xi = points[i].longitude
-        val yi = points[i].latitude
-        val xj = points[j].longitude
-        val yj = points[j].latitude
-
-        val intersect = ((yi > y) != (yj > y)) &&
-                (x < (xj - xi) * (y - yi) / (yj - yi) + xi)
-        if (intersect) inside = !inside
-        j = i
-    }
-    return inside
-}
 
 @Composable
 fun AMapViewWrapper(

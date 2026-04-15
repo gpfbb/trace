@@ -34,61 +34,8 @@ import com.trackmaster.app.mapstraction.MarkerIcon
 import com.trackmaster.app.mapstraction.MapPresenter
 import com.trackmaster.app.mapstraction.google.GoogleMapPresenter
 import com.trackmaster.app.ui.theme.NeonAmber
-import kotlin.math.sin
-import kotlin.math.cos
-import kotlin.math.sqrt
-import kotlin.math.atan2
 
 private const val TAG = "GoogleMapWrapper"
-
-// 判断点是否在围栏内部
-private fun isLocationInsideFence(lat: Double, lng: Double, fence: GeoFence): Boolean {
-    return when (fence.type) {
-        GeoFenceType.CIRCLE -> {
-            val center = fence.center ?: return false
-            val radius = fence.radius ?: return false
-            val distance = calculateDistance(lat, lng, center.latitude, center.longitude)
-            distance <= radius
-        }
-        GeoFenceType.POLYGON -> {
-            val points = fence.points ?: return false
-            if (points.size < 3) return false
-            isPointInPolygon(lat, lng, points)
-        }
-    }
-}
-
-// 计算两点之间的距离（米）
-private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val R = 6371000.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-            sin(dLon / 2) * sin(dLon / 2)
-    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return R * c
-}
-
-// 判断点是否在多边形内部（射线法）
-private fun isPointInPolygon(x: Double, y: Double, points: List<GeoFencePoint>): Boolean {
-    var inside = false
-    val n = points.size
-    var j = n - 1
-
-    for (i in 0 until n) {
-        val xi = points[i].longitude
-        val yi = points[i].latitude
-        val xj = points[j].longitude
-        val yj = points[j].latitude
-
-        val intersect = ((yi > y) != (yj > y)) &&
-                (x < (xj - xi) * (y - yi) / (yj - yi) + xi)
-        if (intersect) inside = !inside
-        j = i
-    }
-    return inside
-}
 
 @Composable
 fun GoogleMapWrapper(
@@ -208,12 +155,6 @@ fun GoogleMapWrapper(
         } else {
             Log.d("GoogleMapWrapper", "LaunchedEffect: 地图已就绪但无权限，不调用 showMyLocation")
         }
-    }
-
-    // 每次进入地图页：GPS连续监听，收到首次精准位置后喂入地图显示蓝点
-    // 纯 Google GPS 定位，不走 AMap
-    LaunchedEffect(isMapReady) {
-        if (!isMapReady) return@LaunchedEffect
     }
 
     // Google GPS 连续监听：只在有权限时启动，组件销毁时自动停止
