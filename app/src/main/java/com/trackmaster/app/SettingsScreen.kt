@@ -193,6 +193,12 @@ fun SettingsPage(
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "⚠️ 切换后请完全退出应用（清后台），重新打开才能生效",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NeonAmber
+                            )
                         }
                     },
                     confirmButton = {
@@ -303,95 +309,101 @@ fun SettingsPage(
                         }
                     },
                     confirmButton = {
+                        val isSuccess = recalculateMessage?.startsWith("重新计算完成") == true
                         TextButton(
                             onClick = {
-                                try {
-                                    app.fenceTreeManager.clearAll()
-                                    val fences = app.geoFences
-                                    val coreFences = fences.mapNotNull { fence ->
-                                        val type = try {
-                                            com.trackmaster.app.core.GeoFenceType.valueOf(fence.type.name)
-                                        } catch (_: Exception) { null }
-                                        if (type != null) {
-                                            // 计算中心点：圆形用center，多边形用重心
-                                            val centerPoint: com.trackmaster.app.core.GeoPoint? = when (type) {
-                                                com.trackmaster.app.core.GeoFenceType.CIRCLE -> fence.center?.let {
-                                                    com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
+                                if (isSuccess) {
+                                    showRecalculateDialog = false
+                                    recalculateMessage = null
+                                } else {
+                                    try {
+                                        app.fenceTreeManager.clearAll()
+                                        val fences = app.geoFences
+                                        val coreFences = fences.mapNotNull { fence ->
+                                            val type = try {
+                                                com.trackmaster.app.core.GeoFenceType.valueOf(fence.type.name)
+                                            } catch (_: Exception) { null }
+                                            if (type != null) {
+                                                // 计算中心点：圆形用center，多边形用重心
+                                                val centerPoint: com.trackmaster.app.core.GeoPoint? = when (type) {
+                                                    com.trackmaster.app.core.GeoFenceType.CIRCLE -> fence.center?.let {
+                                                        com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
+                                                    }
+                                                    com.trackmaster.app.core.GeoFenceType.POLYGON -> {
+                                                        // 计算多边形重心
+                                                        val pts = fence.points
+                                                        if (pts != null && pts.size >= 3) {
+                                                            var latSum = 0.0
+                                                            var lonSum = 0.0
+                                                            for (p in pts) {
+                                                                latSum += p.latitude
+                                                                lonSum += p.longitude
+                                                            }
+                                                            com.trackmaster.app.core.GeoPoint(
+                                                                latSum / pts.size,
+                                                                lonSum / pts.size
+                                                            )
+                                                        } else null
+                                                    }
                                                 }
-                                                com.trackmaster.app.core.GeoFenceType.POLYGON -> {
-                                                    // 计算多边形重心
-                                                    val pts = fence.points
-                                                    if (pts != null && pts.size >= 3) {
-                                                        var latSum = 0.0
-                                                        var lonSum = 0.0
-                                                        for (p in pts) {
-                                                            latSum += p.latitude
-                                                            lonSum += p.longitude
-                                                        }
-                                                        com.trackmaster.app.core.GeoPoint(
-                                                            latSum / pts.size,
-                                                            lonSum / pts.size
-                                                        )
-                                                    } else null
-                                                }
-                                            }
-                                            com.trackmaster.app.core.Geofence(
-                                                id = fence.id,
-                                                name = fence.name,
-                                                type = type,
-                                                polygon = fence.points?.map {
-                                                    com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
-                                                } ?: emptyList(),
-                                                center = centerPoint,
-                                                radius = fence.radius?.toDouble()
-                                            )
-                                        } else null
-                                    }
+                                                com.trackmaster.app.core.Geofence(
+                                                    id = fence.id,
+                                                    name = fence.name,
+                                                    type = type,
+                                                    polygon = fence.points?.map {
+                                                        com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
+                                                    } ?: emptyList(),
+                                                    center = centerPoint,
+                                                    radius = fence.radius?.toDouble()
+                                                )
+                                            } else null
+                                        }
 
-                                    // 第一步：检测围栏相交
-                                    val intersections = GeoMath.detectFenceIntersections(coreFences)
-                                    android.util.Log.d("SettingsPage", "相交检测完成，发现 ${intersections.size} 对相交")
-                                    if (intersections.isNotEmpty()) {
-                                        val msg = buildString {
-                                            appendLine("⚠️ 发现 ${intersections.size} 对相交的围栏，无法计算父子关系：")
-                                            intersections.take(10).forEach { pair ->
-                                                appendLine("  • ${pair.description}")
+                                        // 第一步：检测围栏相交
+                                        val intersections = GeoMath.detectFenceIntersections(coreFences)
+                                        android.util.Log.d("SettingsPage", "相交检测完成，发现 ${intersections.size} 对相交")
+                                        if (intersections.isNotEmpty()) {
+                                            val msg = buildString {
+                                                appendLine("⚠️ 发现 ${intersections.size} 对相交的围栏，无法计算父子关系：")
+                                                intersections.take(10).forEach { pair ->
+                                                    appendLine("  • ${pair.description}")
+                                                }
+                                                if (intersections.size > 10) {
+                                                    appendLine("  • ...还有 ${intersections.size - 10} 对")
+                                                }
                                             }
-                                            if (intersections.size > 10) {
-                                                appendLine("  • ...还有 ${intersections.size - 10} 对")
+                                            recalculateMessage = msg
+                                            return@TextButton
+                                        }
+
+                                        // 第二步：检测通过，执行父子关系计算
+                                        app.fenceTreeManager.clearAll()
+                                        var relationshipCount = 0
+                                        android.util.Log.d("SettingsPage", "开始计算父子关系，coreFences数量: ${coreFences.size}")
+                                        for (fenceA in coreFences) {
+                                            for (fenceB in coreFences) {
+                                                if (fenceA.id == fenceB.id) continue
+                                                val bInA = GeoMath.isFenceContainedByFence(fenceB, fenceA)
+                                                val aInB = GeoMath.isFenceContainedByFence(fenceA, fenceB)
+                                                android.util.Log.d("SettingsPage", "检查 ${fenceB.name} in ${fenceA.name}: $bInA, 反向: $aInB")
+                                                if (bInA) {
+                                                    if (!aInB) {
+                                                        app.fenceTreeManager.setParent(fenceB.id, fenceA.id)
+                                                        relationshipCount++
+                                                        android.util.Log.d("SettingsPage", "设置父子关系: ${fenceB.name} -> ${fenceA.name}")
+                                                    }
+                                                }
                                             }
                                         }
-                                        recalculateMessage = msg
-                                        return@TextButton
+                                        android.util.Log.d("SettingsPage", "重新计算完成，建立了 $relationshipCount 对父子关系")
+                                        recalculateMessage = "重新计算完成，建立了 $relationshipCount 对父子关系"
+                                    } catch (e: Exception) {
+                                        recalculateMessage = "重新计算失败: ${e.message}"
                                     }
-
-                                    // 第二步：检测通过，执行父子关系计算
-                                    app.fenceTreeManager.clearAll()
-                                    var relationshipCount = 0
-                                    android.util.Log.d("SettingsPage", "开始计算父子关系，coreFences数量: ${coreFences.size}")
-                                    for (fenceA in coreFences) {
-                                        for (fenceB in coreFences) {
-                                            if (fenceA.id == fenceB.id) continue
-                                            val bInA = GeoMath.isFenceContainedByFence(fenceB, fenceA)
-                                            val aInB = GeoMath.isFenceContainedByFence(fenceA, fenceB)
-                                            android.util.Log.d("SettingsPage", "检查 ${fenceB.name} in ${fenceA.name}: $bInA, 反向: $aInB")
-                                            if (bInA) {
-                                                if (!aInB) {
-                                                    app.fenceTreeManager.setParent(fenceB.id, fenceA.id)
-                                                    relationshipCount++
-                                                    android.util.Log.d("SettingsPage", "设置父子关系: ${fenceB.name} -> ${fenceA.name}")
-                                                }
-                                            }
-                                        }
-                                    }
-                                    android.util.Log.d("SettingsPage", "重新计算完成，建立了 $relationshipCount 对父子关系")
-                                    recalculateMessage = "重新计算完成，建立了 $relationshipCount 对父子关系"
-                                } catch (e: Exception) {
-                                    recalculateMessage = "重新计算失败: ${e.message}"
                                 }
                             }
                         ) {
-                            Text("确定", color = Success)
+                            Text(if (isSuccess) "知道了" else "确定", color = Success)
                         }
                     },
                     dismissButton = {

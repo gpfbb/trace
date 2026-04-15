@@ -628,22 +628,24 @@ private fun DrawingToolbar(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 围栏类型切换
+                // 围栏类型切换（有点位后禁止切换，避免圆/多边形围栏相交）
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FilterChip(
                         selected = fenceType == GeoFenceType.CIRCLE,
-                        onClick = { onFenceTypeChange(GeoFenceType.CIRCLE) },
+                        onClick = { if (drawingPoints.isEmpty()) onFenceTypeChange(GeoFenceType.CIRCLE) },
                         label = { Text("圆形", fontSize = 12.sp) },
                         leadingIcon = { Icon(Icons.Filled.Circle, contentDescription = null, modifier = Modifier.size(14.dp)) },
-                        modifier = Modifier.height(32.dp)
+                        modifier = Modifier.height(32.dp),
+                        enabled = drawingPoints.isEmpty()
                     )
                     Spacer(Modifier.width(6.dp))
                     FilterChip(
                         selected = fenceType == GeoFenceType.POLYGON,
-                        onClick = { onFenceTypeChange(GeoFenceType.POLYGON) },
+                        onClick = { if (drawingPoints.isEmpty()) onFenceTypeChange(GeoFenceType.POLYGON) },
                         label = { Text("多边形", fontSize = 12.sp) },
                         leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null, modifier = Modifier.size(14.dp)) },
-                        modifier = Modifier.height(32.dp)
+                        modifier = Modifier.height(32.dp),
+                        enabled = drawingPoints.isEmpty()
                     )
                     Spacer(Modifier.width(6.dp))
                     FilterChip(
