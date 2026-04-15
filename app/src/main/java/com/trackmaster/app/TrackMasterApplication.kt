@@ -7,7 +7,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
-import com.amap.api.location.AMapLocation
+import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.core.EngineHolder
 import com.trackmaster.app.core.FenceProcessingHolder
 import com.trackmaster.app.core.FenceTreeManager
@@ -202,10 +202,10 @@ class TrackMasterApplication : Application() {
     // 围栏处理（委托给 FenceProcessingHolder）
     // ============================================================
 
-    fun checkGeoFences(location: AMapLocation): Boolean =
+    fun checkGeoFences(location: Location): Boolean =
         fenceProcessingHolder.checkGeoFences(location)
 
-    fun handleFirstLocationAfterRestore(location: AMapLocation) =
+    fun handleFirstLocationAfterRestore(location: Location) =
         fenceProcessingHolder.handleFirstLocationAfterRestore(location)
 
     fun saveStateOnAppClose() = fenceProcessingHolder.saveStateOnAppClose()

@@ -1,8 +1,8 @@
 package com.trackmaster.app.core
 
 import android.util.Log
-import com.amap.api.location.AMapLocation
 import com.trackmaster.app.GeoFenceDatabaseHelper
+import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.FenceActiveSession
 import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.data.GeoFenceEvent
@@ -50,15 +50,15 @@ class FenceProcessingHolder(
     // 公开 API
     // ============================================================
 
-    fun checkGeoFences(location: AMapLocation): Boolean {
+    fun checkGeoFences(location: Location): Boolean {
         val fix = com.trackmaster.app.core.LocationFix(
             lat = location.latitude,
             lng = location.longitude,
             accuracy = location.accuracy,
-            timestamp = location.time,
+            timestamp = location.timestamp,
         )
 
-        persistentStateManager.saveLastLocation(location.latitude, location.longitude, Date(location.time))
+        persistentStateManager.saveLastLocation(location.latitude, location.longitude, Date(location.timestamp))
         val shouldProcess = engine.evaluateLocation(fix)
         engine.setCurrentMatchedFenceIds(engine.checkFenceMatch(fix))
 
@@ -83,7 +83,7 @@ class FenceProcessingHolder(
         return shouldProcess
     }
 
-    fun handleFirstLocationAfterRestore(location: AMapLocation) {
+    fun handleFirstLocationAfterRestore(location: Location) {
         if (isRestoringFirstLocation) return
         appScope.launch {
             isRestoringFirstLocation = true
@@ -162,20 +162,20 @@ class FenceProcessingHolder(
     // 内部方法
     // ============================================================
 
-    private fun handleFenceExit(fenceId: String, fenceName: String, location: AMapLocation) {
+    private fun handleFenceExit(fenceId: String, fenceName: String, location: Location) {
         recordFenceEvent(fenceId, fenceName, GeoFenceAction.EXIT, location)
-        stayDurationManager.onFenceExit(fenceId, fenceName, Date(location.time))
+        stayDurationManager.onFenceExit(fenceId, fenceName, Date(location.timestamp))
         fenceEnterTimes.remove(fenceId)
 
         val parentId = fenceTreeManager.getParent(fenceId)
         if (parentId != null && engine.currentMatchedFenceIds.contains(parentId)) {
-            stayDurationManager.transferChildDurationToParent(fenceId, parentId, Date(location.time))
+            stayDurationManager.transferChildDurationToParent(fenceId, parentId, Date(location.timestamp))
         }
-        persistentStateManager.saveLastExitState(fenceId, fenceName, Date(location.time))
+        persistentStateManager.saveLastExitState(fenceId, fenceName, Date(location.timestamp))
         persistentStateManager.clearCurrentFenceState()
     }
 
-    private fun handleAllMatchedFences(location: AMapLocation, justExitedFenceId: String?) {
+    private fun handleAllMatchedFences(location: Location, justExitedFenceId: String?) {
         val allMatchedFenceIds = engine.currentMatchedFenceIds
         if (allMatchedFenceIds.isEmpty()) {
             if (!isRestoringFirstLocation) {
@@ -214,18 +214,18 @@ class FenceProcessingHolder(
             if (fenceId == smallestFenceId) {
                 val parentId = fenceTreeManager.getParent(fenceId)
                 if (parentId != null) {
-                    stayDurationManager.updateParentOnChildEnter(parentId, Date(location.time))
+                    stayDurationManager.updateParentOnChildEnter(parentId, Date(location.timestamp))
                 }
                 if (!stayDurationManager.isFenceActive(fenceId)) {
-                    stayDurationManager.onFenceEnter(fenceId, fenceName, Date(location.time))
-                    persistentStateManager.saveCurrentFenceState(fenceId, fenceName, Date(location.time))
+                    stayDurationManager.onFenceEnter(fenceId, fenceName, Date(location.timestamp))
+                    persistentStateManager.saveCurrentFenceState(fenceId, fenceName, Date(location.timestamp))
                 }
             }
-            fenceEnterTimes[fenceId] = Date(location.time)
+            fenceEnterTimes[fenceId] = Date(location.timestamp)
         }
     }
 
-    private fun detectFenceTransition(smallestFenceId: String?, allMatchedFenceIds: List<String>, location: AMapLocation) {
+    private fun detectFenceTransition(smallestFenceId: String?, allMatchedFenceIds: List<String>, location: Location) {
         if (previousSmallestFenceId == null || previousSmallestFenceId == smallestFenceId ||
             previousSmallestFenceId in allMatchedFenceIds) return
 
@@ -233,20 +233,20 @@ class FenceProcessingHolder(
         if (oldFenceName.isEmpty() || !stayDurationManager.isFenceActive(previousSmallestFenceId!!)) return
 
         Log.d(TAG, "强制退出旧围栏(围栏转换检测): $oldFenceName")
-        stayDurationManager.onFenceExit(previousSmallestFenceId!!, oldFenceName, Date(location.time))
+        stayDurationManager.onFenceExit(previousSmallestFenceId!!, oldFenceName, Date(location.timestamp))
         fenceEnterTimes.remove(previousSmallestFenceId!!)
         val oldParentId = fenceTreeManager.getParent(previousSmallestFenceId!!)
         if (oldParentId != null && allMatchedFenceIds.contains(oldParentId)) {
-            stayDurationManager.transferChildDurationToParent(previousSmallestFenceId!!, oldParentId, Date(location.time))
+            stayDurationManager.transferChildDurationToParent(previousSmallestFenceId!!, oldParentId, Date(location.timestamp))
         }
     }
 
-    private suspend fun handleFirstLocationInternal(location: AMapLocation) {
+    private suspend fun handleFirstLocationInternal(location: Location) {
         val currentFenceState = persistentStateManager.getCurrentFenceState()
         val lastAppCloseTime = persistentStateManager.getLastAppCloseTime()
         val fix = com.trackmaster.app.core.LocationFix(
             lat = location.latitude, lng = location.longitude,
-            accuracy = location.accuracy, timestamp = location.time,
+            accuracy = location.accuracy, timestamp = location.timestamp,
         )
 
         Log.d(TAG, "首次定位处理: 位置=(${fix.lat}, ${fix.lng}), 围栏数=${geoFences.size}")
@@ -287,7 +287,7 @@ class FenceProcessingHolder(
             }
             engineResultValid && engineFenceId != currentFenceState.fenceId -> {
                 Log.d(TAG, "状态不一致: Application在${currentFenceState.fenceName}, 用户实际在${matchedIds.firstOrNull() ?: "围栏外"}")
-                val exitTime = lastAppCloseTime ?: Date(location.time)
+                val exitTime = lastAppCloseTime ?: Date(location.timestamp)
                 stayDurationManager.onFenceExit(currentFenceState.fenceId, currentFenceState.fenceName, exitTime)
                 fenceEnterTimes.remove(currentFenceState.fenceId)
                 persistentStateManager.saveLastExitState(currentFenceState.fenceId, currentFenceState.fenceName, exitTime)
@@ -301,25 +301,25 @@ class FenceProcessingHolder(
                 engine.setCurrentFenceForRecovery(currentFenceState.fenceId, currentFenceState.enterTime.time)
             }
             currentFenceState != null -> {
-                val exitTime = lastAppCloseTime ?: Date(location.time)
+                val exitTime = lastAppCloseTime ?: Date(location.timestamp)
                 stayDurationManager.onFenceExit(currentFenceState.fenceId, currentFenceState.fenceName, exitTime)
                 fenceEnterTimes.remove(currentFenceState.fenceId)
                 persistentStateManager.saveLastExitState(currentFenceState.fenceId, currentFenceState.fenceName, exitTime)
                 persistentStateManager.clearCurrentFenceState()
                 Log.d(TAG, "已关闭旧围栏 ${currentFenceState.fenceName} 的计时")
-                startFenceTimingFromRestore(matchedIds.firstOrNull(), location.time, location, matchedIds)
+                startFenceTimingFromRestore(matchedIds.firstOrNull(), location.timestamp, location, matchedIds)
             }
             matchedIds.isNotEmpty() -> {
                 Log.d(TAG, "用户在围栏 ${matchedIds.first()} 内，开始新计时")
-                startFenceTimingFromRestore(matchedIds.first(), location.time, location, matchedIds)
+                startFenceTimingFromRestore(matchedIds.first(), location.timestamp, location, matchedIds)
             }
             else -> {
-                engine.setCurrentFenceForRecovery(null, location.time)
+                engine.setCurrentFenceForRecovery(null, location.timestamp)
             }
         }
     }
 
-    private fun updateApplicationStateForFence(fenceId: String, enterTs: Long, location: AMapLocation) {
+    private fun updateApplicationStateForFence(fenceId: String, enterTs: Long, location: Location) {
         val fence = geoFences.find { it.id == fenceId }
         val fenceName = fence?.name ?: fenceId
         val enterTime = Date(enterTs)
@@ -341,9 +341,9 @@ class FenceProcessingHolder(
         onNotifyFenceStateChanged()
     }
 
-    private fun startFenceTimingFromRestore(fenceId: String?, enterTs: Long, location: AMapLocation, matchedFenceIds: List<String>) {
+    private fun startFenceTimingFromRestore(fenceId: String?, enterTs: Long, location: Location, matchedFenceIds: List<String>) {
         if (fenceId == null) {
-            engine.setCurrentFenceForRecovery(null, location.time)
+            engine.setCurrentFenceForRecovery(null, location.timestamp)
             return
         }
         val fence = geoFences.find { it.id == fenceId }
@@ -367,10 +367,10 @@ class FenceProcessingHolder(
         onNotifyFenceStateChanged()
     }
 
-    private fun recordFenceEvent(fenceId: String, fenceName: String, action: GeoFenceAction, location: AMapLocation) {
+    private fun recordFenceEvent(fenceId: String, fenceName: String, action: GeoFenceAction, location: Location) {
         val event = GeoFenceEvent(
             fenceId = fenceId, fenceName = fenceName, action = action,
-            time = Date(location.time), latitude = location.latitude,
+            time = Date(location.timestamp), latitude = location.latitude,
             longitude = location.longitude, accuracy = location.accuracy
         )
         geoFenceEvents.add(event)

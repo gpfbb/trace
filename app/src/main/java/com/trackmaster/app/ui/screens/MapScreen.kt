@@ -49,7 +49,9 @@ import com.trackmaster.app.LocationServiceState
 import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.locationservice.LocationType
 import com.trackmaster.app.TrackMasterApplication
+import com.trackmaster.app.MapProvider
 import com.trackmaster.app.ui.components.AMapViewWrapper
+import com.trackmaster.app.ui.components.GoogleMapWrapper
 import com.trackmaster.app.ui.theme.*
 import java.util.UUID
 
@@ -160,23 +162,44 @@ fun MapScreen(app: TrackMasterApplication) {
         }
     }
 
+    val currentMapProvider by app.appPreferences.mapProviderFlow.collectAsState()
+
     Box(modifier = Modifier.fillMaxSize()) {
-        AMapViewWrapper(
-            modifier = Modifier.fillMaxSize(),
-            currentLocation = localLocation,
-            fences = localFences,
-            currentMatchedFenceIds = localMatchedIds,
-            highlightedFenceId = highlightedFenceId,
-            displayedFenceId = displayedFenceId,
-            isDrawingMode = isDrawingMode,
-            drawingPoints = drawingPoints,
-            selectedFenceType = selectedFenceType,
-            isEditingFence = isEditingFence,
-            editingPoints = editingPoints,
-            isPrecisionMode = drawingPrecisionMode || editingPrecisionMode,
-            mapType = mapType,
-            onMapClick = onMapClick
-        )
+        if (currentMapProvider == MapProvider.GOOGLE) {
+            GoogleMapWrapper(
+                modifier = Modifier.fillMaxSize(),
+                currentLocation = localLocation,
+                fences = localFences,
+                currentMatchedFenceIds = localMatchedIds,
+                highlightedFenceId = highlightedFenceId,
+                displayedFenceId = displayedFenceId,
+                isDrawingMode = isDrawingMode,
+                drawingPoints = drawingPoints,
+                selectedFenceType = selectedFenceType,
+                isEditingFence = isEditingFence,
+                editingPoints = editingPoints,
+                isPrecisionMode = drawingPrecisionMode || editingPrecisionMode,
+                mapType = mapType,
+                onMapClick = onMapClick
+            )
+        } else {
+            AMapViewWrapper(
+                modifier = Modifier.fillMaxSize(),
+                currentLocation = localLocation,
+                fences = localFences,
+                currentMatchedFenceIds = localMatchedIds,
+                highlightedFenceId = highlightedFenceId,
+                displayedFenceId = displayedFenceId,
+                isDrawingMode = isDrawingMode,
+                drawingPoints = drawingPoints,
+                selectedFenceType = selectedFenceType,
+                isEditingFence = isEditingFence,
+                editingPoints = editingPoints,
+                isPrecisionMode = drawingPrecisionMode || editingPrecisionMode,
+                mapType = mapType,
+                onMapClick = onMapClick
+            )
+        }
 
         TopStatusIsland(
             currentMatchedFenceIds = localMatchedIds,

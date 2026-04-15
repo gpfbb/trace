@@ -78,6 +78,11 @@
             android:name="com.amap.api.v2.apikey"
             android:value="${AMAP_API_KEY}" />
 
+        <!-- Google Maps API Key -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyDxArOAHTh5CSkcmNZunqW9pcjOtRiNIp8" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

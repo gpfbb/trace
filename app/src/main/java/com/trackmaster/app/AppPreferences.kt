@@ -3,6 +3,11 @@ package com.trackmaster.app
 import android.content.Context
 import android.content.SharedPreferences
 import com.trackmaster.app.core.PowerMode
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+enum class MapProvider { AMAP, GOOGLE }
 
 class AppPreferences(context: Context) {
 
@@ -26,6 +31,7 @@ class AppPreferences(context: Context) {
         private const val KEY_AUTO_CLEANUP_DAYS = "auto_cleanup_days"
         // 地图类型：1=标准 2=卫星 3=夜景（对应 AMap.MAP_TYPE_ constants）
         private const val KEY_MAP_TYPE = "map_type"
+        private const val KEY_MAP_PROVIDER = "map_provider"
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -150,4 +156,18 @@ class AppPreferences(context: Context) {
     var mapType: Int
         get() = prefs.getInt(KEY_MAP_TYPE, 1)
         set(value) = prefs.edit().putInt(KEY_MAP_TYPE, value).apply()
+
+    private val _mapProviderFlow = MutableStateFlow(
+        prefs.getString(KEY_MAP_PROVIDER, null)?.let { MapProvider.valueOf(it) } ?: MapProvider.AMAP
+    )
+    val mapProviderFlow: StateFlow<MapProvider> = _mapProviderFlow.asStateFlow()
+
+    var mapProvider: MapProvider
+        get() = _mapProviderFlow.value
+        set(value) {
+            prefs.edit().putString(KEY_MAP_PROVIDER, value.name).apply()
+            _mapProviderFlow.value = value
+        }
+
+    val sharedPreferences: SharedPreferences get() = prefs
 }

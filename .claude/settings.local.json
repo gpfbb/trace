@@ -27,7 +27,9 @@
       "Bash(powershell -Command \"Get-ChildItem -Recurse D:\\\\trace -Filter 'gradlew*' 2>&1 | head -20\")",
       "Bash(cmd /c \"gradlew.bat :app:compileDebugKotlin --no-daemon\")",
       "Bash(powershell -Command \"& { cd D:\\\\trace; .\\\\gradlew.bat :app:compileDebugKotlin --no-daemon 2>&1 | Select-Object -Last 50 }\" 2>&1)",
-      "Bash(powershell -Command \"& { cd D:\\\\trace; \\\\$env:JAVA_HOME='D:\\\\javajdk'; .\\\\gradlew.bat :app:compileDebugKotlin --no-daemon 2>&1 | Select-Object -Last 60 }\" 2>&1)"
+      "Bash(powershell -Command \"& { cd D:\\\\trace; \\\\$env:JAVA_HOME='D:\\\\javajdk'; .\\\\gradlew.bat :app:compileDebugKotlin --no-daemon 2>&1 | Select-Object -Last 60 }\" 2>&1)",
+      "WebFetch(domain:developers.google.com)",
+      "WebSearch"
     ]
   }
 }

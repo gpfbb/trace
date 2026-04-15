@@ -137,6 +137,85 @@ fun SettingsPage(
 
             HorizontalDivider(color = Color(0x30FFFFFF))
 
+            // 地图服务切换
+            var showMapProviderPicker by remember { mutableStateOf(false) }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showMapProviderPicker = true },
+                colors = CardDefaults.cardColors(containerColor = Color(0x4D000000)),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(0.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Map,
+                        contentDescription = "地图服务",
+                        tint = primaryColor(),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("地图服务", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFFE0E0E0))
+                        Text(
+                            if (prefs.mapProvider == MapProvider.GOOGLE) "Google Maps（全球精度）" else "高德地图（国内精度）",
+                            fontSize = 13.sp, color = Color(0xFFBDBDBD)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = Color(0xFFBDBDBD),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            if (showMapProviderPicker) {
+                AlertDialog(
+                    onDismissRequest = { showMapProviderPicker = false },
+                    title = { Text("选择地图服务") },
+                    text = {
+                        Column {
+                            Text(
+                                "高德地图：国内精度高，适合国内使用",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                            HorizontalDivider()
+                            Text(
+                                "Google Maps：全球精度，需要 Google Play 服务",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            prefs.mapProvider = MapProvider.GOOGLE
+                            showMapProviderPicker = false
+                        }) {
+                            Text("Google Maps")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            prefs.mapProvider = MapProvider.AMAP
+                            showMapProviderPicker = false
+                        }) {
+                            Text("高德地图")
+                        }
+                    }
+                )
+            }
+
+            HorizontalDivider(color = Color(0x30FFFFFF))
+
             // 主题选择
             Card(
                 modifier = Modifier
