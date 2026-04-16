@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.trackmaster.app.core.PowerMode
 import com.trackmaster.app.utils.GeoMath
+import com.trackmaster.app.utils.LanguageManager
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -48,6 +49,8 @@ fun SettingsPage(
     var selectedMode by remember { mutableStateOf(prefs.powerMode) }
     var currentTheme by remember { mutableStateOf(ThemeManager.getCurrentTheme()) }
     var showThemePicker by remember { mutableStateOf(false) }
+    var showLanguagePicker by remember { mutableStateOf(false) }
+    var currentLanguage by remember { mutableStateOf(prefs.appLanguage) }
 
     // 高级设置状态
     var showAdvancedSettings by remember { mutableStateOf(false) }
@@ -220,6 +223,48 @@ fun SettingsPage(
                         }
                     }
                 )
+            }
+
+            // 语言切换
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showLanguagePicker = true },
+                colors = CardDefaults.cardColors(containerColor = Color(0x4D000000)),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(0.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Language,
+                        contentDescription = stringResource(R.string.language),
+                        tint = primaryColor(),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.language), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFFE0E0E0))
+                        Text(
+                            when (currentLanguage) {
+                                AppLanguage.CHINESE -> stringResource(R.string.chinese)
+                                AppLanguage.ENGLISH -> stringResource(R.string.english)
+                                AppLanguage.MALAY -> stringResource(R.string.malay)
+                            },
+                            fontSize = 13.sp, color = Color(0xFFBDBDBD)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = Color(0xFFBDBDBD),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
 
             HorizontalDivider(color = Color(0x30FFFFFF))
@@ -487,6 +532,55 @@ fun SettingsPage(
 
             Spacer(modifier = Modifier.height(80.dp))
         }
+    }
+
+    // 语言选择对话框
+    if (showLanguagePicker) {
+        AlertDialog(
+            onDismissRequest = { showLanguagePicker = false },
+            title = { Text(stringResource(R.string.select_language)) },
+            text = {
+                Column {
+                    listOf(
+                        AppLanguage.CHINESE to R.string.chinese,
+                        AppLanguage.ENGLISH to R.string.english,
+                        AppLanguage.MALAY to R.string.malay
+                    ).forEach { (lang, labelRes) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    currentLanguage = lang
+                                    prefs.appLanguage = lang
+                                    showLanguagePicker = false
+                                    LanguageManager.restartApp(context)
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (currentLanguage == lang) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                contentDescription = null,
+                                tint = if (currentLanguage == lang) primaryColor() else Color.Gray,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                stringResource(labelRes),
+                                fontSize = 16.sp,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showLanguagePicker = false }) {
+                    Text(stringResource(R.string.cancel), color = Color.Gray)
+                }
+            }
+        )
     }
 
     // 主题选择对话框
