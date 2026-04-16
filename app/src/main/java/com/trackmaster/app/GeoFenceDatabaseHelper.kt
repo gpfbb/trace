@@ -1102,7 +1102,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
     fun exportToCSV(context: Context): String? {
         try {
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
             val csvContent = StringBuilder()
 
             csvContent.append("=== 围栏数据 ===\n")
@@ -1123,7 +1123,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 csvContent.append("${record.fenceId},${record.fenceName},${dateFormat.format(record.enterTime)},${record.exitTime?.let { dateFormat.format(it) } ?: ""},${record.durationSeconds ?: ""}\n")
             }
 
-            val fileName = "GeoFenceExport_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.csv"
+            val fileName = "GeoFenceExport_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.csv"
             val file = java.io.File(context.getExternalFilesDir(null), fileName)
             file.writeText(csvContent.toString())
 
@@ -1205,30 +1205,31 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
     fun saveDailyStayRecord(record: DailyStayRecord) {
         val db = writableDatabase
 
-        // 【关键修复】UPSERT 模式：累加而非替换
-        // 解决同一围栏同一天多次进入/退出时，CONFLICT_REPLACE 导致历史时长丢失的问题
-        val existing = getDailyStayRecord(record.date, record.fenceId)
-        val newDuration = if (existing != null) {
-            // 累加到已有时长（处理跨天、多次进入等场景）
-            existing.totalDurationSeconds + record.totalDurationSeconds
-        } else {
-            record.totalDurationSeconds
+        // 【Bug修复】使用 INSERT ... ON CONFLICT UPDATE 代替 CONFLICT_REPLACE
+        // 避免触发 ON DELETE CASCADE 导致外键关联记录被意外删除
+        db.beginTransaction()
+        try {
+            val existing = getDailyStayRecord(record.date, record.fenceId)
+            val newDuration = if (existing != null) {
+                existing.totalDurationSeconds + record.totalDurationSeconds
+            } else {
+                record.totalDurationSeconds
+            }
+
+            // 使用 ON CONFLICT UPDATE 进行增量更新，不会触发 DELETE
+            db.execSQL("""
+                INSERT INTO daily_stays ($KEY_DAILY_DATE, $KEY_DAILY_FENCE_ID, $KEY_DAILY_FENCE_NAME, $KEY_DAILY_DURATION, $KEY_DAILY_LAST_UPDATED)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT($KEY_DAILY_DATE, $KEY_DAILY_FENCE_ID) DO UPDATE SET
+                    $KEY_DAILY_DURATION = $KEY_DAILY_DURATION + excluded.$KEY_DAILY_DURATION,
+                    $KEY_DAILY_LAST_UPDATED = excluded.$KEY_DAILY_LAST_UPDATED
+            """, arrayOf(record.date, record.fenceId, record.fenceName, record.totalDurationSeconds, record.lastUpdated.time))
+
+            db.setTransactionSuccessful()
+            Log.d("GeoFenceDB", "保存日统计: ${record.fenceName}, 日期=${record.date}, 累加时长=${record.totalDurationSeconds}秒, 总计=${newDuration}秒")
+        } finally {
+            db.endTransaction()
         }
-
-        val values = ContentValues()
-        values.put(KEY_DAILY_DATE, record.date)
-        values.put(KEY_DAILY_FENCE_ID, record.fenceId)
-        values.put(KEY_DAILY_FENCE_NAME, record.fenceName)
-        values.put(KEY_DAILY_DURATION, newDuration)
-        values.put(KEY_DAILY_LAST_UPDATED, record.lastUpdated.time)
-
-        db.insertWithOnConflict(
-            TABLE_DAILY_STAYS,
-            null,
-            values,
-            SQLiteDatabase.CONFLICT_REPLACE
-        )
-        Log.d("GeoFenceDB", "保存日统计: ${record.fenceName}, 日期=${record.date}, 累加时长=${record.totalDurationSeconds}秒, 总计=${newDuration}秒")
     }
 
     fun getDailyStayRecord(dateKey: String, fenceId: String): DailyStayRecord? {
@@ -1333,35 +1334,15 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         db.beginTransaction()
         try {
             for (record in records) {
-                // 先查询是否已存在
-                val cursor = db.query(
-                    TABLE_DAILY_STAYS,
-                    arrayOf(KEY_DAILY_DURATION),
-                    "$KEY_DAILY_DATE = ? AND $KEY_DAILY_FENCE_ID = ?",
-                    arrayOf(record.date, record.fenceId),
-                    null, null, null
-                )
-                val existingDuration = try {
-                    if (cursor.moveToFirst()) {
-                        cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION))
-                    } else 0L
-                } finally {
-                    cursor.close()
-                }
-
-                val values = ContentValues().apply {
-                    put(KEY_DAILY_DATE, record.date)
-                    put(KEY_DAILY_FENCE_ID, record.fenceId)
-                    put(KEY_DAILY_FENCE_NAME, record.fenceName)
-                    put(KEY_DAILY_DURATION, existingDuration + record.totalDurationSeconds)
-                    put(KEY_DAILY_LAST_UPDATED, System.currentTimeMillis())
-                }
-                db.insertWithOnConflict(
-                    TABLE_DAILY_STAYS,
-                    null,
-                    values,
-                    SQLiteDatabase.CONFLICT_REPLACE
-                )
+                // 使用 INSERT ... ON CONFLICT UPDATE 进行增量更新，不会触发 DELETE
+                db.execSQL("""
+                    INSERT INTO daily_stays ($KEY_DAILY_DATE, $KEY_DAILY_FENCE_ID, $KEY_DAILY_FENCE_NAME, $KEY_DAILY_DURATION, $KEY_DAILY_LAST_UPDATED)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT($KEY_DAILY_DATE, $KEY_DAILY_FENCE_ID) DO UPDATE SET
+                        $KEY_DAILY_FENCE_NAME = excluded.$KEY_DAILY_FENCE_NAME,
+                        $KEY_DAILY_DURATION = $KEY_DAILY_DURATION + excluded.$KEY_DAILY_DURATION,
+                        $KEY_DAILY_LAST_UPDATED = excluded.$KEY_DAILY_LAST_UPDATED
+                """, arrayOf(record.date, record.fenceId, record.fenceName, record.totalDurationSeconds, System.currentTimeMillis()))
             }
             db.setTransactionSuccessful()
         } finally {
@@ -1484,7 +1465,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
      */
     fun generateFencesJson(fences: List<GeoFence>): String? {
         try {
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
             val jsonArray = JSONArray()
 
             fences.forEach { fence ->
@@ -1540,7 +1521,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
     fun exportFencesToJson(fences: List<GeoFence>, context: Context): String? {
         try {
             val json = generateFencesJson(fences) ?: return null
-            val fileName = "TrackMaster_Fences_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.json"
+            val fileName = "TrackMaster_Fences_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.json"
             val file = java.io.File(context.getExternalFilesDir(null), fileName)
             file.writeText(json)
             Log.d("GeoFenceDB", "围栏导出成功: ${file.absolutePath}")
@@ -1559,7 +1540,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
      */
     fun importFencesFromJson(jsonContent: String, preserveId: Boolean = false): Int {
         try {
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
             val wrapper = org.json.JSONObject(jsonContent)
 
             // 验证文件格式

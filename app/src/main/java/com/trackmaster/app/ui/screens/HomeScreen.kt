@@ -67,7 +67,8 @@ fun HomeScreen(
     }
 
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
+    val lifecycle = lifecycleOwner.lifecycle
+    DisposableEffect(lifecycle) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 val today = Calendar.getInstance()
@@ -102,9 +103,9 @@ fun HomeScreen(
                 currentFenceName = matched.firstOrNull()?.name
             }
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
+        lifecycle.addObserver(observer)
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+            lifecycle.removeObserver(observer)
         }
     }
 

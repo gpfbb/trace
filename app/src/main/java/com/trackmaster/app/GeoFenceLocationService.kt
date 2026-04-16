@@ -321,7 +321,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         Log.d(TAG, "配置快速首次定位模式")
     }
 
-    private fun updateLocationOptionsForContinuous(intervalMs: Long = 5000L) {
+    private fun updateLocationOptionsForContinuous(intervalMs: Long) {
         locationOption = AMapLocationClientOption().apply {
             locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
             isOnceLocation = false
@@ -332,6 +332,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             httpTimeOut = maxOf(intervalMs * 3, 10000L)
         }
         locationClient?.setLocationOption(locationOption)
+        // 【Bug修复】setOption后需要stop+start才能让新interval生效
+        locationClient?.stopLocation()
+        locationClient?.startLocation()
         Log.d(TAG, "配置连续定位模式，间隔: ${intervalMs}ms, httpTimeOut: ${maxOf(intervalMs * 3, 10000L)}ms")
     }
 
@@ -377,7 +380,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
     }
 
     private fun startContinuousLocation() {
-        startContinuousLocationWithSmartInterval(30_000L)
+        startContinuousLocationWithSmartInterval(10_000L)
     }
 
     private fun startContinuousLocationWithSmartInterval(baseIntervalMs: Long) {
@@ -458,30 +461,39 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             }
         } else {
             if (shouldProcess) {
-                consecutiveNotProcessCount = 0
-                cancelWakeupAlarm()
-                Log.d(TAG, "省电: 需要处理，重置计数")
+                // 【Bug修复】只有离开围栏时才重置计数器
+                // 围栏内processed：保持counter值，让围栏内throttling状态锁定
+                if (serviceState.isInsideFence) {
+                    // 围栏内processed fix：保持counter，不要重置到0
+                    // 这样下次throttled cycle不需要重新从0开始累加
+                    Log.d(TAG, "省电: 围栏内处理，重置计数(保持throttled状态)")
+                } else {
+                    consecutiveNotProcessCount = 0
+                    cancelWakeupAlarm()
+                    Log.d(TAG, "省电: 需要处理，重置计数")
+                }
             } else {
                 consecutiveNotProcessCount++
                 Log.d(TAG, "省电: 不需要处理 ($consecutiveNotProcessCount/$STOP_THRESHOLD)")
 
-                if (consecutiveNotProcessCount >= STOP_THRESHOLD) {
-                    // 围栏内不停止，只降频到5min/次继续监控（防止漏检出围栏）
-                    if (serviceState.isInsideFence) {
-                        Log.d(TAG, "省电: 围栏内连续${consecutiveNotProcessCount}次不处理，降频到5min/次继续监控")
-                        consecutiveNotProcessCount = 0
-                        updateLocationOptionsForContinuous(300_000L)
-                        if (!serviceState.isRunning) {
-                            locationClient?.startLocation()
-                            serviceState = serviceState.copy(isRunning = true)
-                        }
-                    } else {
-                        Log.d(TAG, "省电: 围栏外连续${consecutiveNotProcessCount}次不需要处理，停止定位，调度 Alarm")
-                        isLocationClientStopped = true
-                        lastResumeCheckTime = now
-                        stopLocation()
-                        scheduleNextWakeup()
+                // 【Bug修复】围栏内阈值从5降到2，interval从300s降到60s
+                // 围栏内用户对定位精度要求低，2次throttled即可触发降频
+                // 60s间隔足够检测用户进出围栏，不会漏检
+                val INSIDE_FENCE_THRESHOLD = 2
+                if (consecutiveNotProcessCount >= INSIDE_FENCE_THRESHOLD && serviceState.isInsideFence) {
+                    Log.d(TAG, "省电: 围栏内连续${consecutiveNotProcessCount}次不处理，降频到60s/次继续监控")
+                    updateLocationOptionsForContinuous(60_000L)
+                    if (!serviceState.isRunning) {
+                        locationClient?.startLocation()
+                        serviceState = serviceState.copy(isRunning = true)
                     }
+                } else if (consecutiveNotProcessCount >= STOP_THRESHOLD) {
+                    // 围栏外：STOP_THRESHOLD=5次throttled后停止GPS
+                    Log.d(TAG, "省电: 围栏外连续${consecutiveNotProcessCount}次不需要处理，停止定位，调度 Alarm")
+                    isLocationClientStopped = true
+                    lastResumeCheckTime = now
+                    stopLocation()
+                    scheduleNextWakeup()
                 }
             }
         }
@@ -584,6 +596,11 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         try {
             isTemporaryCheck = true
             if (isUsingGoogleProvider) {
+                // 【Bug修复】显式设置高精度模式，确保临时检查使用GPS精度
+                // 防止服务停止前切换到省电模式，导致临时检查精度不足
+                (locationProvider as? GoogleLocationProvider)?.setLocationMode(
+                    com.trackmaster.app.locationservice.LocationMode.HIGH_ACCURACY
+                )
                 locationProvider?.start()
             } else {
                 locationOption = AMapLocationClientOption().apply {
@@ -628,6 +645,10 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                     startContinuousLocationWithSmartInterval(60_000L)
                 }
             }
+            else {
+                // BUG-006 FIX: 连续定位模式：已有定时调度，不额外重试
+                Log.d(TAG, "连续定位模式下定位失败，等待下次定时调度")
+            }
             return
         }
 
@@ -651,34 +672,39 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         val app = application as? TrackMasterApplication
         val shouldProcess = app?.checkGeoFences(toLocation(location)) ?: false
 
-        val fix = com.trackmaster.app.core.LocationFix(
-            lat = location.latitude,
-            lng = location.longitude,
-            accuracy = location.accuracy,
-            timestamp = location.time
-        )
-        val isInFence = app?.engine?.isLocationInAnyFence(fix) == true
+        // 【Bug修复】只有 shouldProcess=true 时才更新 serviceState 和围栏状态
+        // shouldProcess=false 意味着 SmartScheduler 认为这是GPS噪声或无需处理的定位
+        // 如果每次回调都更新 serviceState，前台UI会每5秒刷新一次，失去throttle意义
+        if (shouldProcess) {
+            val isInFence = app?.engine?.currentMatchedFenceIds?.isNotEmpty() == true
 
-        val currentFenceName = if (isInFence) {
-            val matchedIds = app?.engine?.currentMatchedFenceIds ?: emptyList()
-            val firstMatchId = matchedIds.firstOrNull()
-            if (firstMatchId != null) {
-                app?.geoFences?.find { it.id == firstMatchId }?.name
+            val currentFenceName = if (isInFence) {
+                val matchedIds = app?.engine?.currentMatchedFenceIds ?: emptyList()
+                val firstMatchId = matchedIds.firstOrNull()
+                if (firstMatchId != null) {
+                    app?.geoFences?.find { it.id == firstMatchId }?.name
+                } else null
             } else null
-        } else null
 
-        serviceState = serviceState.copy(
-            lastLocation = toLocation(location),
-            lastUpdateTime = Date(),
-            locationCount = serviceState.locationCount + 1,
-            isInsideFence = isInFence,
-            currentFenceName = currentFenceName
-        )
+            serviceState = serviceState.copy(
+                lastLocation = toLocation(location),
+                lastUpdateTime = Date(),
+                locationCount = serviceState.locationCount + 1,
+                isInsideFence = isInFence,
+                currentFenceName = currentFenceName
+            )
 
-        Log.d(TAG, "省电检查: shouldProcess=$shouldProcess, isInFence=$isInFence, isStopped=$isLocationClientStopped")
+            Log.d(TAG, "省电检查: shouldProcess=$shouldProcess, isInFence=$isInFence, isStopped=$isLocationClientStopped")
 
-        val shouldStopForPowerSave = shouldProcess.not() && isInFence.not()
-        updatePowerSavingState(shouldStopForPowerSave)
+            val shouldStopForPowerSave = isInFence.not()
+            updatePowerSavingState(shouldStopForPowerSave)
+        } else {
+            // Throttled回调：仍然调用省电state更新（用于计数累加），但不更新UI状态
+            Log.d(TAG, "Throttled回调（不更新UI）: shouldProcess=$shouldProcess, isStopped=$isLocationClientStopped")
+            val isInFence = serviceState.isInsideFence  // 复用上次的围栏状态
+            val shouldStopForPowerSave = isInFence.not()
+            updatePowerSavingState(shouldStopForPowerSave)
+        }
 
         updateNotification()
 
@@ -688,7 +714,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             (application as? TrackMasterApplication)?.handleFirstLocationAfterRestore(toLocation(location))
 
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                startContinuousLocationWithSmartInterval(30_000L)
+                startContinuousLocationWithSmartInterval(10_000L)
             }, 1000)
         }
     }

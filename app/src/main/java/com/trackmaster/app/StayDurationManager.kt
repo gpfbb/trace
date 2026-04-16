@@ -34,7 +34,7 @@ class StayDurationManager(private val context: Context) {
         private const val PERIODIC_SAVE_INTERVAL_MS = 5 * 60 * 1000L // 5分钟
         private val DATE_FORMAT_THREAD_LOCAL = object : ThreadLocal<SimpleDateFormat>() {
             override fun initialValue(): SimpleDateFormat {
-                return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                return SimpleDateFormat("yyyy-MM-dd", Locale.US)
             }
         }
 
@@ -133,8 +133,11 @@ class StayDurationManager(private val context: Context) {
         // 防止开放记录残留导致重启后重复计时
         if (session == null) {
             Log.w(TAG, "围栏 $fenceName 不在 activeSessions 中，尝试关闭 DB 开放记录")
-            val updatedRows = dbHelper.closeOpenStayRecord(fenceId, exitTime, 0L)
-            Log.w(TAG, "围栏 $fenceName DB 开放记录关闭结果: updatedRows=$updatedRows")
+            // 【Bug修复】从 DB 查询实际累积时长，而非硬编码 0L
+            val existingOpen = dbHelper.getOpenStayRecords().filter { it.fenceId == fenceId }.firstOrNull()
+            val duration = existingOpen?.durationSeconds ?: 0L
+            val updatedRows = dbHelper.closeOpenStayRecord(fenceId, exitTime, duration)
+            Log.w(TAG, "围栏 $fenceName DB 开放记录关闭结果: updatedRows=$updatedRows, 实际时长=${duration}秒")
             return
         }
 
@@ -169,8 +172,18 @@ class StayDurationManager(private val context: Context) {
             }
         }
 
+        // 【Bug修复】检查子围栏退出时父围栏是否仍在 activeSessions
+        // 如果是，说明子围栏的时长已通过 transferChildDurationToParent 合并到父围栏，
+        // 子围栏不应再独立写入 daily_stays，避免双重计数
+        val app = context.applicationContext as? TrackMasterApplication
+        val parentId = app?.fenceTreeManager?.getParent(fenceId)
+        val parentStillActive = parentId != null && activeSessions.containsKey(parentId)
+        if (parentStillActive) {
+            Log.d(TAG, "子围栏 $fenceName 的时长已合并到父围栏，跳过独立写入")
+        }
+
         if (enterDateKey == exitDateKey) {
-            if (sessionAccumulated > 0) {
+            if (sessionAccumulated > 0 && !parentStillActive) {
                 addDailyDuration(enterDateKey, fenceId, fenceName, sessionAccumulated)
                 Log.d(TAG, "结束计时: $fenceName, 日期=$enterDateKey, 时长=${sessionAccumulated}秒")
             }
@@ -186,7 +199,7 @@ class StayDurationManager(private val context: Context) {
             val midnightOfNextDay = enterCalendar.time
 
             val durationDay1 = (midnightOfNextDay.time - session.enterTime.time) / 1000
-            if (durationDay1 > 0) {
+            if (durationDay1 > 0 && !parentStillActive) {
                 addDailyDuration(enterDateKey, fenceId, fenceName, durationDay1)
                 Log.d(TAG, "跨天计时(首日): $fenceName, 日期=$enterDateKey, 时长=${durationDay1}秒")
             }
@@ -202,26 +215,32 @@ class StayDurationManager(private val context: Context) {
             exitCalendar.set(Calendar.MILLISECOND, 0)
 
             while (dayCalendar.before(exitCalendar)) {
-                val fullDayKey = getDateKey(dayCalendar.time)
-                addDailyDuration(fullDayKey, fenceId, fenceName, 86400L)
-                Log.d(TAG, "跨天计时(整天): $fenceName, 日期=$fullDayKey, 时长=86400秒")
+                if (!parentStillActive) {
+                    val fullDayKey = getDateKey(dayCalendar.time)
+                    addDailyDuration(fullDayKey, fenceId, fenceName, 86400L)
+                    Log.d(TAG, "跨天计时(整天): $fenceName, 日期=$fullDayKey, 时长=86400秒")
+                }
                 dayCalendar.add(Calendar.DAY_OF_MONTH, 1)
             }
 
             val durationLastDay = (exitTime.time - exitCalendar.time.time) / 1000
-            if (durationLastDay > 0) {
+            if (durationLastDay > 0 && !parentStillActive) {
                 addDailyDuration(exitDateKey, fenceId, fenceName, durationLastDay)
                 Log.d(TAG, "跨天计时(末日): $fenceName, 日期=$exitDateKey, 时长=${durationLastDay}秒")
             }
         }
     }
 
+
     private fun addDailyDuration(dateKey: String, fenceId: String, fenceName: String, durationSeconds: Long) {
+        // 【Bug修复】P7-C-BUG005：对超过24小时的单日时长进行截断
+        val safeDuration = minOf(durationSeconds, 24 * 60 * 60L)
+
         val existing = getDailyRecord(dateKey, fenceId)
         val newDuration = if (existing != null) {
-            existing.totalDurationSeconds + durationSeconds
+            existing.totalDurationSeconds + safeDuration
         } else {
-            durationSeconds
+            safeDuration
         }
 
         val record = DailyStayRecord(

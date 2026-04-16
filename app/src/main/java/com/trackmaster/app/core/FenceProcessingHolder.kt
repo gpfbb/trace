@@ -44,7 +44,7 @@ class FenceProcessingHolder(
 
     // ---- 内部状态 ----
     private var isRestoringFirstLocation = false
-    private var previousSmallestFenceId: String? = null
+    private val previousSmallestFenceId = java.util.concurrent.atomic.AtomicReference<String?>(null)
 
     // ============================================================
     // 公开 API
@@ -198,7 +198,7 @@ class FenceProcessingHolder(
         detectFenceTransition(smallestFenceId, allMatchedFenceIds, location)
 
         if (smallestFenceId != null) {
-            previousSmallestFenceId = smallestFenceId
+            previousSmallestFenceId.set(smallestFenceId)
         }
 
         for (fenceId in allMatchedFenceIds) {
@@ -226,18 +226,30 @@ class FenceProcessingHolder(
     }
 
     private fun detectFenceTransition(smallestFenceId: String?, allMatchedFenceIds: List<String>, location: Location) {
-        if (previousSmallestFenceId == null || previousSmallestFenceId == smallestFenceId ||
-            previousSmallestFenceId in allMatchedFenceIds) return
+        val previousId = previousSmallestFenceId.get()
+        if (previousId == null || previousId == smallestFenceId) return
 
-        val oldFenceName = geoFences.find { it.id == previousSmallestFenceId }?.name ?: previousSmallestFenceId ?: ""
-        if (oldFenceName.isEmpty() || !stayDurationManager.isFenceActive(previousSmallestFenceId!!)) return
+        // Bug 4 修复：如果 previousId 仍在 matched 列表中，检查是否是 sibling 切换
+        if (previousId in allMatchedFenceIds) {
+            val prevParent = fenceTreeManager.getParent(previousId)
+            val currParent = fenceTreeManager.getParent(smallestFenceId ?: "")
+            // sibling 切换：同一父级的子围栏之间切换，继续处理 exit
+            if (prevParent != null && prevParent == currParent) {
+                // 继续执行 exit 处理
+            } else {
+                return
+            }
+        }
+
+        val oldFenceName = geoFences.find { it.id == previousId }?.name ?: previousId ?: ""
+        if (oldFenceName.isEmpty() || !stayDurationManager.isFenceActive(previousId)) return
 
         Log.d(TAG, "强制退出旧围栏(围栏转换检测): $oldFenceName")
-        stayDurationManager.onFenceExit(previousSmallestFenceId!!, oldFenceName, Date(location.timestamp))
-        fenceEnterTimes.remove(previousSmallestFenceId!!)
-        val oldParentId = fenceTreeManager.getParent(previousSmallestFenceId!!)
+        stayDurationManager.onFenceExit(previousId, oldFenceName, Date(location.timestamp))
+        fenceEnterTimes.remove(previousId)
+        val oldParentId = fenceTreeManager.getParent(previousId)
         if (oldParentId != null && allMatchedFenceIds.contains(oldParentId)) {
-            stayDurationManager.transferChildDurationToParent(previousSmallestFenceId!!, oldParentId, Date(location.timestamp))
+            stayDurationManager.transferChildDurationToParent(previousId, oldParentId, Date(location.timestamp))
         }
     }
 

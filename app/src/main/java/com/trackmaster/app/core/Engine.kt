@@ -459,6 +459,7 @@ class Engine(
             // 清除当前状态
             currentLeafId = null
             currentEnterTs = 0L
+            currentMatchedFenceIds = emptyList()
 
             return RestoreResult(
                 shouldRestore = false,

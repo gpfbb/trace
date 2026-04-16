@@ -143,9 +143,10 @@ class PersistentStateManager(context: Context) {
      * 保存上次位置信息
      */
     fun saveLastLocation(latitude: Double, longitude: Double, time: Date) {
+        // 【Bug修复】P7-C-BUG007：使用 doubleToRawLongBits 存储 double，避免 Float 精度丢失
         prefs.edit()
-            .putFloat(KEY_LAST_LOCATION_LAT, latitude.toFloat())
-            .putFloat(KEY_LAST_LOCATION_LNG, longitude.toFloat())
+            .putLong(KEY_LAST_LOCATION_LAT, java.lang.Double.doubleToRawLongBits(latitude))
+            .putLong(KEY_LAST_LOCATION_LNG, java.lang.Double.doubleToRawLongBits(longitude))
             .putLong(KEY_LAST_LOCATION_TIME, time.time)
             .apply()
         Log.d(TAG, "保存上次位置: ($latitude, $longitude), 时间=$time")
@@ -155,14 +156,34 @@ class PersistentStateManager(context: Context) {
      * 获取上次位置信息
      */
     fun getLastLocation(): LastLocationState? {
-        val lat = prefs.getFloat(KEY_LAST_LOCATION_LAT, Float.NaN)
-        val lng = prefs.getFloat(KEY_LAST_LOCATION_LNG, Float.NaN)
-        val time = prefs.getLong(KEY_LAST_LOCATION_TIME, 0L)
+        // 【Bug修复】P7-C-BUG007：使用 longBitsToDouble 读取 double，避免 Float 精度丢失
+        // 【兼容修复】：旧数据以 Float 存储，getLong 遇到 Float 类型会抛 ClassCastException，需兼容读取
+        val latBits: Long
+        val lngBits: Long
+        try {
+            latBits = prefs.getLong(KEY_LAST_LOCATION_LAT, java.lang.Double.doubleToRawLongBits(Double.NaN))
+            lngBits = prefs.getLong(KEY_LAST_LOCATION_LNG, java.lang.Double.doubleToRawLongBits(Double.NaN))
+        } catch (e: ClassCastException) {
+            // 旧数据是 Float 类型，迁移读取并转为 Double 后重写
+            val latFloat = prefs.getFloat(KEY_LAST_LOCATION_LAT, Float.NaN)
+            val lngFloat = prefs.getFloat(KEY_LAST_LOCATION_LNG, Float.NaN)
+            val lat = latFloat.toDouble()
+            val lng = lngFloat.toDouble()
+            val time = prefs.getLong(KEY_LAST_LOCATION_TIME, 0L)
+            if (lat.isNaN() || lng.isNaN() || time == 0L) return null
+            // 立即以新格式(Long)重写，避免下次再走此兼容路径
+            saveLastLocation(lat, lng, Date(time))
+            return LastLocationState(lat, lng, Date(time))
+        }
 
+        val time = prefs.getLong(KEY_LAST_LOCATION_TIME, 0L)
+        val lat = java.lang.Double.longBitsToDouble(latBits)
+        val lng = java.lang.Double.longBitsToDouble(lngBits)
         if (lat.isNaN() || lng.isNaN() || time == 0L) return null
 
-        return LastLocationState(lat.toDouble(), lng.toDouble(), Date(time))
+        return LastLocationState(lat, lng, Date(time))
     }
+
 
     /**
      * 清除所有状态

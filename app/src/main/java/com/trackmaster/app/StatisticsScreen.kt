@@ -730,7 +730,8 @@ private fun FenceTreeItem(
                             try {
                                 Color(AndroidColor.parseColor(node.color))
                             } catch (e: Exception) {
-                                chartColors[index % chartColors.size]
+                                // 使用 fenceId 生成稳定的颜色索引，解决递归子节点 index=0 颜色相同问题
+                                chartColors[ kotlin.math.abs(node.fenceId.hashCode()) % chartColors.size ]
                             }
                         )
                 )
@@ -790,7 +791,7 @@ private fun FenceTreeItem(
                                 try {
                                     Color(AndroidColor.parseColor(node.color))
                                 } catch (e: Exception) {
-                                    chartColors[index % chartColors.size]
+                                    chartColors[ kotlin.math.abs(node.fenceId.hashCode()) % chartColors.size ]
                                 }
                             )
                     )

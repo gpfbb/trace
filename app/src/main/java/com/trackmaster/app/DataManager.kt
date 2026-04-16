@@ -523,7 +523,7 @@ class DataManager(private val context: Context) {
                 // 优先保留原始 ID，若与已有围栏冲突则生成新 ID
                 val originalId = obj.optString("id", null)
                 val existingFence = originalId?.let { dbHelper.getFenceById(it) }
-                val fenceId = existingFence?.id ?: originalId ?: UUID.randomUUID().toString()
+                val fenceId = if (existingFence != null) UUID.randomUUID().toString() else originalId ?: UUID.randomUUID().toString()
                 val fence = if (type == GeoFenceType.CIRCLE) {
                     GeoFence(
                         id = fenceId,
@@ -715,12 +715,18 @@ class DataManager(private val context: Context) {
                         ?.let { dateTimeFormat.parse(it) }
                 } catch (e: Exception) { null }
                 val duration = obj.optLong("duration", 0L).takeIf { it > 0 }
+                val fenceId = obj.optString("fenceId", "").takeIf { it.isNotBlank() }
+                val fenceName = obj.optString("fenceName", "").takeIf { it.isNotBlank() }
+
+                if (fenceId == null || fenceName == null) {
+                    continue // 跳过无效记录
+                }
 
                 stayRecords.add(
                     FenceStayRecord(
                         id = id,
-                        fenceId = obj.getString("fenceId"),
-                        fenceName = obj.getString("fenceName"),
+                        fenceId = fenceId,
+                        fenceName = fenceName,
                         enterTime = enterTime,
                         exitTime = exitTime,
                         durationSeconds = duration
@@ -737,11 +743,18 @@ class DataManager(private val context: Context) {
             val dailyRecords = mutableListOf<DailyStayRecord>()
             for (i in 0 until dailyArray.length()) {
                 val obj = dailyArray.getJSONObject(i)
+                val fenceId = obj.optString("fenceId", "").takeIf { it.isNotBlank() }
+                val fenceName = obj.optString("fenceName", "").takeIf { it.isNotBlank() }
+
+                if (fenceId == null || fenceName == null) {
+                    continue // 跳过无效记录
+                }
+
                 dailyRecords.add(
                     DailyStayRecord(
                         date = obj.getString("date"),
-                        fenceId = obj.getString("fenceId"),
-                        fenceName = obj.getString("fenceName"),
+                        fenceId = fenceId,
+                        fenceName = fenceName,
                         totalDurationSeconds = obj.getLong("duration"),
                         lastUpdated = Date()
                     )
@@ -762,11 +775,18 @@ class DataManager(private val context: Context) {
                 } catch (e: Exception) {
                     Date()
                 }
+                val fenceId = obj.optString("fenceId", "").takeIf { it.isNotBlank() }
+                val fenceName = obj.optString("fenceName", "").takeIf { it.isNotBlank() }
+
+                if (fenceId == null || fenceName == null) {
+                    continue // 跳过无效记录
+                }
+
                 eventRecords.add(
                     GeoFenceEvent(
                         id = obj.optString("id", UUID.randomUUID().toString()),
-                        fenceId = obj.getString("fenceId"),
-                        fenceName = obj.getString("fenceName"),
+                        fenceId = fenceId,
+                        fenceName = fenceName,
                         action = GeoFenceAction.valueOf(obj.getString("action")),
                         time = timestamp,
                         latitude = obj.getDouble("latitude"),

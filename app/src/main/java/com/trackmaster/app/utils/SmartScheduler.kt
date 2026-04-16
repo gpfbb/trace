@@ -175,6 +175,8 @@ class SmartScheduler(
     private var accumulatedStationaryMs = 0L
     /** 是否注册了 SLC 兜底 */
     private var slcRegistered = false
+    /** 【新增】连续移动计数器：单次GPS跳点不能判断为真移动，需要连续多次才确认 */
+    private var consecutiveMovementCount = 0
 
     // ---- 加速度窗口 ----
     private val accelBuffer = ArrayDeque<AccelerometerData>()
@@ -255,7 +257,7 @@ class SmartScheduler(
 
         // ---- 多源静止判定 ----
         val distance = lastPoint?.let { GeoMath.haversine(it, currentPoint) } ?: Double.MAX_VALUE
-        val isStationary = checkStationary(distance, fix.accuracy, accel)
+        val isStationary = checkStationary(distance, fix.accuracy, accel, currentPoint)
 
         // ---- 边界 Buffer 检测（所有模式都启用，小围栏用户边界敏感） ----
         val inBuffer = checkBoundaryBuffer(currentPoint)
@@ -264,20 +266,31 @@ class SmartScheduler(
         val isInsideFence = checkFenceInside(currentPoint)
 
         // ---- 立即重置条件检查 ----
-        val shouldReset = distance > config.resetDistanceM
-
-        if (shouldReset) {
-            resetThrottle()
-        } else if (isStationary) {
-            if (stationarySinceTs == 0L) {
-                stationarySinceTs = ts
+        // 【核心修复】单次GPS跳点(>30m)不能判断为"真移动"
+        // 只有连续3次跳点才确认用户真的在移动（排除噪声/手机晃动）
+        // 对正常使用手机、偶尔看屏幕等场景，不触发reset
+        val hasMovementSignal = distance > config.resetDistanceM && !isStationary
+        if (hasMovementSignal) {
+            consecutiveMovementCount++
+            if (consecutiveMovementCount >= 3) {
+                // 连续3次移动信号 → 确认用户真的在移动，reset
+                resetThrottle()
             }
-            accumulatedStationaryMs = ts - stationarySinceTs
-            updateThrottleLevel(isInsideFence)
+            // 不满3次：暂时不清除静止状态，等待后续确认
         } else {
-            stationarySinceTs = 0L
-            accumulatedStationaryMs = 0L
-            level = 0
+            // 无移动信号（包括GPS噪声跳点但速度判定为静止）
+            consecutiveMovementCount = 0
+            if (isStationary) {
+                if (stationarySinceTs == 0L) {
+                    stationarySinceTs = ts
+                }
+                accumulatedStationaryMs = ts - stationarySinceTs
+                updateThrottleLevel(isInsideFence)
+            } else {
+                stationarySinceTs = 0L
+                accumulatedStationaryMs = 0L
+                level = 0
+            }
         }
 
         lastProcessedTs = ts
@@ -339,6 +352,7 @@ class SmartScheduler(
         stationarySinceTs = 0L
         accumulatedStationaryMs = 0L
         level = 0
+        consecutiveMovementCount = 0
     }
 
     // ============================================================
@@ -353,7 +367,8 @@ class SmartScheduler(
      * 3. 速度判定（使用位置历史计算速度）
      * 4. 时间窗口平滑判定（需要多个点同时满足条件）
      */
-    private fun checkStationary(distanceM: Double, accuracyM: Float, accel: AccelerometerData?): Boolean {
+    // BUG-005 FIX: windowOk 基于当前点到窗口中心的距离，而非窗口内各点到中心的距离
+    private fun checkStationary(distanceM: Double, accuracyM: Float, accel: AccelerometerData?, currentPoint: GeoPoint): Boolean {
         val distThreshold = computeDynamicDistanceThreshold(accuracyM)
         val currentDistOk = distanceM < distThreshold
 
@@ -365,7 +380,14 @@ class SmartScheduler(
             true
         }
 
-        val windowOk = checkLocationWindow(distThreshold)
+        // BUG-005 FIX: windowOk 基于当前点到窗口中心的距离，而非窗口内各点到中心的距离
+        val windowOk = if (locationHistory.size >= config.stationaryMinPoints) {
+            val centerPoint = computeWindowCenter(locationHistory.toList())
+            val distToCenter = GeoMath.haversine(centerPoint, currentPoint)
+            distToCenter < distThreshold
+        } else {
+            true
+        }
 
         val singlePointOk = currentDistOk && speedOk && accelOk
 
@@ -565,13 +587,6 @@ class SmartScheduler(
 
     /** 检查点是否在任何叶子围栏的边界 Buffer 区内 */
     private fun checkBoundaryBuffer(point: GeoPoint): Boolean {
-        val bufferM = config.boundaryBufferM
-
-        // 如果 bufferM 变化，重新预计算所有扩展 BBox
-        if (bufferM != lastBufferM) {
-            precomputeExpandedBBoxes(bufferM)
-        }
-
         // 如果点距离上次检查的点很近，直接复用上次结果
         lastBoundaryCheckPoint?.let { lastPoint ->
             if (GeoMath.haversine(point, lastPoint) < 5.0) {
@@ -582,22 +597,46 @@ class SmartScheduler(
         for (leaf in leavesByDepth) {
             val bbox = bboxCache[leaf.id] ?: continue
 
-            // 围栏内不算 Buffer
-            if (GeoMath.pointInPolygon(point.lat, point.lng, leaf.polygon)) continue
+            // 【Bug修复】按围栏尺寸动态计算buffer，避免小围栏被buffer覆盖大部分面积
+            // buffer = min(5m, 围栏特征半径 × 0.3)，既防止抖动又不对小围栏过度惩罚
+            val fenceRadiusM = computeFenceRadiusM(leaf)
+            val bufferM = minOf(config.boundaryBufferM, fenceRadiusM * 0.3)
 
-            // 获取预计算的扩展 BBox（应该已存在）
+            // 获取预计算的扩展 BBox
             val expanded = expandedBBoxCache[leaf.id] ?: computeExpandedBBox(bbox, bufferM)
 
+            // BUG-002 FIX: pointInBBox 命中后，再用 pointInPolygon 精确判断（排除已在围栏内的情况）
+            // 围栏内不算 Buffer，只有在扩展 BBox 内但不在多边形内才算 Buffer
             if (GeoMath.pointInBBox(point.lat, point.lng, expanded)) {
-                lastBoundaryCheckPoint = point
-                lastBoundaryCheckResult = true
-                return true
+                if (!GeoMath.pointInPolygon(point.lat, point.lng, leaf.polygon)) {
+                    lastBoundaryCheckPoint = point
+                    lastBoundaryCheckResult = true
+                    return true
+                }
             }
         }
 
         lastBoundaryCheckPoint = point
         lastBoundaryCheckResult = false
         return false
+    }
+
+    /**
+     * 计算围栏的"特征半径"（米）
+     * 用于动态buffer计算
+     */
+    private fun computeFenceRadiusM(fence: Geofence): Double {
+        return when (fence.type) {
+            com.trackmaster.app.core.GeoFenceType.CIRCLE -> fence.radius ?: 10.0
+            com.trackmaster.app.core.GeoFenceType.POLYGON -> {
+                // 对多边形，估算从中心到最远顶点的距离
+                if (fence.polygon.size < 3) return 10.0
+                val centerLat = fence.polygon.map { it.lat }.average()
+                val centerLng = fence.polygon.map { it.lng }.average()
+                val center = GeoPoint(centerLat, centerLng)
+                fence.polygon.maxOf { GeoMath.haversine(center, it) }.coerceAtLeast(5.0)
+            }
+        }
     }
 
     /**
@@ -620,6 +659,13 @@ class SmartScheduler(
         level = 0
         stationarySinceTs = 0L
         accumulatedStationaryMs = 0L
+        slcRegistered = false
+        // 【Bug修复】resetThrottle() 后应重置 lastProcessedTs
+        // 否则下一个定位的 ts - lastProcessedTs 可能仍 < interval，导致
+        // 真正的位置更新被throttle blocked（GPS噪声后应立即重新校准）
+        lastProcessedTs = 0L
+        // 【新增】重置连续移动计数器
+        consecutiveMovementCount = 0
     }
 
     /** 构造调度决策 */

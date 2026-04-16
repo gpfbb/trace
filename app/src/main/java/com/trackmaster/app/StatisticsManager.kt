@@ -137,8 +137,11 @@ class StatisticsManager(private val context: Context) {
                     FenceStatisticsBuilder(fenceId = fenceId, fenceName = session.fenceName)
                 }
                 builder.addDuration(effectiveDurationSeconds)
-                // 如果之前没有被记录进入（当前活跃），也算一次进入
-                if (!enterCounts.containsKey(fenceId)) {
+                // 只有当进入时间在所选时间范围内，才计入 enterCount
+                // 如果用户在时间范围之前就已进入，不应多数
+                if (!enterCounts.containsKey(fenceId) &&
+                    session.enterTime >= timeRange.startTime &&
+                    session.enterTime <= timeRange.endTime) {
                     builder.incrementEnterCount()
                 }
             }
@@ -184,12 +187,12 @@ class StatisticsManager(private val context: Context) {
             val childIds = childrenMap[fenceId] ?: emptyList()
             val childTrees = mutableListOf<FenceStatisticTree>()
 
-            var totalChildrenDuration = 0L
+            var totalChildrenDirect = 0L
             for (childId in childIds) {
                 val childTree = buildTree(childId, depth + 1, statsMap[childId]?.totalDurationSeconds ?: 0L)
                 if (childTree != null) {
                     childTrees.add(childTree)
-                    totalChildrenDuration += childTree.totalDurationSeconds
+                    totalChildrenDirect += childTree.ownDurationSeconds
                 }
             }
 
@@ -198,7 +201,7 @@ class StatisticsManager(private val context: Context) {
 
             // 自身时长 + 子节点时长 = 总时长
             val ownDur = stat?.totalDurationSeconds ?: ownDuration
-            val totalDur = ownDur + totalChildrenDuration
+            val totalDur = ownDur + totalChildrenDirect
 
             return FenceStatisticTree(
                 fenceId = fenceId,
