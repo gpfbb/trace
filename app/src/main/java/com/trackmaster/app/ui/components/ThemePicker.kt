@@ -14,7 +14,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
+import com.trackmaster.app.R
 import com.trackmaster.app.ui.theme.*
 
 /**
@@ -32,7 +34,7 @@ fun ThemePickerDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "选择主题",
+                stringResource(R.string.select_theme),
                 fontWeight = FontWeight.Bold,
                 color = getThemeAccent(currentTheme)
             )
@@ -43,7 +45,7 @@ fun ThemePickerDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    "选择你喜欢的主题风格",
+                    stringResource(R.string.select_theme_desc),
                     fontSize = 13.sp,
                     color = Color(0xFFBDBDBD)
                 )
@@ -69,12 +71,12 @@ fun ThemePickerDialog(
                     containerColor = getThemeAccent(currentTheme)
                 )
             ) {
-                Text("应用")
+                Text(stringResource(R.string.confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消", color = Color.Gray)
+                Text(stringResource(R.string.cancel), color = Color.Gray)
             }
         }
     )

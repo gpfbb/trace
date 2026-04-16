@@ -32,14 +32,16 @@ import com.trackmaster.app.ui.theme.primaryColor
 import com.trackmaster.app.ui.theme.surfaceColor
 import com.trackmaster.app.ui.theme.backgroundColor
 import com.trackmaster.app.ui.theme.glassPanel
+import androidx.compose.ui.res.stringResource
+import com.trackmaster.app.R
 import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * 历史记录页面
+ * History Screen
  *
- * 显示围栏事件的 chronological 时间线视图。
+ * Displays chronological timeline view of fence events.
  */
 @Composable
 fun HistoryScreen(
@@ -60,9 +62,9 @@ fun HistoryScreen(
         EventFilter.EXIT -> events.value.filter { it.action == GeoFenceAction.EXIT }
     }
 
-    // 按日期分组
+    // Group by date
     val groupedEvents = filteredEvents.groupBy { event ->
-        SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()).format(event.time)
+        SimpleDateFormat(stringResource(R.string.date_format_day), Locale.getDefault()).format(event.time)
     }
 
     Column(
@@ -75,7 +77,7 @@ fun HistoryScreen(
             )
     ) {
         // ============================================================
-        // 顶部栏
+        // Top Bar
         // ============================================================
         GlassTopCard(
             modifier = Modifier
@@ -95,14 +97,14 @@ fun HistoryScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "历史记录",
+                        text = stringResource(R.string.history_title),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = primaryColor()
                     )
                 }
                 Text(
-                    text = "${filteredEvents.size} 条记录",
+                    text = stringResource(R.string.history_records_count, filteredEvents.size),
                     fontSize = 14.sp,
                     color = Color.Gray
                 )
@@ -110,7 +112,7 @@ fun HistoryScreen(
         }
 
         // ============================================================
-        // 筛选器
+        // Filters
         // ============================================================
         Row(
             modifier = Modifier
@@ -119,17 +121,17 @@ fun HistoryScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
-                label = "全部",
+                label = stringResource(R.string.filter_all),
                 isSelected = selectedFilter == EventFilter.ALL,
                 onClick = { selectedFilter = EventFilter.ALL }
             )
             FilterChip(
-                label = "进入",
+                label = stringResource(R.string.filter_enter),
                 isSelected = selectedFilter == EventFilter.ENTER,
                 onClick = { selectedFilter = EventFilter.ENTER }
             )
             FilterChip(
-                label = "离开",
+                label = stringResource(R.string.filter_exit),
                 isSelected = selectedFilter == EventFilter.EXIT,
                 onClick = { selectedFilter = EventFilter.EXIT }
             )
@@ -138,7 +140,7 @@ fun HistoryScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // ============================================================
-        // 事件列表
+        // Event List
         // ============================================================
         if (filteredEvents.isEmpty()) {
             Box(
@@ -154,7 +156,7 @@ fun HistoryScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "暂无历史记录",
+                        text = stringResource(R.string.no_history_records),
                         fontSize = 16.sp,
                         color = Color.Gray
                     )
@@ -203,7 +205,7 @@ private fun EventItem(event: GeoFenceEvent) {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 状态图标
+            // Status Icon
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -221,10 +223,10 @@ private fun EventItem(event: GeoFenceEvent) {
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // 事件信息
+            // Event Info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (isEnter) "进入" else "离开",
+                    text = if (isEnter) stringResource(R.string.enter_event) else stringResource(R.string.exit_event),
                     fontSize = 12.sp,
                     color = if (isEnter) Success else Danger
                 )
@@ -241,7 +243,7 @@ private fun EventItem(event: GeoFenceEvent) {
                 )
             }
 
-            // 时间
+            // Time
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = timeFormat.format(event.time),
@@ -249,7 +251,7 @@ private fun EventItem(event: GeoFenceEvent) {
                     color = Color.White
                 )
                 Text(
-                    text = "精度: ${event.accuracy.toInt()}m",
+                    text = stringResource(R.string.accuracy_label, event.accuracy.toInt()),
                     fontSize = 11.sp,
                     color = Color.Gray
                 )

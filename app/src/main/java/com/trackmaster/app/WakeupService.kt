@@ -12,23 +12,14 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 
-/**
- * 被 AlarmManager 唤醒后执行的轻量服务
- * 负责：
- * 1. 获取一次位置
- * 2. 检查是否需要恢复主定位服务
- * 3. 调度下次 Alarm
- */
 class WakeupService : Service() {
     companion object {
         private const val TAG = "WakeupService"
         private const val NOTIFICATION_ID = 1002
         private const val CHANNEL_ID = "wakeup_channel"
-        private const val CHANNEL_NAME = "唤醒检查服务"
         const val ACTION_WAKEUP = "com.trackmaster.app.ACTION_LOCATION_WAKEUP"
         private const val WAKELOCK_TIMEOUT = 30000L // 30秒唤醒锁
 
-        // 唤醒后定位间隔（毫秒）
         private const val CHECK_INTERVAL_MS = 5 * 60 * 1000L // 5分钟
     }
 
@@ -51,10 +42,8 @@ class WakeupService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // 在主线程执行检查（轻量操作）
         performWakeupCheck()
 
-        // 完成任务后停止，最多运行30秒
         android.os.Handler(mainLooper).postDelayed({
             Log.d(TAG, "WakeupService 检查完成，停止")
             releaseWakeLock()
@@ -77,20 +66,14 @@ class WakeupService : Service() {
             return
         }
 
-        // 检查定位服务是否还在运行
         if (locationService.isRunning()) {
             Log.d(TAG, "定位服务正在运行，重新调度 Alarm")
             locationService.scheduleNextWakeup()
             return
         }
 
-        // 定位服务已停止，尝试恢复
         Log.d(TAG, "定位服务已停止，尝试恢复定位")
-
-        // 通知主服务执行一次定位检查
         locationService.performWakeupLocation()
-
-        // 重新调度下次 Alarm（保持5分钟周期）
         locationService.scheduleNextWakeup()
     }
 
@@ -98,10 +81,10 @@ class WakeupService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                CHANNEL_NAME,
+                getString(R.string.notification_location_checking),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "定期唤醒检查定位服务"
+                description = getString(R.string.notification_location_checking_desc)
                 setShowBadge(false)
             }
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -117,8 +100,8 @@ class WakeupService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("定位检查中")
-            .setContentText("定期检查位置状态...")
+            .setContentTitle(getString(R.string.notification_location_checking))
+            .setContentText(getString(R.string.notification_location_checking_desc))
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

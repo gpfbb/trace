@@ -1,5 +1,7 @@
 package com.trackmaster.app.ui.navigation
 
+import com.trackmaster.app.R
+
 /**
  * 导航路由定义
  *
@@ -65,11 +67,11 @@ sealed class Screen(val route: String) {
  */
 enum class BottomNavItem(
     val screen: Screen,
-    val title: String,
+    @androidx.annotation.StringRes val titleRes: Int,
     val iconName: String
 ) {
-    HOME(Screen.Home, "首页", "home"),
-    MAP(Screen.Map, "地图", "map"),
-    HISTORY(Screen.History, "历史", "history"),
-    SETTINGS(Screen.Settings, "设置", "settings")
+    HOME(Screen.Home, R.string.nav_home, "home"),
+    MAP(Screen.Map, R.string.nav_map, "map"),
+    HISTORY(Screen.History, R.string.nav_history, "history"),
+    SETTINGS(Screen.Settings, R.string.nav_settings, "settings")
 }

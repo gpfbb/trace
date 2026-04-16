@@ -16,9 +16,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.trackmaster.app.R
 import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.LocationServiceState
 import com.trackmaster.app.TrackMasterApplication
@@ -114,29 +116,30 @@ fun HomeScreen(
     ) {
         item {
             Row(Modifier.fillMaxWidth()) {
-                Text("TrackMaster", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = primaryColor())
+                Text(stringResource(R.string.trackmaster), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = primaryColor())
             }
         }
 
         item {
             GlassCard(Modifier.fillMaxWidth()) {
                 Column {
-                    Text("当前状态", fontSize = 14.sp, color = primaryColor())
+                    Text(stringResource(R.string.current_status), fontSize = 14.sp, color = primaryColor())
                     Spacer(Modifier.height(8.dp))
                     if (isInsideFence && currentFenceName != null) {
+                        val fenceName = currentFenceName
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Success, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
                             Column {
-                                Text("正在 $currentFenceName", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                Text("实时监测中...", fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f))
+                                Text(stringResource(R.string.currently_inside, fenceName!!), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.monitoring_active), fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f))
                             }
                         }
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.LocationOff, contentDescription = null, tint = Warning, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("未在任何围栏内", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(stringResource(R.string.not_inside_any_fence), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }
@@ -145,18 +148,18 @@ fun HomeScreen(
 
         item {
             Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp)) {
-                StatsCard(title = "今日进入", value = "$todayEnterCount 次", icon = Icons.AutoMirrored.Filled.Login, color = Success, modifier = Modifier.weight(1f))
-                StatsCard(title = "今日离开", value = "$todayExitCount 次", icon = Icons.AutoMirrored.Filled.Logout, color = Danger, modifier = Modifier.weight(1f))
+                StatsCard(title = stringResource(R.string.today_enter), value = "$todayEnterCount ${stringResource(R.string.times)}", icon = Icons.AutoMirrored.Filled.Login, color = Success, modifier = Modifier.weight(1f))
+                StatsCard(title = stringResource(R.string.today_exit), value = "$todayExitCount ${stringResource(R.string.times)}", icon = Icons.AutoMirrored.Filled.Logout, color = Danger, modifier = Modifier.weight(1f))
             }
         }
 
         item {
             GlassCard(Modifier.fillMaxWidth()) {
                 Column {
-                    Text("本月停留时长 TOP 3", fontSize = 14.sp, color = primaryColor())
+                    Text(stringResource(R.string.monthly_top_fences), fontSize = 14.sp, color = primaryColor())
                     Spacer(Modifier.height(12.dp))
                     if (monthTopFences.isEmpty()) {
-                        Text("暂无数据", fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
+                        Text(stringResource(R.string.no_data), fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
                     } else {
                         monthTopFences.forEachIndexed { idx, pair ->
                             Row(
@@ -197,7 +200,7 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "查看统计",
+                        stringResource(R.string.view_statistics),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White
@@ -210,13 +213,14 @@ fun HomeScreen(
     }
 }
 
+@Composable
 private fun formatDuration(seconds: Long): String {
     val hours = seconds / 3600
     val mins = (seconds % 3600) / 60
     return when {
-        hours > 0 -> "${hours}小时${mins}分"
-        mins > 0 -> "${mins}分钟"
-        else -> "< 1分钟"
+        hours > 0 -> stringResource(R.string.duration_hours_minutes, hours, mins)
+        mins > 0 -> stringResource(R.string.duration_minutes, mins)
+        else -> stringResource(R.string.duration_less_than_minute)
     }
 }
 

@@ -1,0 +1,224 @@
+<resources>
+    <string name="app_name">TrackMaster</string>
+
+    <!-- Onboarding -->
+    <string name="skip">Lewati</string>
+    <string name="next">Seterusnya</string>
+    <string name="grant_permission">Berikan Kebenaran Lokasi</string>
+    <string name="grant_later">Beri Kebenaran Kemudian</string>
+    <string name="start_using">Mula Menggunakan</string>
+    <string name="welcome_title">Selamat Datang ke TrackMaster</string>
+    <string name="welcome_desc">Pembantu penjejakan geofence pintar, merekod setiap tinggal anda dengan tepat</string>
+    <string name="create_fence_title">Buat Geofence</string>
+    <string name="create_fence_desc">Ketuk pada peta untuk melukis geofence bulat atau poligon, mentakrifkan kawasan yang anda ambil berat</string>
+    <string name="start_tracking_title">Mula Penjejakan</string>
+    <string name="start_tracking_desc">Rakam automatik apabila masuk atau keluar geofence, menyediakan statistik tempoh terperinci</string>
+    <string name="select_language_title">Pilih Bahasa</string>
+    <string name="select_language_desc">Pilih bahasa pilihan anda untuk aplikasi ini</string>
+    <string name="map_sdk_recommendation_title">Pengesanan SDK Peta</string>
+    <string name="amap_recommendation">AMap (高德) disyorkan untuk digunakan di China — ketepatan domestik yang tinggi</string>
+    <string name="google_recommendation">Google Maps disyorkan untuk digunakan di luar China — ketepatan global</string>
+
+    <!-- Settings -->
+    <string name="settings">Tetapan</string>
+    <string name="permission_management">Pengurusan Kebenaran</string>
+    <string name="location_permission">Kebenaran Lokasi</string>
+    <string name="location_permission_desc">Dapatkan maklumat lokasi pengguna untuk memantau geofence</string>
+    <string name="background_location_permission">Lokasi Latar Belakang</string>
+    <string name="background_location_permission_desc">Terus memantau lokasi apabila aplikasi di latar belakang</string>
+    <string name="battery_optimization">Pengoptimalan Bateri</string>
+    <string name="battery_optimization_desc">Elakkan perkhidmatan latar belakang daripada dibunuh oleh sistem</string>
+    <string name="grant">Berikan</string>
+    <string name="granted">Diberikan</string>
+    <string name="go_to_settings">Pergi ke Tetapan</string>
+    <string name="permission_warning">⚠️ Sesetengah kebenaran tidak diberikan. Ciri geofence mungkin tidak berfungsi dengan baik.</string>
+
+    <string name="location_mode">Mod Lokasi</string>
+    <string name="power_save_mode">Jimak Kuasa</string>
+    <string name="power_save_desc">Kuasa ultra rendah, sesuai untuk tidur/ketidakgerakan lama. Bermula 1min pegun pada 2min/selang</string>
+    <string name="balanced_mode">Seimbang</string>
+    <string name="balanced_desc">Keseimbangan pintar: bermula dari 1min pegun pada 1min/selang</string>
+
+    <string name="map_service">Perkhidmatan Peta</string>
+    <string name="amap_china">AMap (Ketepatan China)</string>
+    <string name="google_global">Google Maps (Ketepatan Global)</string>
+    <string name="map_switch_hint">⚠️ Selepas bertukar, sila keluar aplikasi sepenuhnya (bersihkan latar belakang) dan buka semula untuk berkuatkuasa</string>
+
+    <string name="language">Bahasa</string>
+    <string name="select_language">Pilih Bahasa</string>
+    <string name="chinese">中文</string>
+    <string name="english">English</string>
+    <string name="malay">Bahasa Melayu</string>
+    <string name="language_changed_hint">⚠️ Bahasa ditukar. Sila mulakan semula aplikasi untuk kesan penuh.</string>
+
+    <string name="theme">Tema</string>
+    <string name="data_import_export">Import/Export Data</string>
+    <string name="data_import_export_desc">Import dan export data geofence dan statistik</string>
+    <string name="recalculate_relationships">Kira Semula Hubungan Ibu Bapa-Anak</string>
+    <string name="recalculate_desc">Tentukan automatik hubungan tertutup geofence berdasarkan geometri</string>
+    <string name="advanced_settings">Tetapan Lanjutan</string>
+    <string name="advanced_settings_desc">Laraskan parameter algoritma lokasi</string>
+    <string name="reset_defaults">Set Semula ke Lalai</string>
+
+    <string name="stationary_threshold">Ambang Ketidakgerakan</string>
+    <string name="boundary_buffer">Penimbal Sempadan</string>
+    <string name="drift_threshold">Ambang Pengesanan Hanyut</string>
+    <string name="recommended_defaults">Konfigurasi Lalai Disyorkan</string>
+
+    <string name="usage_instructions">Arahan Penggunaan</string>
+    <string name="usage_tip_1">Sila berikan semua kebenaran yang diperlukan untuk memastikan fungsi biasa</string>
+    <string name="usage_tip_2">Menambah ke senarai putih pengoptimalan bateri mengelakkan perkhidmatan latar belakang daripada dibunuh</string>
+    <string name="usage_tip_3">Anda boleh memilih mod lokasi yang sesuai berdasarkan keperluan anda</string>
+    <string name="usage_tip_4">Mod jimat kuasa sesuai untuk penggunaan jangka panjang; mod prestasi sesuai untuk senario ketepatan tinggi</string>
+
+    <string name="confirm">Sahkan</string>
+    <string name="cancel">Batal</string>
+    <string name="app_settings">Tetapan Aplikasi</string>
+    <string name="map_service_card">Perkhidmatan Peta</string>
+    <string name="map_provider_selector">Pilih Perkhidmatan Peta</string>
+    <string name="amap_recommendation_desc">AMap: Ketepatan domestik yang tinggi, sesuai untuk digunakan di China</string>
+    <string name="google_recommendation_desc">Google Maps: Ketepatan global, memerlukan perkhidmatan Google Play</string>
+    <string name="amap_card_label">AMap (Ketepatan China)</string>
+    <string name="google_card_label">Google Maps (Ketepatan Global)</string>
+    <string name="recalculate_title">Kira Semula Hubungan Ibu Bapa-Anak</string>
+    <string name="recalculate_confirm">Ini akan menentukan automatik hubungan kandungan geofence berdasarkan geometri. Teruskan?</string>
+    <string name="recalculate_success">Pengiraan semula selesai, %d hubungan ibu-bapa-anak ditubuhkan.</string>
+    <string name="recalculate_error">Pengiraan semula gagal: %s</string>
+    <string name="collapse">Runtuh</string>
+    <string name="expand">Kembangkan</string>
+    <string name="ok">OK</string>
+    <string name="close">Tutup</string>
+    <string name="recalculate_done">Pengiraan semula selesai. %d hubungan ibu-bapa-anak ditubuhkan.</string>
+    <string name="recalculate_failed">Pengiraan semula gagal: %s</string>
+    <string name="intersection_warning">⚠️ Ditemui %d pasangan geofence bersilang, tidak dapat mengira hubungan ibu-bapa-anak.</string>
+
+    <!-- Common -->
+    <string name="map_type_satellite">Satelit</string>
+    <string name="map_type_normal">Normal</string>
+    <string name="map_type_night">Malam</string>
+
+    <!-- Map & Fence -->
+    <string name="undo">Buat asal</string>
+    <string name="draw">Lukis</string>
+    <string name="fence_created">Geofence berjaya dicipta</string>
+    <string name="recalculate_hint">Tip: Pergi ke Tetapan → Kira Semula Hubungan Ibu Bapa-Anak untuk pastikan hubungan geofence</string>
+    <string name="confirm_delete">Sahkan Padam</string>
+    <string name="fence_delete_confirm">Padam geofence "%s"? Ini tidak boleh dibuat asal.</string>
+    <string name="fence_count">%d geofence</string>
+    <string name="switch_map_layer">Tukar lapisan peta (%s)</string>
+    <string name="fence_list">Senarai Geofence</string>
+    <string name="circle">Bulatan</string>
+    <string name="polygon">Poligon</string>
+    <string name="precision">Preisi</string>
+    <string name="tap_map_for_center">Tekan peta untuk pilih pusat bulatan</string>
+    <string name="center_selected_radius">Pusat dipilih, jejari 100m</string>
+    <string name="need_n_vertices">Perlu %d lagi titik</string>
+    <string name="ready_to_create">%d titik, sedia untuk dicipta</string>
+    <string name="create">Cipta</string>
+    <string name="editing_fence_tap_to_add">Mengedit "%s" — tekan peta untuk tambah titik</string>
+    <string name="delete_last">Padam terakhir</string>
+    <string name="save">Simpan</string>
+    <string name="create_fence">Cipta Geofence</string>
+    <string name="fence_name">Nama Geofence</string>
+    <string name="nested_fence_hint">Geofence menyokong bersarang (ibu bapa-anak), tidak menyokong bersilang</string>
+    <string name="no_fences">Tiada geofence lagi</string>
+    <string name="matched">Dipadankan</string>
+    <string name="highlighted">Diserlahkan</string>
+    <string name="edit">Edit</string>
+    <string name="delete">Padam</string>
+    <string name="edit_fence">Edit Geofence</string>
+    <string name="color">Warna</string>
+    <string name="transparency">Ketelusan: %d%%</string>
+    <string name="radius_meters">Jejari: %d meter</string>
+    <string name="edit_on_map_hint">Tekan "Edit pada Peta" untuk tambah atau padam titik pada peta</string>
+    <string name="edit_on_map">Edit pada Peta</string>
+    <string name="category_management">Pengurusan Kategori</string>
+    <string name="no_categories_hint">Tiada kategori lagi, tekan bawah untuk cipta</string>
+    <string name="new_category">Kategori Baru</string>
+    <string name="edit_category">Edit Kategori</string>
+    <string name="category_name">Nama Kategori</string>
+    <string name="select_icon">Pilih Ikon</string>
+    <string name="more_icons">Ikon Lain</string>
+    <string name="delete_category">Padam Kategori</string>
+    <string name="delete_category_confirm">Padam kategori "%s"? Semua geofence dalam kategori ini akan dipindahkan ke "Tidak Berkategori".</string>
+    <string name="create_failed">Ciutan gagal</string>
+    <string name="update_failed">Kemaskini gagal</string>
+    <string name="delete_failed">Padam gagal</string>
+
+    <!-- Home Screen -->
+    <string name="current_status">Status Semasa</string>
+    <string name="currently_inside">Di dalam %s</string>
+    <string name="monitoring_active">Pemantauan masa nyata aktif…</string>
+    <string name="not_inside_any_fence">Tidak berada dalam mana-mana geofence</string>
+    <string name="today_enter">Masuk Hari Ini</string>
+    <string name="today_exit">Keluar Hari Ini</string>
+    <string name="monthly_top_fences">TOP 3 Geofence Mengikut Tempoh Tinggal Bulanan</string>
+    <string name="view_statistics">Lihat Statistik</string>
+    <string name="no_data">Tiada data</string>
+    <string name="duration_hours_minutes">%dj %dm</string>
+    <string name="duration_minutes">%d min</string>
+    <string name="duration_less_than_minute">&lt; 1 minit</string>
+    <!-- Advanced Settings -->
+    <string name="recommended">Disyorkan</string>
+    <string name="default_config_stationary">Pegun: %dm (geofence kecil: 10–30m)</string>
+    <string name="default_config_buffer">Sempadan: %dm (geofence kecil: 3–20m)</string>
+    <string name="default_config_drift">Penapis hanyutan: %dm (menapis GPS rendah presisi)</string>
+    <string name="stationary_threshold_desc">Ambang jarak untuk pengesanan pegun. Lebih besar = lebih mudah dikesan pegun, lebih menjimatkan kuasa. Geofence kecil: 30–50m.</string>
+    <string name="boundary_buffer_desc">Kawasan pengembangan sempadan geofence. Geofence kecil: 3–20m. Nilai lebih 100m boleh menyebabkan salah faham dalam/luar.</string>
+    <string name="drift_threshold_desc">Penapis presisi GPS. Titik dengan presisi lebih buruk daripada ini akan dibuang untuk elak salah faham. Geofence kecil: 15–30m.</string>
+
+    <!-- Data Management Screen -->
+    <string name="reading_file">Membaca fail…</string>
+    <string name="importing_data">Mengimport data…</string>
+    <string name="import_success">Import berjaya!
+
+Geofence: %1$d
+Kejadian: %2$d
+Tinggal: %3$d
+
+Data diimport dengan berjaya, sedia untuk digunakan.</string>
+    <string name="import_failed">Import gagal: %s</string>
+    <string name="file_read_error">Tidak dapat membaca fail</string>
+    <string name="preparing_export">Menyediakan export…</string>
+    <string name="export_success">Export berjaya!
+
+Geofence: %1$d
+Kejadian: %2$d
+Tinggal: %3$d
+Statistik harian: %4$d
+
+Lokasi fail: %5$s</string>
+    <string name="export_failed">Export gagal: %s</string>
+    <string name="no_fences_to_share">Tiada geofence untuk dikongsi</string>
+    <string name="generating_fence_template">Menjana templat geofence…</string>
+    <string name="share_fence_title">TrackMaster Kongsi Geofence</string>
+    <string name="share_fence">Kongsi Geofence</string>
+    <string name="fence_share_ready">Fail kongsi geofence dijana, %d geofence</string>
+    <string name="fence_generate_error">Gagal menjana fail geofence</string>
+    <string name="share_failed">Kongsi gagal: %s</string>
+    <string name="cleaned_old_logs">%d log lama dibersihkan</string>
+    <string name="storage_status">Status Storan</string>
+    <string name="fence_quantity">Bilangan Geofence</string>
+    <string name="event_record">Rekod Kejadian</string>
+    <string name="stay_record">Rekod Tinggal</string>
+    <string name="database_size">Saiz Pangkalan Data</string>
+    <string name="export_import">Export &amp; Import</string>
+    <string name="settings_button">Tetapan</string>
+    <string name="cleanup_now">Bersihkan Log Lama Sekarang</string>
+    <string name="cleanup_reminder">Log adalah rekod kejadian masuk/keluar geofence, pembersihan tidak mempengaruhi geofence dan statistik</string>
+    <string name="auto_cleanup_dialog_title">Tetapan Auto Cleanup</string>
+    <string name="auto_cleanup_dialog_desc">Auto cleanup kejadian yang lebih lama daripada hari berikut:</string>
+    <string name="days_option">%d hari</string>
+    <string name="delete_section">Padam Data Sejarah</string>
+    <string name="delete_data_desc">Padam rekod kejadian dan tinggal (keep geofence dan statistik harian)</string>
+    <string name="delete_data_button">Padam Data Sejarah</string>
+    <string name="exported_files_section">Fail Diexport (tekan nama fail untuk import)</string>
+    <string name="no_exported_files">Tiada fail diexport</string>
+    <string name="click_to_import">Tekan untuk import</string>
+    <string name="delete_options_title">Pilihan Padam</string>
+    <string name="delete_warning">Amaran: Operasi padam tidak boleh dibatalkan!</string>
+    <string name="delete_all_data">Padam semua data sejarah</string>
+    <string name="delete_before_date">Padam data sebelum 1 bulan lepas</string>
+    <string name="confirm_delete_button">Sahkan Padam</string>
+    <string name="operation_complete">Operasi Selesai</string>
+</resources>

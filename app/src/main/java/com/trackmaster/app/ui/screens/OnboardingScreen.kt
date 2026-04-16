@@ -7,10 +7,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
@@ -23,12 +25,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.trackmaster.app.AppLanguage
 import com.trackmaster.app.AppPreferences
+import com.trackmaster.app.R
+import com.trackmaster.app.MapProvider
 import com.trackmaster.app.ui.theme.GlassButton
 import com.trackmaster.app.ui.theme.Success
 import com.trackmaster.app.ui.theme.primaryColor
@@ -38,12 +44,12 @@ import com.trackmaster.app.ui.theme.NeonAmber
 import kotlinx.coroutines.launch
 
 /**
- * 引导页 - 首次用户体验流程
- *
- * 3步引导：
- * 1. 欢迎 + 权限请求
- * 2. 地图功能介绍
- * 3. 快速开始
+ * Onboarding: 5 pages
+ * 0: Language selection (3 languages)
+ * 1: Map SDK recommendation
+ * 2: Welcome
+ * 3: Create fences
+ * 4: Start tracking
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -54,94 +60,73 @@ fun OnboardingScreen(
     val prefs = remember { AppPreferences(context) }
     val scope = rememberCoroutineScope()
 
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    // 5 pages
+    val pagerState = rememberPagerState(pageCount = { 5 })
 
-    // 权限请求
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) {
-            // 权限已授予
-        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(surfaceColor(), backgroundColor())
-                )
-            )
+            .background(brush = Brush.verticalGradient(colors = listOf(surfaceColor(), backgroundColor())))
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // ============================================================
-            // 跳过按钮
-            // ============================================================
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Skip button
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(
-                    onClick = {
-                        prefs.isOnboardingCompleted = true
-                        onComplete()
-                    }
-                ) {
-                    Text(
-                        text = "跳过",
-                        color = Color.Gray
-                    )
+                TextButton(onClick = {
+                    prefs.isOnboardingCompleted = true
+                    onComplete()
+                }) {
+                    Text(text = stringResource(R.string.skip), color = Color.Gray)
                 }
             }
 
-            // ============================================================
-            // Pager 内容
-            // ============================================================
+            // Pager content
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
+                modifier = Modifier.weight(1f).fillMaxWidth()
             ) { page ->
                 when (page) {
-                    0 -> OnboardingPage(
+                    0 -> LanguageSelectionPage(
+                        prefs = prefs,
+                        onSelected = { scope.launch { pagerState.animateScrollToPage(1) } }
+                    )
+                    1 -> MapSdkRecommendationPage(prefs = prefs)
+                    2 -> OnboardingPage(
                         icon = Icons.Default.MyLocation,
-                        title = "欢迎使用 TrackMaster",
-                        description = "智能地理围栏追踪助手，精准记录您的每一次停留",
+                        title = stringResource(R.string.welcome_title),
+                        description = stringResource(R.string.welcome_desc),
                         accentColor = primaryColor()
                     )
-                    1 -> OnboardingPage(
+                    3 -> OnboardingPage(
                         icon = Icons.Default.Map,
-                        title = "创建围栏",
-                        description = "在地图上点击绘制圆形或多边形围栏，定义您关心的区域",
+                        title = stringResource(R.string.create_fence_title),
+                        description = stringResource(R.string.create_fence_desc),
                         accentColor = NeonAmber
                     )
-                    2 -> OnboardingPage(
+                    4 -> OnboardingPage(
                         icon = Icons.Default.Timeline,
-                        title = "开始追踪",
-                        description = "进入或离开围栏时自动记录，提供详细的停留时长统计",
+                        title = stringResource(R.string.start_tracking_title),
+                        description = stringResource(R.string.start_tracking_desc),
                         accentColor = Success
                     )
                 }
             }
 
-            // ============================================================
-            // 页面指示器
-            // ============================================================
+            // Page indicators (5 dots)
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
                 horizontalArrangement = Arrangement.Center
             ) {
-                repeat(3) { index ->
+                repeat(5) { index ->
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 4.dp)
@@ -155,88 +140,232 @@ fun OnboardingScreen(
                 }
             }
 
-            // ============================================================
-            // 操作按钮
-            // ============================================================
+            // Action buttons
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (pagerState.currentPage == 0) {
-                    // 第一页：请求权限按钮
-                    GlassButton(
-                        onClick = {
-                            val hasPermission = ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.ACCESS_FINE_LOCATION
-                            ) == PackageManager.PERMISSION_GRANTED
-
-                            if (hasPermission) {
-                                scope.launch { pagerState.animateScrollToPage(1) }
-                            } else {
-                                locationPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                when (pagerState.currentPage) {
+                    0 -> {
+                        // Language page: next button
+                        GlassButton(
+                            onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.next), color = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.White)
+                        }
+                    }
+                    1 -> {
+                        GlassButton(
+                            onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.next), color = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.White)
+                        }
+                    }
+                    2 -> {
+                        val hasPermission = ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED
+                        GlassButton(
+                            onClick = {
+                                if (hasPermission) {
+                                    scope.launch { pagerState.animateScrollToPage(3) }
+                                } else {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
                                     )
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("授予定位权限", color = Color.White)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.grant_permission), color = Color.White)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { scope.launch { pagerState.animateScrollToPage(3) } }) {
+                            Text(stringResource(R.string.grant_later), color = Color.Gray)
+                        }
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    TextButton(
-                        onClick = { scope.launch { pagerState.animateScrollToPage(1) } }
-                    ) {
-                        Text("稍后授权", color = Color.Gray)
+                    3 -> {
+                        GlassButton(
+                            onClick = { scope.launch { pagerState.animateScrollToPage(4) } },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.next), color = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.White)
+                        }
                     }
-                } else if (pagerState.currentPage < 2) {
-                    // 第二页：下一步
-                    GlassButton(
-                        onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("下一步", color = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = Color.White
-                        )
-                    }
-                } else {
-                    // 第三页：开始使用
-                    GlassButton(
-                        onClick = {
-                            prefs.isOnboardingCompleted = true
-                            onComplete()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("开始使用", color = Color.White)
+                    4 -> {
+                        GlassButton(
+                            onClick = {
+                                prefs.isOnboardingCompleted = true
+                                onComplete()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.start_using), color = Color.White)
+                        }
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun LanguageSelectionPage(prefs: AppPreferences, onSelected: () -> Unit = {}) {
+    var selectedLang by remember { mutableStateOf(prefs.appLanguage) }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .clip(CircleShape)
+                .background(primaryColor().copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Language, contentDescription = null, tint = primaryColor(), modifier = Modifier.size(64.dp))
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        Text(
+            text = stringResource(R.string.select_language_title),
+            fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = stringResource(R.string.select_language_desc),
+            fontSize = 16.sp, color = Color.Gray, textAlign = TextAlign.Center, lineHeight = 24.sp
+        )
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        // 3 language options
+        listOf(
+            AppLanguage.CHINESE to R.string.chinese,
+            AppLanguage.ENGLISH to R.string.english,
+            AppLanguage.MALAY to R.string.malay
+        ).forEach { (lang, labelRes) ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        selectedLang = lang
+                        prefs.appLanguage = lang
+                        onSelected()
+                    },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (selectedLang == lang) Color(0x4DFF7F50) else Color(0x4D000000)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                border = if (selectedLang == lang) androidx.compose.foundation.BorderStroke(2.dp, primaryColor()) else null
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = if (selectedLang == lang) Success else Color.Gray,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        stringResource(labelRes),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color.White
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun MapSdkRecommendationPage(prefs: AppPreferences) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .clip(CircleShape)
+                .background(NeonAmber.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Recommend, contentDescription = null, tint = NeonAmber, modifier = Modifier.size(64.dp))
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        Text(
+            text = stringResource(R.string.map_sdk_recommendation_title),
+            fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0x4D000000)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Map, contentDescription = null, tint = Success, modifier = Modifier.size(32.dp))
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = stringResource(R.string.amap_recommendation),
+                    fontSize = 15.sp, color = Color(0xFFE0E0E0), lineHeight = 22.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0x4D000000)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Public, contentDescription = null, tint = Color(0xFF4285F4), modifier = Modifier.size(32.dp))
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = stringResource(R.string.google_recommendation),
+                    fontSize = 15.sp, color = Color(0xFFE0E0E0), lineHeight = 22.sp
+                )
+            }
         }
     }
 }
@@ -249,13 +378,10 @@ private fun OnboardingPage(
     accentColor: Color
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
+        modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 图标
         Box(
             modifier = Modifier
                 .size(120.dp)
@@ -263,34 +389,21 @@ private fun OnboardingPage(
                 .background(accentColor.copy(alpha = 0.2f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(64.dp)
-            )
+            Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(64.dp))
         }
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        // 标题
         Text(
             text = title,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            textAlign = TextAlign.Center
+            fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 描述
         Text(
             text = description,
-            fontSize = 16.sp,
-            color = Color.Gray,
-            textAlign = TextAlign.Center,
-            lineHeight = 24.sp
+            fontSize = 16.sp, color = Color.Gray, textAlign = TextAlign.Center, lineHeight = 24.sp
         )
     }
 }

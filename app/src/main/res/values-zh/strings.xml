@@ -1,0 +1,369 @@
+<resources>
+    <string name="app_name">TrackMaster</string>
+
+    <!-- Onboarding -->
+    <string name="skip">跳过</string>
+    <string name="next">下一步</string>
+    <string name="grant_permission">授予定位权限</string>
+    <string name="grant_later">稍后授权</string>
+    <string name="start_using">开始使用</string>
+    <string name="welcome_title">欢迎使用 TrackMaster</string>
+    <string name="welcome_desc">智能地理围栏追踪助手，精准记录您的每一次停留</string>
+    <string name="create_fence_title">创建围栏</string>
+    <string name="create_fence_desc">在地图上点击绘制圆形或多边形围栏，定义您关心的区域</string>
+    <string name="start_tracking_title">开始追踪</string>
+    <string name="start_tracking_desc">进入或离开围栏时自动记录，提供详细的停留时长统计</string>
+    <string name="select_language_title">选择语言</string>
+    <string name="select_language_desc">选择您偏好的应用语言</string>
+    <string name="map_sdk_recommendation_title">地图 SDK 推荐</string>
+    <string name="amap_recommendation">高德地图：推荐国内使用，精度高</string>
+    <string name="google_recommendation">Google Maps：推荐国外使用，全球精度</string>
+
+    <!-- Settings -->
+    <string name="settings">设置</string>
+    <string name="permission_management">权限管理</string>
+    <string name="location_permission">位置权限</string>
+    <string name="location_permission_desc">获取用户位置信息以监测地理围栏</string>
+    <string name="background_location_permission">后台定位权限</string>
+    <string name="background_location_permission_desc">在应用后台时仍能监测位置</string>
+    <string name="battery_optimization">电池优化白名单</string>
+    <string name="battery_optimization_desc">防止后台服务被系统杀死</string>
+    <string name="grant">去设置</string>
+    <string name="granted">已授予</string>
+    <string name="go_to_settings">去设置</string>
+    <string name="permission_warning">⚠️ 部分权限未授予，地理围栏功能可能无法正常工作。</string>
+
+    <string name="location_mode">定位模式</string>
+    <string name="power_save_mode">省电模式</string>
+    <string name="power_save_desc">超低功耗，适合睡觉/长时间静止。静止1分钟起2分钟/次</string>
+    <string name="balanced_mode">均衡模式</string>
+    <string name="balanced_desc">智能平衡：静止1分钟/次起</string>
+
+    <string name="map_service">地图服务</string>
+    <string name="amap_china">高德地图（国内精度）</string>
+    <string name="google_global">Google Maps（全球精度）</string>
+    <string name="map_switch_hint">⚠️ 切换后请完全退出应用（清后台），重新打开才能生效</string>
+
+    <string name="language">语言</string>
+    <string name="select_language">选择语言</string>
+    <string name="chinese">中文</string>
+    <string name="english">English</string>
+    <string name="malay">Bahasa Melayu</string>
+    <string name="language_changed_hint">⚠️ 语言已切换，请重启应用以完全生效。</string>
+
+    <string name="theme">主题</string>
+    <string name="select_theme">选择主题</string>
+    <string name="select_theme_desc">选择您偏好的应用主题</string>
+    <string name="data_import_export">数据导入导出</string>
+    <string name="data_import_export_desc">围栏与统计数据的导入导出</string>
+    <string name="recalculate_relationships">重新计算父子关系</string>
+    <string name="recalculate_desc">根据几何位置自动判断围栏包含关系</string>
+    <string name="advanced_settings">高级设置</string>
+    <string name="advanced_settings_desc">调整定位算法参数</string>
+    <string name="reset_defaults">恢复默认设置</string>
+
+    <string name="stationary_threshold">静止判定阈值</string>
+    <string name="boundary_buffer">边界缓冲距离</string>
+    <string name="drift_threshold">漂移检测阈值</string>
+    <string name="recommended_defaults">推荐默认配置</string>
+
+    <string name="usage_instructions">使用说明</string>
+    <string name="usage_tip_1">请授予所有必要权限以确保功能正常运行</string>
+    <string name="usage_tip_2">添加至电池优化白名单可防止后台服务被系统杀死</string>
+    <string name="usage_tip_3">可根据实际需求选择合适的定位模式</string>
+    <string name="usage_tip_4">省电模式适合长时间使用，高性能模式适合需要高精确度的场景</string>
+
+    <string name="confirm">确认</string>
+    <string name="cancel">取消</string>
+    <string name="app_settings">应用设置</string>
+    <string name="map_service_card">地图服务</string>
+    <string name="map_provider_selector">选择地图服务</string>
+    <string name="amap_recommendation_desc">高德地图：国内精度高，适合国内使用</string>
+    <string name="google_recommendation_desc">Google Maps：全球精度，需要 Google Play 服务</string>
+    <string name="amap_card_label">高德地图（国内精度）</string>
+    <string name="google_card_label">Google Maps（全球精度）</string>
+    <string name="recalculate_title">重新计算父子关系</string>
+    <string name="recalculate_confirm">这将根据几何位置自动判断围栏包含关系。继续吗？</string>
+    <string name="recalculate_success">重新计算完成，建立了 %d 对父子关系。</string>
+    <string name="recalculate_error">重新计算失败：%s</string>
+    <string name="collapse">收起</string>
+    <string name="expand">展开</string>
+    <string name="ok">好的</string>
+    <string name="close">关闭</string>
+    <string name="recalculate_done">重新计算完成，建立了 %d 对父子关系。</string>
+    <string name="recalculate_failed">重新计算失败：%s</string>
+    <string name="intersection_warning">⚠️ 发现 %d 对相交的围栏，无法计算父子关系。</string>
+
+    <!-- Common -->
+    <string name="map_type_satellite">卫星</string>
+    <string name="map_type_normal">标准</string>
+    <string name="map_type_night">夜景</string>
+
+    <!-- Map & Fence -->
+    <string name="undo">撤销</string>
+    <string name="draw">绘制</string>
+    <string name="fence_created">围栏创建成功</string>
+    <string name="recalculate_hint">提示：前往「设置 → 重新计算父子关系」建立围栏的嵌套层级，统计时会自动累加子围栏的停留时长。</string>
+    <string name="confirm_delete">确认删除</string>
+    <string name="fence_delete_confirm">删除围栏「%s」？此操作不可撤销。</string>
+    <string name="fence_count">%d 个</string>
+    <string name="switch_map_layer">切换地图图层 (%s)</string>
+    <string name="fence_list">围栏列表</string>
+    <string name="circle">圆形</string>
+    <string name="polygon">多边形</string>
+    <string name="precision">精度</string>
+    <string name="tap_map_for_center">点击地图选择圆心</string>
+    <string name="center_selected_radius">已选择圆心，半径 100米</string>
+    <string name="need_n_vertices">还需要 %d 个顶点</string>
+    <string name="ready_to_create">%d 个顶点，可以创建</string>
+    <string name="create">创建</string>
+    <string name="editing_fence_tap_to_add">正在编辑 \"%s\" — 点击地图添加顶点</string>
+    <string name="delete_last">删除最后一个</string>
+    <string name="save">保存</string>
+    <string name="create_fence">创建围栏</string>
+    <string name="fence_name">围栏名称</string>
+    <string name="nested_fence_hint">围栏支持嵌套（父子关系），不支持相交</string>
+    <string name="no_fences">暂无围栏</string>
+    <string name="matched">已匹配</string>
+    <string name="highlighted">已高亮</string>
+    <string name="edit">编辑</string>
+    <string name="delete">删除</string>
+    <string name="edit_fence">编辑围栏</string>
+    <string name="color">颜色</string>
+    <string name="transparency">透明度: %d%%</string>
+    <string name="radius_meters">半径: %d 米</string>
+    <string name="vertices_count">%d 个顶点</string>
+    <string name="circle_with_radius">圆形（半径: %dm）</string>
+    <string name="polygon_with_vertices">多边形（%d 个顶点）</string>
+    <string name="edit_on_map_hint">点击「在地图上编辑」来添加或删除地图上的顶点</string>
+    <string name="edit_on_map">在地图上编辑</string>
+    <string name="category_management">分类管理</string>
+    <string name="no_categories_hint">暂无分类，点击下方创建</string>
+    <string name="new_category">新建分类</string>
+    <string name="edit_category">编辑分类</string>
+    <string name="category_name">分类名称</string>
+    <string name="select_icon">选择图标</string>
+    <string name="more_icons">更多图标</string>
+    <string name="delete_category">删除分类</string>
+    <string name="delete_category_confirm">删除分类「%s」？此分类中的所有围栏将移至「未分类」。</string>
+    <string name="create_failed">创建失败</string>
+    <string name="update_failed">更新失败</string>
+    <string name="delete_failed">删除失败</string>
+
+    <!-- Home Screen -->
+    <string name="current_status">当前状态</string>
+    <string name="currently_inside">当前在 %s</string>
+    <string name="monitoring_active">实时监测中…</string>
+    <string name="not_inside_any_fence">未在任何围栏内</string>
+    <string name="today_enter">今日进入</string>
+    <string name="today_exit">今日离开</string>
+    <string name="monthly_top_fences">本月热门围栏</string>
+    <string name="view_statistics">查看统计</string>
+    <string name="no_data">暂无数据</string>
+    <string name="duration_hours_minutes" formatted="false">%d小时%d分钟</string>
+    <string name="duration_minutes">%d分钟</string>
+    <string name="duration_less_than_minute">&lt;1分钟</string>
+    <!-- Advanced Settings -->
+    <string name="recommended">推荐</string>
+    <string name="default_config_stationary">静止: %dm (小围栏: 10–30m)</string>
+    <string name="default_config_buffer">边界: %dm (小围栏: 3–20m)</string>
+    <string name="default_config_drift">漂移过滤: %dm (过滤低精度GPS)</string>
+    <string name="stationary_threshold_desc">静止检测的距离阈值。越大=越容易检测到静止，更省电。小围栏: 30–50m。</string>
+    <string name="boundary_buffer_desc">围栏边界扩展区域。小围栏: 3–20m。超过100m的值可能导致内/外误判。</string>
+    <string name="drift_threshold_desc">GPS精度过滤器。精度比这个差的点将被丢弃以避免误判。小围栏: 15–30m。</string>
+
+    <!-- Data Management Screen -->
+    <string name="reading_file">正在读取文件…</string>
+    <string name="importing_data">正在导入数据…</string>
+    <string name="import_success">导入成功！
+
+围栏: %1$d
+事件: %2$d
+停留: %3$d
+
+数据已成功导入，可以使用。</string>
+    <string name="import_failed">导入失败: %s</string>
+    <string name="file_read_error">无法读取文件</string>
+    <string name="preparing_export">正在准备导出…</string>
+    <string name="export_success">导出成功！
+
+围栏: %1$d
+事件: %2$d
+停留: %3$d
+每日统计: %4$d
+
+文件位置: %5$s</string>
+    <string name="export_failed">导出失败: %s</string>
+    <string name="no_fences_to_share">暂无围栏可分享</string>
+    <string name="no_fences_to_export">暂无围栏可导出</string>
+    <string name="generating_fence_template">正在生成围栏模板…</string>
+    <string name="share_fence_title">TrackMaster 围栏分享</string>
+    <string name="share_fence">分享围栏</string>
+    <string name="import_fence">导入围栏</string>
+    <string name="import_short">导入</string>
+    <string name="share_short">分享</string>
+    <string name="select_fences_to_share">选择要分享的围栏</string>
+    <string name="deselect_all">取消全选</string>
+    <string name="select_all">全选</string>
+    <string name="fence_share_ready">围栏分享文件已生成，%d 个围栏</string>
+    <string name="fence_generate_error">生成围栏文件失败</string>
+    <string name="share_failed">分享失败: %s</string>
+    <string name="cleaned_old_logs">已清理 %d 条旧日志</string>
+    <string name="storage_status">存储状态</string>
+    <string name="fence_quantity">围栏数量</string>
+    <string name="event_record">事件记录</string>
+    <string name="stay_record">停留记录</string>
+    <string name="database_size">数据库大小</string>
+    <string name="export_import">导出和导入</string>
+    <string name="settings_button">设置</string>
+    <string name="cleanup_now">立即清理旧日志</string>
+    <string name="cleanup_reminder">日志是进入/离开围栏的事件记录，清理不会影响围栏和统计数据</string>
+    <string name="auto_cleanup_dialog_title">自动清理设置</string>
+    <string name="auto_cleanup_dialog_desc">自动清理早于以下天数的事件：</string>
+    <string name="auto_cleanup_section">自动清理</string>
+    <string name="auto_cleanup_desc">自动删除早于所选天数的事件日志</string>
+    <string name="days_option">%d 天</string>
+    <string name="delete_section">删除历史数据</string>
+    <string name="delete_data_desc">删除事件和停留记录（保留围栏和每日统计）</string>
+    <string name="delete_data_button">删除历史数据</string>
+    <string name="exported_files_section">已导出的文件（点击文件名导入）</string>
+    <string name="no_exported_files">暂无已导出文件</string>
+    <string name="click_to_import">点击导入</string>
+    <string name="delete_options_title">删除选项</string>
+    <string name="delete_warning">警告：删除操作不可撤销！</string>
+    <string name="delete_all_data">删除所有历史数据</string>
+    <string name="delete_before_date">删除1个月前的数据</string>
+    <string name="confirm_delete_button">确认删除</string>
+    <string name="operation_complete">操作完成</string>
+    <string name="delete_success_records">删除成功！已删除 %d 条记录</string>
+    <string name="export_all">全部导出</string>
+    <string name="import_action">导入</string>
+    <string name="keep_recent_days">保留最近 %d 天</string>
+
+    <!-- Misc -->
+    <string name="start_tracking">开始记录</string>
+    <string name="pause_tracking">暂停</string>
+    <string name="resume_tracking">继续</string>
+    <string name="stop_tracking">停止</string>
+    <string name="total_distance">总里程</string>
+    <string name="duration">时长</string>
+    <string name="avg_speed">平均速度</string>
+    <string name="current_speed">当前速度</string>
+    <string name="accuracy">精度</string>
+    <string name="tracking">轨迹</string>
+    <string name="geofence">围栏</string>
+    <string name="history">历史</string>
+    <string name="statistics">统计</string>
+    <string name="location_permission_required">需要定位权限</string>
+    <string name="background_location_permission_required">需要后台定位权限</string>
+    <string name="notification_permission_required">需要通知权限</string>
+    <string name="permission_denied">权限被拒绝</string>
+    <string name="disable_battery_optimization">关闭电池优化以确保后台运行</string>
+    <string name="power_mode_high_performance">高性能</string>
+    <string name="power_mode_balanced">均衡</string>
+    <string name="power_mode_power_save">极致省电</string>
+    <string name="low_battery_warning">低电量警告</string>
+    <string name="low_battery_message">电量过低，建议暂停记录</string>
+    <string name="motion_state_stationary">静止</string>
+    <string name="motion_state_walking">步行</string>
+    <string name="motion_state_riding">骑行</string>
+    <string name="motion_state_driving">驾车</string>
+    <string name="enter_geofence">进入围栏</string>
+    <string name="exit_geofence">离开围栏</string>
+
+    <!-- Stats Export Import Screen -->
+    <string name="import_failure">导入失败: %s</string>
+    <string name="export_failure">导出失败: %s</string>
+    <string name="share_stay_records">分享停留记录</string>
+    <string name="export_file_description">包含停留记录和统计数据的 TrackMaster 数据文件</string>
+    <string name="share">分享</string>
+    <string name="stay_record_import_export">停留记录导入/导出</string>
+    <string name="current_data_statistics">当前数据统计</string>
+    <string name="stay_record_count">%d 条记录</string>
+    <string name="daily_summary">每日总结</string>
+    <string name="daily_summary_count">%d 条总结</string>
+    <string name="event_log">事件日志</string>
+    <string name="event_log_count">%d 条日志</string>
+    <string name="about_data_export">关于数据导出</string>
+    <string name="about_export_desc">导出的文件包含所有停留记录数据和事件日志。您可以分享此文件或保存它作为备份。</string>
+    <string name="exporting">正在导出…</string>
+    <string name="export_stay_records">导出停留记录</string>
+    <string name="importing">正在导入…</string>
+    <string name="import_stay_records">导入停留记录</string>
+    <string name="merge_rules">合并规则</string>
+    <string name="merge_rules_desc">导入的数据将与现有数据合并。相同的数据（按ID）不会被覆盖。</string>
+    <string name="operation_success">操作成功</string>
+    <string name="operation_failed">操作失败</string>
+
+    <!-- History Screen -->
+    <string name="history_title">历史记录</string>
+    <string name="history_records_count">%d 条记录</string>
+    <string name="filter_all">全部</string>
+    <string name="filter_enter">进入</string>
+    <string name="filter_exit">离开</string>
+    <string name="no_history_records">暂无历史记录</string>
+    <string name="enter_event">进入</string>
+    <string name="exit_event">离开</string>
+    <string name="accuracy_label">精度: %dm</string>
+
+    <!-- Map Screen -->
+    <string name="fence_list_title">围栏列表 (%d)</string>
+    <string name="hit">已命中</string>
+    <string name="fence_hint">💡 提示：围栏支持嵌套（父子关系），不支持相交。相交的两个围栏无法计算父子关系。</string>
+    <string name="circle_meters">圆形 %dm</string>
+    <string name="polygon_vertices">多边形 %d顶点</string>
+
+    <!-- Fence Export/Import -->
+    <string name="import_from_file">从文件导入围栏</string>
+    <string name="select_fence_file">选择一个之前分享的围栏文件 (.json)</string>
+    <string name="select_file">选择文件</string>
+    <string name="import_instructions">导入说明</string>
+    <string name="import_instruction_1">• 导入的围栏会添加新的UUID，不会覆盖已有围栏</string>
+    <string name="import_instruction_2">• 导入的围栏将归入「未分类」</string>
+    <string name="import_instruction_3">• 停留记录不会被导入</string>
+
+    <!-- Categorized Fence List -->
+    <string name="select_parent_for">为「%s」选择父级围栏：</string>
+    <string name="top_level_no_parent">顶级（无父级）</string>
+    <string name="set_parent_fence">设置父级围栏</string>
+
+    <!-- Home Screen -->
+    <string name="nav_home">首页</string>
+    <string name="nav_map">地图</string>
+    <string name="nav_history">历史</string>
+    <string name="nav_settings">设置</string>
+    <string name="trackmaster">TrackMaster</string>
+    <string name="times">次</string>
+
+    <!-- Statistics Screen -->
+    <string name="select_date">选择日期</string>
+    <string name="select_month">选择月份</string>
+    <string name="select_year">选择年份</string>
+    <string name="year_label">年</string>
+    <string name="month_label">月</string>
+    <string name="day_label">日</string>
+    <string name="confirm_short">确定</string>
+    <string name="cancel_short">取消</string>
+    <string name="close_short">关闭</string>
+    <string name="statistics_title">统计数据可视化</string>
+    <string name="select_date_button">📅 选择日期</string>
+    <string name="no_statistics_data">暂无统计数据</string>
+    <string name="fence_duration">围栏停留时长</string>
+    <string name="total_duration">总时长: %s</string>
+    <string name="collapse_short">收起</string>
+    <string name="expand_short">展开</string>
+    <string name="day_dimension">日</string>
+    <string name="month_dimension">月</string>
+    <string name="year_dimension">年</string>
+    <string name="duration_distribution">停留时长分布</string>
+    <string name="duration_leaderboard">停留时长排行榜</string>
+
+    <!-- Notifications -->
+    <string name="notification_location_checking">定位检查中</string>
+    <string name="notification_location_checking_desc">定期检查位置状态...</string>
+
+    <!-- Date Formats -->
+    <string name="date_format_day">yyyy年MM月dd日</string>
+    <string name="date_format_month">yyyy年MM月</string>
+    <string name="date_format_year">yyyy年</string>
+</resources>

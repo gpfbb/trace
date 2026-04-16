@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +45,15 @@ fun StatsExportImportScreen(
     // 统计数据
     val storageInfo = remember { dataManager.getStorageInfo() }
 
+    // Pre-computed string templates (stringResource cannot be called inside lambdas)
+    val importSuccessTemplate = stringResource(R.string.import_success)
+    val importFailureTemplate = stringResource(R.string.import_failure)
+    val exportSuccessTemplate = stringResource(R.string.export_success)
+    val exportFailureTemplate = stringResource(R.string.export_failure)
+    val shareSubject = stringResource(R.string.share_stay_records)
+    val shareText = stringResource(R.string.export_file_description)
+    val shareDialogTitle = stringResource(R.string.share)
+
     // 文件选择器
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -67,20 +77,17 @@ fun StatsExportImportScreen(
                         // 刷新 StayDurationManager 缓存
                         stayDurationManager.loadActiveSessionsFromDatabase()
 
-                        resultMessage = """
-                            导入成功！
-
-                            停留记录: ${result.importedStays} 条
-                            每日汇总: ${result.importedDailyStays} 条
-                            事件日志: ${result.importedEvents} 条
-
-                            数据已合并到现有数据中。
-                        """.trimIndent()
+                        resultMessage = String.format(
+                            importSuccessTemplate,
+                            0, // fencesCount not available in stats import
+                            result.importedEvents,
+                            result.importedStays
+                        )
                     } else {
-                        resultMessage = "导入失败: ${result.message}"
+                        resultMessage = importFailureTemplate.format(result.message)
                     }
                 } catch (e: Exception) {
-                    resultMessage = "导入失败: ${e.message}"
+                    resultMessage = importFailureTemplate.format(e.message ?: "Unknown error")
                 } finally {
                     isImporting = false
                     showResultDialog = true
@@ -108,27 +115,26 @@ fun StatsExportImportScreen(
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "application/json"
                         putExtra(Intent.EXTRA_STREAM, uri)
-                        putExtra(Intent.EXTRA_SUBJECT, "TrackMaster 停留记录")
-                        putExtra(Intent.EXTRA_TEXT, "TrackMaster 停留记录导出文件，分享后可导入查看")
+                        putExtra(Intent.EXTRA_SUBJECT, shareSubject)
+                        putExtra(Intent.EXTRA_TEXT, shareText)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
 
-                    context.startActivity(Intent.createChooser(shareIntent, "分享停留记录"))
+                    context.startActivity(Intent.createChooser(shareIntent, shareDialogTitle))
 
-                    resultMessage = """
-                        导出成功！
-
-                        停留记录: ${result.staysCount} 条
-                        每日汇总: ${result.dailyStaysCount} 条
-                        事件日志: ${result.eventsCount} 条
-
-                        文件已生成并可分享。
-                    """.trimIndent()
+                    resultMessage = String.format(
+                                exportSuccessTemplate,
+                                0, // fencesCount not available in stats export
+                                result.eventsCount,
+                                result.staysCount,
+                                result.dailyStaysCount,
+                                result.fileName ?: ""
+                            )
                 } else {
-                    resultMessage = "导出失败: ${result.message}"
+                    resultMessage = exportFailureTemplate.format(result.message)
                 }
             } catch (e: Exception) {
-                resultMessage = "导出失败: ${e.message}"
+                resultMessage = exportFailureTemplate.format(e.message ?: "Unknown error")
             } finally {
                 isExporting = false
                 showResultDialog = true
@@ -150,7 +156,7 @@ fun StatsExportImportScreen(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    "停留记录导入导出",
+                    stringResource(R.string.stay_record_import_export),
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
                     color = NeonCoral
@@ -175,7 +181,7 @@ fun StatsExportImportScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "当前数据统计",
+                            stringResource(R.string.current_data_statistics),
                             fontWeight = FontWeight.Bold,
                             color = NeonCoral
                         )
@@ -185,22 +191,21 @@ fun StatsExportImportScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column {
-                                Text("停留记录", fontSize = 12.sp, color = Color(0xFFBDBDBD))
-                                Text("${storageInfo.stayCount} 条", fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.stay_record), fontSize = 12.sp, color = Color(0xFFBDBDBD))
+                                Text(stringResource(R.string.stay_record_count, storageInfo.stayCount), fontWeight = FontWeight.Bold, color = Color.White)
                             }
                             Column {
-                                Text("每日汇总", fontSize = 12.sp, color = Color(0xFFBDBDBD))
+                                Text(stringResource(R.string.daily_summary), fontSize = 12.sp, color = Color(0xFFBDBDBD))
                                 Text(
-                                    try {
-                                        "${dataManager.getAllDailyStayRecords().size} 条"
-                                    } catch (e: Exception) { "未知" },
+                                    stringResource(R.string.daily_summary_count,
+                                        try { dataManager.getAllDailyStayRecords().size } catch (e: Exception) { 0 }),
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
                             }
                             Column {
-                                Text("事件日志", fontSize = 12.sp, color = Color(0xFFBDBDBD))
-                                Text("${storageInfo.eventCount} 条", fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.event_log), fontSize = 12.sp, color = Color(0xFFBDBDBD))
+                                Text(stringResource(R.string.event_log_count, storageInfo.eventCount), fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     }
@@ -225,11 +230,11 @@ fun StatsExportImportScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("关于数据导出", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                            Text(stringResource(R.string.about_data_export), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "导出的文件包含停留记录、每日汇总和事件日志。可以分享给朋友，他们用同一 App 导入后可以查看你的数据。",
+                            stringResource(R.string.about_export_desc),
                             fontSize = 11.sp,
                             color = Color(0xFFBDBDBD)
                         )
@@ -250,11 +255,11 @@ fun StatsExportImportScreen(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("正在导出...")
+                        Text(stringResource(R.string.exporting))
                     } else {
                         Icon(Icons.Default.Upload, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("导出停留记录")
+                        Text(stringResource(R.string.export_stay_records))
                     }
                 }
 
@@ -272,11 +277,11 @@ fun StatsExportImportScreen(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("正在导入...")
+                        Text(stringResource(R.string.importing))
                     } else {
                         Icon(Icons.Default.Download, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("导入停留记录")
+                        Text(stringResource(R.string.import_stay_records))
                     }
                 }
 
@@ -297,14 +302,10 @@ fun StatsExportImportScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("合并规则", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                            Text(stringResource(R.string.merge_rules), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "• 停留记录：按记录 ID 去重\n" +
-                                    "• 每日汇总：相同围栏相同日期的时长会累加\n" +
-                                    "• 事件日志：按事件 ID 去重",
-                            fontSize = 11.sp,
+                        Text(                            stringResource(R.string.merge_rules_desc),
                             color = Color(0xFFBDBDBD)
                         )
                     }
@@ -313,7 +314,7 @@ fun StatsExportImportScreen(
         },
         confirmButton = {
             GlassButton(onClick = onDismiss) {
-                Text("关闭", color = Color.White)
+                Text(stringResource(R.string.close), color = Color.White)
             }
         }
     )
@@ -324,7 +325,7 @@ fun StatsExportImportScreen(
             onDismissRequest = { showResultDialog = false },
             title = {
                 Text(
-                    if (importResult?.success == true || exportResult?.success == true) "操作成功" else "操作失败",
+                    if (importResult?.success == true || exportResult?.success == true) stringResource(R.string.operation_success) else stringResource(R.string.operation_failed),
                     color = if (importResult?.success == true || exportResult?.success == true) Success else Danger
                 )
             },
@@ -334,7 +335,7 @@ fun StatsExportImportScreen(
                     onClick = { showResultDialog = false },
                     colors = ButtonDefaults.buttonColors(containerColor = NeonCoral)
                 ) {
-                    Text("确定")
+                    Text(stringResource(R.string.ok))
                 }
             }
         )

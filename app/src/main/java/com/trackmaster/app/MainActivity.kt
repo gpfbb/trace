@@ -11,10 +11,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import com.amap.api.location.AMapLocationClient
 import com.amap.api.maps.AMap
-import com.trackmaster.app.LocationServiceState
 import com.trackmaster.app.mapstraction.amap.AMapPresenter
+import com.trackmaster.app.LocationServiceState
 import com.trackmaster.app.ui.navigation.TrackMasterNavHost
 import com.trackmaster.app.ui.theme.TrackMasterTheme
+import com.trackmaster.app.utils.LanguageManager
 
 class MainActivity : ComponentActivity() {
 
@@ -39,11 +40,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val activityContext = this
-        Log.d("TrackMaster", "开始初始化高德 SDK")
+        // Apply locale from preferences on every cold start
+        val appPrefs = (application as TrackMasterApplication).appPreferences
+        android.util.Log.d("MainActivity", "onCreate: appPrefs.appLanguage=${appPrefs.appLanguage}")
+        LanguageManager.ensureLocale(this)
 
-        AMapLocationClient.updatePrivacyShow(activityContext, true, true)
-        AMapLocationClient.updatePrivacyAgree(activityContext, true)
+        if (appPrefs.mapProvider == MapProvider.AMAP) {
+            Log.d("TrackMaster", "初始化高德 SDK")
+            AMapLocationClient.updatePrivacyShow(this, true, true)
+            AMapLocationClient.updatePrivacyAgree(this, true)
+        }
 
         setContent {
             TrackMasterTheme {

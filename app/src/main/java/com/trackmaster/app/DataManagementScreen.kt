@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.launch
@@ -27,6 +28,7 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import com.trackmaster.app.R
 import com.trackmaster.app.ui.theme.*
 
 @Composable
@@ -53,6 +55,25 @@ fun DataManagementScreen(
     var autoCleanupDays by remember { mutableStateOf(prefs.autoCleanupDays) }
     var showAutoCleanupDialog by remember { mutableStateOf(false) }
 
+    // Pre-compute strings for use in lambdas (stringResource cannot be called in lambdas)
+    val readingFileMsg = stringResource(R.string.reading_file)
+    val importingDataMsg = stringResource(R.string.importing_data)
+    val importSuccessTemplate = stringResource(R.string.import_success, 0, 0, 0)
+    val importFailedTemplate = stringResource(R.string.import_failed, "")
+    val fileReadErrorMsg = stringResource(R.string.file_read_error)
+    val preparingExportMsg = stringResource(R.string.preparing_export)
+    val exportSuccessTemplate = stringResource(R.string.export_success, 0, 0, 0, 0, "")
+    val exportFailedTemplate = stringResource(R.string.export_failed, "")
+    val noFencesToShareMsg = stringResource(R.string.no_fences_to_share)
+    val generatingFenceTemplateMsg = stringResource(R.string.generating_fence_template)
+    val shareFenceTitleMsg = stringResource(R.string.share_fence_title)
+    val shareFenceMsg = stringResource(R.string.share_fence)
+    val fenceShareReadyTemplate = stringResource(R.string.fence_share_ready, 0)
+    val fenceGenerateErrorMsg = stringResource(R.string.fence_generate_error)
+    val shareFailedTemplate = stringResource(R.string.share_failed, "")
+    val cleanedOldLogsTemplate = stringResource(R.string.cleaned_old_logs, 0)
+    val deleteSuccessTemplate = stringResource(R.string.delete_success_records, 0)
+
     fun refreshData() {
         scope.launch {
             storageInfo = dataManager.getStorageInfo()
@@ -67,33 +88,28 @@ fun DataManagementScreen(
         if (uri != null) {
             scope.launch {
                 isImporting = true
-                importMessage = "正在读取文件..."
+                importMessage = readingFileMsg
 
                 val tempFile = copyUriToFile(context, uri)
                 if (tempFile != null) {
-                    importMessage = "正在导入数据..."
+                    importMessage = importingDataMsg
                     val result = dataManager.importData(tempFile.absolutePath)
 
                     isImporting = false
                     if (result.success) {
-                        successMessage = """
-                            导入成功！
-
-                            围栏: ${result.importedFences} 个
-                            事件: ${result.importedEvents} 条
-                            停留: ${result.importedStays} 条
-
-                            数据已成功导入，现在可以正常使用。
-                        """.trimIndent()
+                        successMessage = importSuccessTemplate
+                            .replace("%1\$d", result.importedFences.toString())
+                            .replace("%2\$d", result.importedEvents.toString())
+                            .replace("%3\$d", result.importedStays.toString())
                         showSuccessDialog = true
                         refreshData()
                     } else {
-                        successMessage = "导入失败: ${result.message}"
+                        successMessage = importFailedTemplate.replace("%s", result.message)
                         showSuccessDialog = true
                     }
                 } else {
                     isImporting = false
-                    successMessage = "无法读取文件"
+                    successMessage = fileReadErrorMsg
                     showSuccessDialog = true
                 }
             }
@@ -103,12 +119,11 @@ fun DataManagementScreen(
     LaunchedEffect(Unit) {
         refreshData()
     }
-
     GlassDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "数据导入导出",
+                stringResource(R.string.data_import_export),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = NeonCoral
@@ -126,12 +141,12 @@ fun DataManagementScreen(
 
                 HorizontalDivider(color = Color(0x30FFFFFF))
 
-                // 导出与导入
+                // Export Import Section
                 ExportImportSection(
                     onExportAll = {
                         scope.launch {
                             isExporting = true
-                            exportMessage = "准备导出..."
+                            exportMessage = preparingExportMsg
                             val result = dataManager.exportData(
                                 options = DataExportOptions(exportAll = true),
                                 onProgress = { progress, msg ->
@@ -140,38 +155,33 @@ fun DataManagementScreen(
                             )
                             isExporting = false
                             if (result.success) {
-                                successMessage = """
-                                    导出成功！
-
-                                    围栏: ${result.exportedFences} 个
-                                    事件: ${result.exportedEvents} 条
-                                    停留: ${result.exportedStays} 条
-                                    每日统计: ${result.exportedDailyStays} 条
-
-                                    文件位置: ${result.filePath}
-                                """.trimIndent()
+                                successMessage = exportSuccessTemplate
+                                    .replace("%1", result.exportedFences.toString())
+                                    .replace("%2", result.exportedEvents.toString())
+                                    .replace("%3", result.exportedStays.toString())
+                                    .replace("%4", result.exportedDailyStays.toString())
+                                    .replace("%5", result.filePath ?: "")
                             } else {
-                                successMessage = "导出失败: ${result.message}"
+                                successMessage = exportFailedTemplate.replace("%s", result.message)
                             }
                             showSuccessDialog = true
                             refreshData()
                         }
                     },
                     onShareFences = {
-                        // 分享围栏模板：不含ID，导入时自动分配新UUID
                         val fences = app.geoFences.toList()
                         if (fences.isEmpty()) {
-                            successMessage = "暂无围栏可分享"
+                            successMessage = noFencesToShareMsg
                             showSuccessDialog = true
                             return@ExportImportSection
                         }
                         scope.launch {
                             isExporting = true
-                            exportMessage = "生成围栏模板..."
+                            exportMessage = generatingFenceTemplateMsg
                             try {
                                 val jsonContent = app.exportFencesToJson(fences)
                                 if (jsonContent != null) {
-                                    val fileName = "TrackMaster_围栏_${SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())}.json"
+                                    val fileName = "TrackMaster_Fence_${SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())}.json"
                                     val file = File(context.cacheDir, fileName)
                                     file.writeText(jsonContent)
                                     val uri = androidx.core.content.FileProvider.getUriForFile(
@@ -180,18 +190,19 @@ fun DataManagementScreen(
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                         type = "application/json"
                                         putExtra(Intent.EXTRA_STREAM, uri)
-                                        putExtra(Intent.EXTRA_SUBJECT, "TrackMaster 围栏分享")
+                                        putExtra(Intent.EXTRA_SUBJECT, shareFenceTitleMsg)
                                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
-                                    context.startActivity(Intent.createChooser(shareIntent, "分享围栏").apply {
+                                    context.startActivity(Intent.createChooser(shareIntent, shareFenceMsg).apply {
                                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     })
-                                    successMessage = "已生成围栏分享文件，共 ${fences.size} 个围栏"
+                                    successMessage = fenceShareReadyTemplate.replace("%d", fences.size.toString())
                                 } else {
-                                    successMessage = "生成围栏文件失败"
+                                    successMessage = fenceGenerateErrorMsg
                                 }
                             } catch (e: Exception) {
-                                successMessage = "分享失败: ${e.message}"
+                                val errorMsg = e.message ?: "Unknown error"
+                                successMessage = shareFailedTemplate.replace("%s", errorMsg)
                             }
                             isExporting = false
                             showSuccessDialog = true
@@ -208,7 +219,7 @@ fun DataManagementScreen(
 
                 HorizontalDivider(color = Color(0x30FFFFFF))
 
-                // 日志自动清理
+                // Auto Cleanup Section
                 AutoCleanupSection(
                     autoCleanupDays = autoCleanupDays,
                     onOpenSettings = { showAutoCleanupDialog = true },
@@ -217,7 +228,7 @@ fun DataManagementScreen(
                             val deleted = dataManager.deleteEventsBefore(
                                 Date(System.currentTimeMillis() - autoCleanupDays * 24 * 60 * 60 * 1000L)
                             )
-                            successMessage = "已清理 $deleted 条旧日志"
+                            successMessage = cleanedOldLogsTemplate.replace("%d", deleted.toString())
                             showSuccessDialog = true
                             refreshData()
                         }
@@ -226,14 +237,14 @@ fun DataManagementScreen(
 
                 HorizontalDivider(color = Color(0x30FFFFFF))
 
-                // 删除历史数据（保留围栏和统计）
+                // Delete Section
                 DeleteSection(
                     onDeleteAll = { showDeleteDialog = true }
                 )
 
                 HorizontalDivider(color = Color(0x30FFFFFF))
 
-                // 已导出文件
+                // Exported Files Section
                 ExportedFilesSection(
                     files = exportFiles,
                     onDeleteFile = { file ->
@@ -245,21 +256,17 @@ fun DataManagementScreen(
                     onImportFile = { file ->
                         scope.launch {
                             isImporting = true
-                            importMessage = "正在导入..."
+                            importMessage = importingDataMsg
                             val result = dataManager.importData(file.absolutePath)
                             isImporting = false
                             if (result.success) {
-                                // 【关键修复】模板导入（仅围栏）后立即刷新引擎和内存数据，无需重启
                                 if (result.importedFences > 0) {
                                     app.importFencesAndRefresh(file.readText(), preserveId = false)
                                 }
-                                successMessage = """
-                                    导入成功！
-
-                                    围栏: ${result.importedFences} 个
-                                    事件: ${result.importedEvents} 条
-                                    停留: ${result.importedStays} 条
-                                """.trimIndent()
+                                successMessage = importSuccessTemplate
+                                    .replace("%1", result.importedFences.toString())
+                                    .replace("%2", result.importedEvents.toString())
+                                    .replace("%3", result.importedStays.toString())
                             } else {
                                 successMessage = result.message
                             }
@@ -272,12 +279,12 @@ fun DataManagementScreen(
         },
         confirmButton = {
             GlassButton(onClick = onDismiss) {
-                Text("关闭", color = Color.White)
+                Text(stringResource(R.string.close), color = Color.White)
             }
         }
     )
 
-    // 删除确认对话框
+    // Delete Confirmation Dialog
     if (showDeleteDialog) {
         DeleteOptionsDialog(
             onDismiss = { showDeleteDialog = false },
@@ -285,7 +292,7 @@ fun DataManagementScreen(
                 scope.launch {
                     val deletedCount = dataManager.deleteData(beforeDate)
                     showDeleteDialog = false
-                    successMessage = "删除成功！共删除 $deletedCount 条记录"
+                    successMessage = deleteSuccessTemplate.replace("%d", deletedCount.toString())
                     showSuccessDialog = true
                     refreshData()
                 }
@@ -293,7 +300,7 @@ fun DataManagementScreen(
         )
     }
 
-    // 自动清理设置对话框
+    // Auto Cleanup Dialog
     if (showAutoCleanupDialog) {
         AutoCleanupDialog(
             currentDays = autoCleanupDays,
@@ -306,11 +313,11 @@ fun DataManagementScreen(
         )
     }
 
-    // 成功/失败提示
+    // Success/Failure Dialog
     if (showSuccessDialog) {
         GlassDialog(
             onDismissRequest = { showSuccessDialog = false },
-            title = { Text("操作完成", color = NeonCoral) },
+            title = { Text(stringResource(R.string.operation_complete), color = NeonCoral) },
             text = {
                 Text(
                     successMessage,
@@ -320,7 +327,7 @@ fun DataManagementScreen(
             },
             confirmButton = {
                 GlassButton(onClick = { showSuccessDialog = false }) {
-                    Text("确定", color = Color.White)
+                    Text(stringResource(R.string.confirm), color = Color.White)
                 }
             }
         )
@@ -342,7 +349,7 @@ private fun StorageInfoCard(storageInfo: StorageInfo) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "存储状态",
+                stringResource(R.string.storage_status),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = NeonCoral
@@ -351,15 +358,15 @@ private fun StorageInfoCard(storageInfo: StorageInfo) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                StorageStatItem(label = "围栏数量", value = storageInfo.fenceCount.toString())
-                StorageStatItem(label = "事件记录", value = storageInfo.eventCount.toString())
+                StorageStatItem(label = stringResource(R.string.fence_quantity), value = storageInfo.fenceCount.toString())
+                StorageStatItem(label = stringResource(R.string.event_record), value = storageInfo.eventCount.toString())
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                StorageStatItem(label = "停留记录", value = storageInfo.stayCount.toString())
-                StorageStatItem(label = "数据库大小", value = storageInfo.formattedSize)
+                StorageStatItem(label = stringResource(R.string.stay_record), value = storageInfo.stayCount.toString())
+                StorageStatItem(label = stringResource(R.string.database_size), value = storageInfo.formattedSize)
             }
         }
     }
@@ -394,7 +401,7 @@ private fun ExportImportSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            "导出与导入",
+            stringResource(R.string.export_import),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = NeonCoral
@@ -442,13 +449,13 @@ private fun ExportImportSection(
                 ) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = NeonAmber)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("分享围栏", color = NeonAmber)
+                    Text(stringResource(R.string.share_fence), color = NeonAmber)
                 }
                 GlassButton(
                     onClick = onExportAll,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("导出全部", color = Color.White)
+                    Text(stringResource(R.string.export_all), color = Color.White)
                 }
                 GlassButton(
                     onClick = onImportFile,
@@ -456,7 +463,7 @@ private fun ExportImportSection(
                 ) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("导入", color = Color.White)
+                    Text(stringResource(R.string.import_action), color = Color.White)
                 }
             }
         }
@@ -471,7 +478,7 @@ private fun AutoCleanupSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "日志自动清理",
+            stringResource(R.string.auto_cleanup_section),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = NeonCoral
@@ -484,18 +491,18 @@ private fun AutoCleanupSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "自动清理",
+                    stringResource(R.string.auto_cleanup_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFFE0E0E0)
                 )
                 Text(
-                    "保留最近 $autoCleanupDays 天",
+                    stringResource(R.string.keep_recent_days, autoCleanupDays),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFFBDBDBD)
                 )
             }
             TextButton(onClick = onOpenSettings) {
-                Text("设置", color = NeonCoral, fontSize = 13.sp)
+                Text(stringResource(R.string.settings_button), color = NeonCoral, fontSize = 13.sp)
             }
         }
 
@@ -505,11 +512,11 @@ private fun AutoCleanupSection(
         ) {
             Icon(imageVector = Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = Danger)
             Spacer(modifier = Modifier.width(4.dp))
-            Text("立即清理旧日志", color = Danger, fontSize = 13.sp)
+            Text(stringResource(R.string.cleanup_now), color = Danger, fontSize = 13.sp)
         }
 
         Text(
-            "日志为进出围栏事件记录，清理后围栏和统计数据不受影响",
+            stringResource(R.string.cleanup_reminder),
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFF9E9E9E)
         )
@@ -527,10 +534,10 @@ private fun AutoCleanupDialog(
 
     GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("日志自动清理", color = NeonCoral) },
+        title = { Text(stringResource(R.string.auto_cleanup_dialog_title), color = NeonCoral) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("自动清理超过以下天数的日志事件：", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFE0E0E0))
+                Text(stringResource(R.string.auto_cleanup_dialog_desc), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFE0E0E0))
                 Spacer(modifier = Modifier.height(8.dp))
                 options.forEach { days ->
                     Row(
@@ -546,19 +553,19 @@ private fun AutoCleanupDialog(
                             colors = RadioButtonDefaults.colors(selectedColor = NeonCoral)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("$days 天", color = Color(0xFFE0E0E0))
+                        Text(stringResource(R.string.days_option, days), color = Color(0xFFE0E0E0))
                     }
                 }
             }
         },
         confirmButton = {
             GlassButton(onClick = { onConfirm(selected) }) {
-                Text("保存", color = Color.White)
+                Text(stringResource(R.string.save), color = Color.White)
             }
         },
         dismissButton = {
             GlassButton(onClick = onDismiss) {
-                Text("取消", color = Color.White)
+                Text(stringResource(R.string.cancel), color = Color.White)
             }
         }
     )
@@ -568,13 +575,13 @@ private fun AutoCleanupDialog(
 private fun DeleteSection(onDeleteAll: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            "删除历史数据",
+            stringResource(R.string.delete_section),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = NeonCoral
         )
         Text(
-            "删除事件和停留记录（保留围栏和每日统计）",
+            stringResource(R.string.delete_data_desc),
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFFBDBDBD)
         )
@@ -584,7 +591,7 @@ private fun DeleteSection(onDeleteAll: () -> Unit) {
         ) {
             Icon(imageVector = Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = Danger)
             Spacer(modifier = Modifier.width(4.dp))
-            Text("删除历史数据", color = Danger)
+            Text(stringResource(R.string.delete_data_button), color = Danger)
         }
     }
 }
@@ -597,13 +604,13 @@ private fun ExportedFilesSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            "已导出文件（点击文件名导入）",
+            stringResource(R.string.exported_files_section),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = NeonCoral
         )
         if (files.isEmpty()) {
-            Text("暂无导出文件", style = MaterialTheme.typography.bodySmall, color = Color(0xFFBDBDBD))
+            Text(stringResource(R.string.no_exported_files), style = MaterialTheme.typography.bodySmall, color = Color(0xFFBDBDBD))
         } else {
             files.take(5).forEach { file ->
                 FileItem(
@@ -637,10 +644,10 @@ private fun FileItem(file: File, onDelete: () -> Unit, onImport: () -> Unit) {
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFFBDBDBD)
                 )
-                Text(text = "点击导入", style = MaterialTheme.typography.labelSmall, color = NeonCoral)
+                Text(text = stringResource(R.string.click_to_import), style = MaterialTheme.typography.labelSmall, color = NeonCoral)
             }
             IconButton(onClick = onDelete) {
-                Icon(imageVector = Icons.Default.Delete, contentDescription = "删除", tint = Danger)
+                Icon(imageVector = Icons.Default.Delete, contentDescription = stringResource(R.string.delete), tint = Danger)
             }
         }
     }
@@ -656,17 +663,17 @@ private fun DeleteOptionsDialog(onDismiss: () -> Unit, onConfirm: (Date?) -> Uni
 
     GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("删除选项", color = NeonCoral) },
+        title = { Text(stringResource(R.string.delete_options_title), color = NeonCoral) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("警告：删除操作不可恢复！", color = Danger, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.delete_warning), color = Danger, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = deleteAll, onCheckedChange = { deleteAll = it; if (it) deleteBefore = false }, colors = CheckboxDefaults.colors(checkedColor = NeonCoral))
-                    Text("删除全部历史数据", color = Color(0xFFE0E0E0))
+                    Text(stringResource(R.string.delete_all_data), color = Color(0xFFE0E0E0))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = deleteBefore, onCheckedChange = { deleteBefore = it; if (it) deleteAll = false }, colors = CheckboxDefaults.colors(checkedColor = NeonCoral))
-                    Text("删除1个月前的数据", color = Color(0xFFE0E0E0))
+                    Text(stringResource(R.string.delete_before_date), color = Color(0xFFE0E0E0))
                 }
             }
         },
@@ -679,12 +686,12 @@ private fun DeleteOptionsDialog(onDismiss: () -> Unit, onConfirm: (Date?) -> Uni
                 }
                 onConfirm(before)
             }) {
-                Text("确认删除", color = Color.White)
+                Text(stringResource(R.string.confirm_delete_button), color = Color.White)
             }
         },
         dismissButton = {
             GlassButton(onClick = onDismiss) {
-                Text("取消", color = Color.White)
+                Text(stringResource(R.string.cancel), color = Color.White)
             }
         }
     )
@@ -710,3 +717,4 @@ fun copyUriToFile(context: android.content.Context, uri: android.net.Uri): File?
         null
     }
 }
+

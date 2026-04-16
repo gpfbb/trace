@@ -19,9 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.trackmaster.app.R
 import com.trackmaster.app.ui.theme.*
 
 @Composable
@@ -41,9 +43,10 @@ fun EnhancedBottomNavBar(
     ) {
         EnhancedBottomNavItem.entries.forEach { item ->
             val isSelected = currentRoute == item.screen.route
+            val resolvedLabel = stringResource(item.titleRes)
             EnhancedNavItem(
                 icon = item.toIcon(),
-                label = item.title,
+                label = resolvedLabel,
                 isSelected = isSelected,
                 onClick = { onNavigate(item.screen) }
             )
@@ -159,12 +162,12 @@ private fun EnhancedNavItem(
 
 private enum class EnhancedBottomNavItem(
     val screen: Screen,
-    val title: String
+    @androidx.annotation.StringRes val titleRes: Int
 ) {
-    HOME(Screen.Home, "首页"),
-    MAP(Screen.Map, "地图"),
-    HISTORY(Screen.History, "历史"),
-    SETTINGS(Screen.Settings, "设置")
+    HOME(Screen.Home, R.string.nav_home),
+    MAP(Screen.Map, R.string.nav_map),
+    HISTORY(Screen.History, R.string.nav_history),
+    SETTINGS(Screen.Settings, R.string.nav_settings)
 }
 
 private fun EnhancedBottomNavItem.toIcon(): ImageVector = when (this) {

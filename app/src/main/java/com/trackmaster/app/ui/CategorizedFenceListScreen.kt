@@ -13,11 +13,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.model.Category
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.utils.FenceTreeResult
 import com.trackmaster.app.core.FenceTreeManager
+import com.trackmaster.app.R
 import com.trackmaster.app.core.Geofence
 
 /**
@@ -169,7 +171,7 @@ private fun CategoryHeader(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = "$fenceCount 个",
+                text = stringResource(R.string.fence_count, fenceCount),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -306,11 +308,11 @@ fun SetParentDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("设置父级围栏") },
+        title = { Text(stringResource(R.string.set_parent_fence)) },
         text = {
             Column {
                 Text(
-                    text = "为「${fence.name}」选择父级围栏：",
+                    text = stringResource(R.string.select_parent_for, fence.name),
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -327,7 +329,7 @@ fun SetParentDialog(
                         selected = fence.parentId == null,
                         onClick = { onConfirm(null) }
                     )
-                    Text("顶级（无父级）", modifier = Modifier.padding(start = 8.dp))
+                    Text(stringResource(R.string.top_level_no_parent), modifier = Modifier.padding(start = 8.dp))
                 }
 
                 HorizontalDivider()
@@ -357,7 +359,7 @@ fun SetParentDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
         }
     )
 }

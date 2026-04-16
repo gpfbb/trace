@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 enum class MapProvider { AMAP, GOOGLE }
+enum class AppLanguage { CHINESE, ENGLISH, MALAY }
 
 class AppPreferences(context: Context) {
 
@@ -32,6 +33,7 @@ class AppPreferences(context: Context) {
         // 地图类型：1=标准 2=卫星 3=夜景（对应 AMap.MAP_TYPE_ constants）
         private const val KEY_MAP_TYPE = "map_type"
         private const val KEY_MAP_PROVIDER = "map_provider"
+        private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_CAMERA_LAT = "camera_lat"
         private const val KEY_CAMERA_LNG = "camera_lng"
         private const val KEY_CAMERA_ZOOM = "camera_zoom"
@@ -191,4 +193,11 @@ class AppPreferences(context: Context) {
     var cameraZoom: Float
         get() = prefs.getFloat(KEY_CAMERA_ZOOM, 15f)
         set(value) = prefs.edit().putFloat(KEY_CAMERA_ZOOM, value).apply()
+
+    var appLanguage: AppLanguage
+        get() {
+            val name = prefs.getString(KEY_APP_LANGUAGE, null)
+            return if (name != null) AppLanguage.valueOf(name) else AppLanguage.ENGLISH
+        }
+        set(value) = prefs.edit().putString(KEY_APP_LANGUAGE, value.name).apply()
 }

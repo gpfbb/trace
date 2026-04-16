@@ -26,11 +26,13 @@ import androidx.compose.ui.graphics.Color
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.core.GeoFenceType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.trackmaster.app.ui.theme.GlassButton
 import com.trackmaster.app.ui.theme.NeonAmber
 import com.trackmaster.app.ui.theme.NeonBlue
+import com.trackmaster.app.R
 import com.trackmaster.app.ui.theme.NeonCoral
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -72,7 +74,7 @@ fun FenceExportImportDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (isExportMode) "分享围栏" else "导入围栏",
+                    text = if (isExportMode) stringResource(R.string.share_fence) else stringResource(R.string.import_fence),
                     fontWeight = FontWeight.Bold
                 )
                 Row {
@@ -88,7 +90,7 @@ fun FenceExportImportDialog(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (isExportMode) "导入" else "分享",
+                            text = if (isExportMode) stringResource(R.string.import_short) else stringResource(R.string.share_short),
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
@@ -101,12 +103,12 @@ fun FenceExportImportDialog(
                     // 分享模式：选择围栏
                     if (fences.isEmpty()) {
                         Text(
-                            text = "暂无围栏可导出",
+                            text = stringResource(R.string.no_fences_to_export),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
-                            text = "选择要分享的围栏（${selectedFences.size}/${fences.size}）",
+                            text = stringResource(R.string.select_fences_to_share, selectedFences.size, fences.size),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -149,7 +151,7 @@ fun FenceExportImportDialog(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
-                                    text = if (selectedFences.size == fences.size) "取消全选" else "全选",
+                                    text = if (selectedFences.size == fences.size) stringResource(R.string.deselect_all) else stringResource(R.string.select_all),
                                     color = NeonBlue,
                                     style = MaterialTheme.typography.labelSmall
                                 )
@@ -171,7 +173,7 @@ fun FenceExportImportDialog(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("分享", color = NeonBlue)
+                                Text(stringResource(R.string.share_short), color = NeonBlue)
                             }
                         }
                     }
@@ -190,12 +192,12 @@ fun FenceExportImportDialog(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "从文件导入围栏",
+                            text = stringResource(R.string.import_from_file),
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "选择一个之前分享的围栏文件 (.json)",
+                            text = stringResource(R.string.select_fence_file),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -211,7 +213,7 @@ fun FenceExportImportDialog(
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("选择文件", color = NeonAmber)
+                            Text(stringResource(R.string.select_file), color = NeonAmber)
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Card(
@@ -222,15 +224,13 @@ fun FenceExportImportDialog(
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Text(
-                                    text = "导入说明",
+                                    text = stringResource(R.string.import_instructions),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "• 导入的围栏会添加新的UUID，不会覆盖已有围栏\n" +
-                                           "• 导入的围栏将归入「未分类」\n" +
-                                           "• 停留记录不会被导入",
+                                    text = "${stringResource(R.string.import_instruction_1)}\n${stringResource(R.string.import_instruction_2)}\n${stringResource(R.string.import_instruction_3)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -243,7 +243,7 @@ fun FenceExportImportDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("关闭")
+                Text(stringResource(R.string.close))
             }
         }
     )
@@ -289,8 +289,8 @@ private fun FenceSelectItem(
             )
             Text(
                 text = when (fence.type) {
-                    GeoFenceType.CIRCLE -> "圆形 ${fence.radius?.toInt() ?: 0}m"
-                    GeoFenceType.POLYGON -> "多边形 ${fence.points?.size ?: 0}顶点"
+                    GeoFenceType.CIRCLE -> stringResource(R.string.circle_meters, fence.radius?.toInt() ?: 0)
+                    GeoFenceType.POLYGON -> stringResource(R.string.polygon_vertices, fence.points?.size ?: 0)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -1,41 +1,369 @@
 <resources>
     <string name="app_name">TrackMaster</string>
-    <string name="map_type_satellite">卫星</string>
-    <string name="map_type_normal">标准</string>
-    <string name="map_type_night">夜景</string>
-    <string name="start_tracking">开始记录</string>
-    <string name="pause_tracking">暂停</string>
-    <string name="resume_tracking">继续</string>
-    <string name="stop_tracking">停止</string>
-    <string name="total_distance">总里程</string>
-    <string name="duration">时长</string>
-    <string name="avg_speed">平均速度</string>
-    <string name="current_speed">当前速度</string>
-    <string name="accuracy">精度</string>
-    <string name="tracking">轨迹</string>
-    <string name="geofence">围栏</string>
-    <string name="history">历史</string>
-    <string name="statistics">统计</string>
-    <string name="settings">设置</string>
-    <string name="save">保存</string>
-    <string name="delete">删除</string>
-    <string name="cancel">取消</string>
-    <string name="confirm">确认</string>
-    <string name="location_permission_required">需要定位权限</string>
-    <string name="background_location_permission_required">需要后台定位权限</string>
-    <string name="notification_permission_required">需要通知权限</string>
-    <string name="permission_denied">权限被拒绝</string>
-    <string name="battery_optimization">电池优化</string>
-    <string name="disable_battery_optimization">关闭电池优化以确保后台正常运行</string>
-    <string name="power_mode_high_performance">高性能</string>
-    <string name="power_mode_balanced">均衡</string>
-    <string name="power_mode_power_save">极致省电</string>
-    <string name="low_battery_warning">低电量警告</string>
-    <string name="low_battery_message">电量过低，建议暂停记录</string>
-    <string name="motion_state_stationary">静止</string>
-    <string name="motion_state_walking">步行</string>
-    <string name="motion_state_riding">骑行</string>
-    <string name="motion_state_driving">驾车</string>
-    <string name="enter_geofence">进入围栏</string>
-    <string name="exit_geofence">离开围栏</string>
+
+    <!-- Onboarding -->
+    <string name="skip">Skip</string>
+    <string name="next">Next</string>
+    <string name="grant_permission">Grant Location Permission</string>
+    <string name="grant_later">Grant Later</string>
+    <string name="start_using">Start Using</string>
+    <string name="welcome_title">Welcome to TrackMaster</string>
+    <string name="welcome_desc">Smart geofence tracking assistant, accurately recording every stay</string>
+    <string name="create_fence_title">Create Geofence</string>
+    <string name="create_fence_desc">Tap on the map to draw circular or polygon fences, defining areas you care about</string>
+    <string name="start_tracking_title">Start Tracking</string>
+    <string name="start_tracking_desc">Automatically record when entering or exiting fences, providing detailed duration statistics</string>
+    <string name="select_language_title">Select Language</string>
+    <string name="select_language_desc">Select your preferred app language</string>
+    <string name="map_sdk_recommendation_title">Map SDK Recommendation</string>
+    <string name="amap_recommendation">AMap (高德) recommended for use in China — high domestic accuracy</string>
+    <string name="google_recommendation">Google Maps recommended for use outside China — global accuracy</string>
+
+    <!-- Settings -->
+    <string name="settings">Settings</string>
+    <string name="permission_management">Permission Management</string>
+    <string name="location_permission">Location Permission</string>
+    <string name="location_permission_desc">Get user location information to monitor geofences</string>
+    <string name="background_location_permission">Background Location</string>
+    <string name="background_location_permission_desc">Continue monitoring location when app is in background</string>
+    <string name="battery_optimization">Battery Optimization</string>
+    <string name="battery_optimization_desc">Prevent background services from being killed by system</string>
+    <string name="grant">Grant</string>
+    <string name="granted">Granted</string>
+    <string name="go_to_settings">Go to Settings</string>
+    <string name="permission_warning">⚠️ Some permissions not granted. Geofence features may not work properly.</string>
+
+    <string name="location_mode">Location Mode</string>
+    <string name="power_save_mode">Power Save</string>
+    <string name="power_save_desc">Ultra low power, suitable for sleep/long stationary. Starts at 1min stationary at 2min/interval</string>
+    <string name="balanced_mode">Balanced</string>
+    <string name="balanced_desc">Smart balance: starts from 1min stationary at 1min/interval</string>
+
+    <string name="map_service">Map Service</string>
+    <string name="amap_china">AMap (China Accuracy)</string>
+    <string name="google_global">Google Maps (Global Accuracy)</string>
+    <string name="map_switch_hint">⚠️ After switching, please fully exit app (clear background) and reopen to take effect</string>
+
+    <string name="language">Language</string>
+    <string name="select_language">Select Language</string>
+    <string name="chinese">中文</string>
+    <string name="english">English</string>
+    <string name="malay">Bahasa Melayu</string>
+    <string name="language_changed_hint">⚠️ Language changed. Please restart app for full effect.</string>
+
+    <string name="theme">Theme</string>
+    <string name="select_theme">Select Theme</string>
+    <string name="select_theme_desc">Choose your preferred app theme</string>
+    <string name="data_import_export">Data Import/Export</string>
+    <string name="data_import_export_desc">Import and export geofence and statistics data</string>
+    <string name="recalculate_relationships">Recalculate Parent-Child Relationships</string>
+    <string name="recalculate_desc">Automatically determine fence containment relationships based on geometry</string>
+    <string name="advanced_settings">Advanced Settings</string>
+    <string name="advanced_settings_desc">Adjust location algorithm parameters</string>
+    <string name="reset_defaults">Reset to Defaults</string>
+
+    <string name="stationary_threshold">Stationary Threshold</string>
+    <string name="boundary_buffer">Boundary Buffer</string>
+    <string name="drift_threshold">Drift Detection Threshold</string>
+    <string name="recommended_defaults">Recommended Default Configuration</string>
+
+    <string name="usage_instructions">Usage Instructions</string>
+    <string name="usage_tip_1">Please grant all necessary permissions to ensure normal function</string>
+    <string name="usage_tip_2">Adding to battery optimization whitelist prevents background services from being killed</string>
+    <string name="usage_tip_3">You can choose appropriate location mode based on your needs</string>
+    <string name="usage_tip_4">Power save mode suitable for long-term use; performance mode suitable for high precision scenarios</string>
+
+    <string name="confirm">Confirm</string>
+    <string name="cancel">Cancel</string>
+    <string name="app_settings">App Settings</string>
+    <string name="map_service_card">Map Service</string>
+    <string name="map_provider_selector">Select Map Service</string>
+    <string name="amap_recommendation_desc">AMap: High domestic accuracy, suitable for use in China</string>
+    <string name="google_recommendation_desc">Google Maps: Global accuracy, requires Google Play services</string>
+    <string name="amap_card_label">AMap (China Accuracy)</string>
+    <string name="google_card_label">Google Maps (Global Accuracy)</string>
+    <string name="recalculate_title">Recalculate Parent-Child Relationships</string>
+    <string name="recalculate_confirm">This will automatically determine geofence containment relationships based on geometry. Continue?</string>
+    <string name="recalculate_success">Recalculation complete, %d parent-child relationships established.</string>
+    <string name="recalculate_error">Recalculation failed: %s</string>
+    <string name="collapse">Collapse</string>
+    <string name="expand">Expand</string>
+    <string name="ok">OK</string>
+    <string name="close">Close</string>
+    <string name="recalculate_done">Recalculation complete. %d parent-child relationships established.</string>
+    <string name="recalculate_failed">Recalculation failed: %s</string>
+    <string name="intersection_warning">⚠️ Found %d intersecting fence pairs, cannot calculate parent-child relationships.</string>
+
+    <!-- Common -->
+    <string name="map_type_satellite">Satellite</string>
+    <string name="map_type_normal">Standard</string>
+    <string name="map_type_night">Night</string>
+
+    <!-- Map & Fence -->
+    <string name="undo">Undo</string>
+    <string name="draw">Draw</string>
+    <string name="fence_created">Fence created successfully</string>
+    <string name="recalculate_hint">Tip: Go to Settings → Recalculate Parent-Child Relationships to ensure fence relationships</string>
+    <string name="confirm_delete">Confirm Delete</string>
+    <string name="fence_delete_confirm">Delete fence "%s"? This cannot be undone.</string>
+    <string name="fence_count">%d fences</string>
+    <string name="switch_map_layer">Switch map layer (%s)</string>
+    <string name="fence_list">Fence List</string>
+    <string name="circle">Circle</string>
+    <string name="polygon">Polygon</string>
+    <string name="precision">Precision</string>
+    <string name="tap_map_for_center">Tap map to select circle center</string>
+    <string name="center_selected_radius">Center selected, radius 100m</string>
+    <string name="need_n_vertices">Need %d more vertices</string>
+    <string name="ready_to_create">%d vertices, ready to create</string>
+    <string name="create">Create</string>
+    <string name="editing_fence_tap_to_add">Editing "%s" — tap map to add vertices</string>
+    <string name="delete_last">Delete Last</string>
+    <string name="save">Save</string>
+    <string name="create_fence">Create Fence</string>
+    <string name="fence_name">Fence Name</string>
+    <string name="nested_fence_hint">Fences support nesting (parent-child), do not support intersection</string>
+    <string name="no_fences">No fences yet</string>
+    <string name="matched">Matched</string>
+    <string name="highlighted">Highlighted</string>
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="edit_fence">Edit Fence</string>
+    <string name="color">Color</string>
+    <string name="transparency">Transparency: %d%%</string>
+    <string name="radius_meters">Radius: %d meters</string>
+    <string name="vertices_count">%d vertices</string>
+    <string name="circle_with_radius">Circle (radius: %dm)</string>
+    <string name="polygon_with_vertices">Polygon (%d vertices)</string>
+    <string name="edit_on_map_hint">Tap "Edit on Map" to add or delete vertices on the map</string>
+    <string name="edit_on_map">Edit on Map</string>
+    <string name="category_management">Category Management</string>
+    <string name="no_categories_hint">No categories yet, tap below to create</string>
+    <string name="new_category">New Category</string>
+    <string name="edit_category">Edit Category</string>
+    <string name="category_name">Category Name</string>
+    <string name="select_icon">Select Icon</string>
+    <string name="more_icons">More Icons</string>
+    <string name="delete_category">Delete Category</string>
+    <string name="delete_category_confirm">Delete category "%s"? All fences in this category will be moved to "Uncategorized".</string>
+    <string name="create_failed">Creation failed</string>
+    <string name="update_failed">Update failed</string>
+    <string name="delete_failed">Delete failed</string>
+
+    <!-- Home Screen -->
+    <string name="current_status">Current Status</string>
+    <string name="currently_inside">Currently inside %s</string>
+    <string name="monitoring_active">Live monitoring active…</string>
+    <string name="not_inside_any_fence">Not inside any fence</string>
+    <string name="today_enter">Today Enter</string>
+    <string name="today_exit">Today Exit</string>
+    <string name="monthly_top_fences">Top 3 Fences by Monthly Stay Duration</string>
+    <string name="view_statistics">View Statistics</string>
+    <string name="no_data">No data</string>
+    <string name="duration_hours_minutes" formatted="false">%dh %dm</string>
+    <string name="duration_minutes">%d min</string>
+    <string name="duration_less_than_minute">&lt; 1 minute</string>
+    <!-- Advanced Settings -->
+    <string name="recommended">Recommended</string>
+    <string name="default_config_stationary">Stationary: %dm (small fences: 10–30m)</string>
+    <string name="default_config_buffer">Boundary: %dm (small fences: 3–20m)</string>
+    <string name="default_config_drift">Drift Filter: %dm (filters low precision GPS)</string>
+    <string name="stationary_threshold_desc">Distance threshold for stationary detection. Larger = easier to detect stationary, more power saving. Small fences: 30–50m.</string>
+    <string name="boundary_buffer_desc">Fence boundary expansion area. Small fences: 3–20m. Values over 100m may cause inside/outside misunderstanding.</string>
+    <string name="drift_threshold_desc">GPS precision filter. Points with worse precision than this will be discarded to avoid misunderstanding. Small fences: 15–30m.</string>
+
+    <!-- Data Management Screen -->
+    <string name="reading_file">Reading file…</string>
+    <string name="importing_data">Importing data…</string>
+    <string name="import_success">Import successful!
+
+Fences: %1$d
+Events: %2$d
+Stays: %3$d
+
+Data imported successfully, ready to use.</string>
+    <string name="import_failed">Import failed: %s</string>
+    <string name="file_read_error">Cannot read file</string>
+    <string name="preparing_export">Preparing export…</string>
+    <string name="export_success">Export successful!
+
+Fences: %1$d
+Events: %2$d
+Stays: %3$d
+Daily Stats: %4$d
+
+File location: %5$s</string>
+    <string name="export_failed">Export failed: %s</string>
+    <string name="no_fences_to_share">No fences to share</string>
+    <string name="no_fences_to_export">No fences to export</string>
+    <string name="generating_fence_template">Generating fence template…</string>
+    <string name="share_fence_title">TrackMaster Fence Share</string>
+    <string name="share_fence">Share Fence</string>
+    <string name="import_fence">Import Fence</string>
+    <string name="import_short">Import</string>
+    <string name="share_short">Share</string>
+    <string name="select_fences_to_share">Select fences to share</string>
+    <string name="deselect_all">Deselect All</string>
+    <string name="select_all">Select All</string>
+    <string name="fence_share_ready">Fence share file generated, %d fences</string>
+    <string name="fence_generate_error">Failed to generate fence file</string>
+    <string name="share_failed">Share failed: %s</string>
+    <string name="cleaned_old_logs">Cleaned %d old logs</string>
+    <string name="storage_status">Storage Status</string>
+    <string name="fence_quantity">Fence Quantity</string>
+    <string name="event_record">Event Record</string>
+    <string name="stay_record">Stay Record</string>
+    <string name="database_size">Database Size</string>
+    <string name="export_import">Export &amp; Import</string>
+    <string name="settings_button">Settings</string>
+    <string name="cleanup_now">Clean Old Logs Now</string>
+    <string name="cleanup_reminder">Logs are enter/exit fence event records, cleanup does not affect fences and statistics</string>
+    <string name="auto_cleanup_dialog_title">Auto Cleanup Settings</string>
+    <string name="auto_cleanup_dialog_desc">Auto cleanup events older than following days:</string>
+    <string name="auto_cleanup_section">Auto Cleanup</string>
+    <string name="auto_cleanup_desc">Automatically delete event logs older than selected days</string>
+    <string name="days_option">%d days</string>
+    <string name="delete_section">Delete History Data</string>
+    <string name="delete_data_desc">Delete event and stay records (keep fences and daily stats)</string>
+    <string name="delete_data_button">Delete History Data</string>
+    <string name="exported_files_section">Exported Files (tap filename to import)</string>
+    <string name="no_exported_files">No exported files</string>
+    <string name="click_to_import">Tap to import</string>
+    <string name="delete_options_title">Delete Options</string>
+    <string name="delete_warning">Warning: Delete operation cannot be undone!</string>
+    <string name="delete_all_data">Delete all history data</string>
+    <string name="delete_before_date">Delete data older than 1 month</string>
+    <string name="confirm_delete_button">Confirm Delete</string>
+    <string name="operation_complete">Operation Complete</string>
+    <string name="delete_success_records">Delete successful! %d records deleted</string>
+    <string name="export_all">Export All</string>
+    <string name="import_action">Import</string>
+    <string name="keep_recent_days">Keep recent %d days</string>
+
+    <!-- Misc -->
+    <string name="start_tracking">Start Tracking</string>
+    <string name="pause_tracking">Pause</string>
+    <string name="resume_tracking">Resume</string>
+    <string name="stop_tracking">Stop</string>
+    <string name="total_distance">Total Distance</string>
+    <string name="duration">Duration</string>
+    <string name="avg_speed">Avg Speed</string>
+    <string name="current_speed">Current Speed</string>
+    <string name="accuracy">Accuracy</string>
+    <string name="tracking">Tracking</string>
+    <string name="geofence">Geofence</string>
+    <string name="history">History</string>
+    <string name="statistics">Statistics</string>
+    <string name="location_permission_required">Location permission required</string>
+    <string name="background_location_permission_required">Background location permission required</string>
+    <string name="notification_permission_required">Notification permission required</string>
+    <string name="permission_denied">Permission denied</string>
+    <string name="disable_battery_optimization">Disable battery optimization to ensure background operation</string>
+    <string name="power_mode_high_performance">High Performance</string>
+    <string name="power_mode_balanced">Balanced</string>
+    <string name="power_mode_power_save">Power Save</string>
+    <string name="low_battery_warning">Low Battery Warning</string>
+    <string name="low_battery_message">Battery too low, recommended to pause tracking</string>
+    <string name="motion_state_stationary">Stationary</string>
+    <string name="motion_state_walking">Walking</string>
+    <string name="motion_state_riding">Riding</string>
+    <string name="motion_state_driving">Driving</string>
+    <string name="enter_geofence">Enter fence</string>
+    <string name="exit_geofence">Exit fence</string>
+
+    <!-- Stats Export Import Screen -->
+    <string name="import_failure">Import failed: %s</string>
+    <string name="export_failure">Export failed: %s</string>
+    <string name="share_stay_records">Share Stay Records</string>
+    <string name="export_file_description">TrackMaster data file containing stay records and statistics</string>
+    <string name="share">Share</string>
+    <string name="stay_record_import_export">Stay Record Import/Export</string>
+    <string name="current_data_statistics">Current Data Statistics</string>
+    <string name="stay_record_count">%d records</string>
+    <string name="daily_summary">Daily Summary</string>
+    <string name="daily_summary_count">%d summaries</string>
+    <string name="event_log">Event Log</string>
+    <string name="event_log_count">%d logs</string>
+    <string name="about_data_export">About Data Export</string>
+    <string name="about_export_desc">Exported file contains all stay record data and event logs. You can share this file or save it for backup.</string>
+    <string name="exporting">Exporting…</string>
+    <string name="export_stay_records">Export Stay Records</string>
+    <string name="importing">Importing…</string>
+    <string name="import_stay_records">Import Stay Records</string>
+    <string name="merge_rules">Merge Rules</string>
+    <string name="merge_rules_desc">Imported data will be merged with existing data. Same data (by ID) will not be overwritten.</string>
+    <string name="operation_success">Operation Successful</string>
+    <string name="operation_failed">Operation Failed</string>
+
+    <!-- History Screen -->
+    <string name="history_title">History Records</string>
+    <string name="history_records_count">%d records</string>
+    <string name="filter_all">All</string>
+    <string name="filter_enter">Enter</string>
+    <string name="filter_exit">Exit</string>
+    <string name="no_history_records">No history records</string>
+    <string name="enter_event">Enter</string>
+    <string name="exit_event">Exit</string>
+    <string name="accuracy_label">Accuracy: %dm</string>
+
+    <!-- Map Screen -->
+    <string name="fence_list_title">Fence List (%d)</string>
+    <string name="hit">Hit</string>
+    <string name="fence_hint">💡 Tip: Fences support nesting (parent-child), do not support intersection. Two intersecting fences cannot calculate parent-child relationships.</string>
+    <string name="circle_meters">Circle %dm</string>
+    <string name="polygon_vertices">Polygon %d vertices</string>
+
+    <!-- Fence Export/Import -->
+    <string name="import_from_file">Import fence from file</string>
+    <string name="select_fence_file">Select a previously shared fence file (.json)</string>
+    <string name="select_file">Select File</string>
+    <string name="import_instructions">Import Instructions</string>
+    <string name="import_instruction_1">• Imported fences will add new UUIDs, will not overwrite existing fences</string>
+    <string name="import_instruction_2">• Imported fences will be added to "Uncategorized"</string>
+    <string name="import_instruction_3">• Stay records will not be imported</string>
+
+    <!-- Categorized Fence List -->
+    <string name="select_parent_for">Select parent fence for \"%s\":</string>
+    <string name="top_level_no_parent">Top Level (No Parent)</string>
+    <string name="set_parent_fence">Set Parent Fence</string>
+
+    <!-- Home Screen -->
+    <string name="nav_home">Home</string>
+    <string name="nav_map">Map</string>
+    <string name="nav_history">History</string>
+    <string name="nav_settings">Settings</string>
+    <string name="trackmaster">TrackMaster</string>
+    <string name="times">times</string>
+
+    <!-- Statistics Screen -->
+    <string name="select_date">Select Date</string>
+    <string name="select_month">Select Month</string>
+    <string name="select_year">Select Year</string>
+    <string name="year_label">Year</string>
+    <string name="month_label">Month</string>
+    <string name="day_label">Day</string>
+    <string name="confirm_short">Confirm</string>
+    <string name="cancel_short">Cancel</string>
+    <string name="close_short">Close</string>
+    <string name="statistics_title">Statistics Visualization</string>
+    <string name="select_date_button">📅 Select Date</string>
+    <string name="no_statistics_data">No statistics data</string>
+    <string name="fence_duration">Fence Stay Duration</string>
+    <string name="total_duration">Total: %s</string>
+    <string name="collapse_short">Collapse</string>
+    <string name="expand_short">Expand</string>
+    <string name="day_dimension">Day</string>
+    <string name="month_dimension">Month</string>
+    <string name="year_dimension">Year</string>
+    <string name="duration_distribution">Duration Distribution</string>
+    <string name="duration_leaderboard">Duration Leaderboard</string>
+
+    <!-- Notifications -->
+    <string name="notification_location_checking">Location checking</string>
+    <string name="notification_location_checking_desc">Periodically checking location status...</string>
+
+    <!-- Date Formats -->
+    <string name="date_format_day">MMMM dd, yyyy</string>
+    <string name="date_format_month">MMMM yyyy</string>
+    <string name="date_format_year">yyyy</string>
 </resources>

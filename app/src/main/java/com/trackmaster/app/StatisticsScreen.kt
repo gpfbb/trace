@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.trackmaster.app.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -45,7 +47,6 @@ fun StatisticsScreen(
     onDismiss: () -> Unit,
     statisticsManager: StatisticsManager
 ) {
-    // 防双击关闭
     var dismissHandled by remember { mutableStateOf(false) }
     fun debouncedDismiss() {
         if (dismissHandled) return
@@ -72,7 +73,6 @@ fun StatisticsScreen(
     var showMonthPicker by remember { mutableStateOf(false) }
     var showYearPicker by remember { mutableStateOf(false) }
 
-    // 使用 derivedStateOf 确保 isToday 每次都基于当前时间重新计算
     val isToday by remember {
         derivedStateOf {
             val today = Calendar.getInstance()
@@ -83,12 +83,10 @@ fun StatisticsScreen(
         }
     }
 
-    // 递归展开所有节点ID
     fun flattenTreeIds(node: FenceStatisticTree): List<String> {
         return listOf(node.fenceId) + node.children.flatMap { flattenTreeIds(it) }
     }
 
-    // 树加载后默认展开所有节点
     LaunchedEffect(statisticsTree) {
         if (statisticsTree.isNotEmpty() && expandedFenceIds.isEmpty()) {
             expandedFenceIds = statisticsTree.flatMap { flattenTreeIds(it) }.toSet()
@@ -106,14 +104,10 @@ fun StatisticsScreen(
     LaunchedEffect(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
         isLoading = true
         statistics = statisticsManager.getStatistics(selectedTimeDimension, timeRange)
-        // 加载树形数据
         statisticsTree = statisticsManager.buildFenceStatisticTree(selectedTimeDimension, timeRange)
         isLoading = false
     }
 
-    // 实时更新：每秒刷新一次统计数据
-    // 每日视图：实时更新当前这一天的数据（跨午夜的活跃会话也计算在内）
-    // 每月/每年视图：每10秒自动刷新一次
     LaunchedEffect(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
         var lastUpdateTime = 0L
         while (currentCoroutineContext().isActive) {
@@ -124,8 +118,6 @@ fun StatisticsScreen(
                     selectedMonth == today.get(Calendar.MONTH) &&
                     selectedDay == today.get(Calendar.DAY_OF_MONTH)
 
-            // 每日视图且是今天：每秒更新
-            // 每月/每年视图：每10秒更新一次
             val shouldUpdate = when (selectedTimeDimension) {
                 TimeDimension.DAY -> isTodayNow
                 TimeDimension.MONTH, TimeDimension.YEAR -> now - lastUpdateTime >= 10_000
@@ -155,9 +147,9 @@ fun StatisticsScreen(
         }
     }
     
-    val dateFormat = SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault())
-    val monthFormat = SimpleDateFormat("yyyy年MM月", Locale.getDefault())
-    val yearFormat = SimpleDateFormat("yyyy年", Locale.getDefault())
+    val dateFormat = SimpleDateFormat(stringResource(R.string.date_format_day), Locale.getDefault())
+    val monthFormat = SimpleDateFormat(stringResource(R.string.date_format_month), Locale.getDefault())
+    val yearFormat = SimpleDateFormat(stringResource(R.string.date_format_year), Locale.getDefault())
     
     val calendar = Calendar.getInstance()
     calendar.set(Calendar.YEAR, selectedYear)
@@ -182,7 +174,7 @@ fun StatisticsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    "统计数据可视化",
+                    stringResource(R.string.statistics_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = primaryColor()
@@ -217,7 +209,7 @@ fun StatisticsScreen(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("📅 选择日期", fontSize = 11.sp, color = Color.White)
+                        Text(stringResource(R.string.select_date_button), fontSize = 11.sp, color = Color.White)
                     }
                 }
             }
@@ -252,7 +244,7 @@ fun StatisticsScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "暂无统计数据",
+                            stringResource(R.string.no_statistics_data),
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFFBDBDBD)
                         )
@@ -279,7 +271,7 @@ fun StatisticsScreen(
         },
         confirmButton = {
             GlassButton(onClick = onDismiss) {
-                Text("关闭", color = Color.White)
+                Text(stringResource(R.string.close_short), color = Color.White)
             }
         }
     )
@@ -348,7 +340,7 @@ fun DatePickerDialog(
     
     GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择日期", color = NeonCoral) },
+        title = { Text(stringResource(R.string.select_date), color = NeonCoral) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -358,21 +350,21 @@ fun DatePickerDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     NumberPicker(
-                        label = "年",
+                        label = stringResource(R.string.year_label),
                         value = year,
                         range = yearRange,
                         onValueChange = { year = it },
                         modifier = Modifier.weight(1f)
                     )
                     NumberPicker(
-                        label = "月",
+                        label = stringResource(R.string.month_label),
                         value = month + 1,
                         range = 1..12,
                         onValueChange = { month = it - 1 },
                         modifier = Modifier.weight(1f)
                     )
                     NumberPicker(
-                        label = "日",
+                        label = stringResource(R.string.day_label),
                         value = day,
                         range = 1..maxDay,
                         onValueChange = { day = it },
@@ -383,12 +375,12 @@ fun DatePickerDialog(
         },
         confirmButton = {
             GlassButton(onClick = { onDateSelected(year, month, day) }) {
-                Text("确定", color = Color.White)
+                Text(stringResource(R.string.confirm_short), color = Color.White)
             }
         },
         dismissButton = {
             GlassButton(onClick = onDismiss) {
-                Text("取消", color = Color.White)
+                Text(stringResource(R.string.cancel_short), color = Color.White)
             }
         }
     )
@@ -409,7 +401,7 @@ fun MonthPickerDialog(
     
     GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择月份", color = NeonCoral) },
+        title = { Text(stringResource(R.string.select_month), color = NeonCoral) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -419,14 +411,14 @@ fun MonthPickerDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     NumberPicker(
-                        label = "年",
+                        label = stringResource(R.string.year_label),
                         value = year,
                         range = yearRange,
                         onValueChange = { year = it },
                         modifier = Modifier.weight(1f)
                     )
                     NumberPicker(
-                        label = "月",
+                        label = stringResource(R.string.month_label),
                         value = month + 1,
                         range = 1..12,
                         onValueChange = { month = it - 1 },
@@ -437,12 +429,12 @@ fun MonthPickerDialog(
         },
         confirmButton = {
             GlassButton(onClick = { onMonthSelected(year, month) }) {
-                Text("确定", color = Color.White)
+                Text(stringResource(R.string.confirm_short), color = Color.White)
             }
         },
         dismissButton = {
             GlassButton(onClick = onDismiss) {
-                Text("取消", color = Color.White)
+                Text(stringResource(R.string.cancel_short), color = Color.White)
             }
         }
     )
@@ -461,13 +453,13 @@ fun YearPickerDialog(
     
     GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择年份", color = NeonCoral) },
+        title = { Text(stringResource(R.string.select_year), color = NeonCoral) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 NumberPicker(
-                    label = "年",
+                    label = stringResource(R.string.year_label),
                     value = year,
                     range = yearRange,
                     onValueChange = { year = it }
@@ -476,12 +468,12 @@ fun YearPickerDialog(
         },
         confirmButton = {
             GlassButton(onClick = { onYearSelected(year) }) {
-                Text("确定", color = Color.White)
+                Text(stringResource(R.string.confirm_short), color = Color.White)
             }
         },
         dismissButton = {
             GlassButton(onClick = onDismiss) {
-                Text("取消", color = Color.White)
+                Text(stringResource(R.string.cancel_short), color = Color.White)
             }
         }
     )
@@ -557,7 +549,6 @@ fun TimeDimensionSelector(
                 shape = RoundedCornerShape(24.dp)
             )
     ) {
-        // 滑动背景指示器 - 使用 alignment 实现平滑移动
         Box(
             modifier = Modifier
                 .fillMaxHeight()
@@ -596,9 +587,9 @@ fun TimeDimensionSelector(
                 ) {
                     Text(
                         text = when (dimension) {
-                            TimeDimension.DAY -> "日"
-                            TimeDimension.MONTH -> "月"
-                            TimeDimension.YEAR -> "年"
+                            TimeDimension.DAY -> stringResource(R.string.day_dimension)
+                            TimeDimension.MONTH -> stringResource(R.string.month_dimension)
+                            TimeDimension.YEAR -> stringResource(R.string.year_dimension)
                         },
                         color = if (selectedDimension == dimension) 
                             Color.White 
@@ -642,13 +633,13 @@ fun FenceTreeSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "围栏停留时长",
+                    stringResource(R.string.fence_duration),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = NeonCoral
                 )
                 Text(
-                    "总时长: ${statisticsManager.formatDuration(totalDuration)}",
+                    stringResource(R.string.total_duration, statisticsManager.formatDuration(totalDuration)),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFFBDBDBD)
                 )
@@ -708,11 +699,10 @@ private fun FenceTreeItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 展开/收起图标
                 if (node.children.isNotEmpty()) {
                     Icon(
                         imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = if (isExpanded) "收起" else "展开",
+                        contentDescription = if (isExpanded) stringResource(R.string.collapse_short) else stringResource(R.string.expand_short),
                         tint = NeonBlue,
                         modifier = Modifier.size(20.dp)
                     )
@@ -720,7 +710,6 @@ private fun FenceTreeItem(
                     Spacer(Modifier.width(20.dp))
                 }
 
-                // 颜色指示器
                 Box(
                     modifier = Modifier
                         .size(24.dp)
@@ -734,7 +723,6 @@ private fun FenceTreeItem(
                         )
                 )
 
-                // 名称和时长
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -774,7 +762,6 @@ private fun FenceTreeItem(
                     }
                 }
 
-                // 进度条
                 Box(
                     modifier = Modifier
                         .width(50.dp)
@@ -799,7 +786,6 @@ private fun FenceTreeItem(
             }
         }
 
-        // 子节点
         if (isExpanded && node.children.isNotEmpty()) {
             node.children.forEach { child ->
                 FenceTreeItem(
@@ -840,19 +826,18 @@ fun DurationProgressSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "停留时长分布",
+                    stringResource(R.string.duration_distribution),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = NeonCoral
                 )
                 Text(
-                    "总时长: ${statisticsManager.formatDuration(totalDuration)}",
+                    stringResource(R.string.total_duration, statisticsManager.formatDuration(totalDuration)),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFFBDBDBD)
                 )
             }
 
-            // 使用网格卡片布局
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -874,7 +859,6 @@ fun DurationProgressSection(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // 颜色指示器
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
@@ -927,7 +911,6 @@ fun DurationProgressSection(
                                 }
                             }
 
-                            // 小型进度条
                             Box(
                                 modifier = Modifier
                                     .width(60.dp)
@@ -971,7 +954,7 @@ fun LeaderboardSection(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                "停留时长排行榜",
+                stringResource(R.string.duration_leaderboard),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = NeonCoral

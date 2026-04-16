@@ -36,12 +36,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.amap.api.location.AMapLocation
+import com.trackmaster.app.R
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFencePoint
 import com.trackmaster.app.core.GeoFenceType
@@ -300,7 +302,7 @@ fun MapScreen(app: TrackMasterApplication) {
                     containerColor = NeonAmber,
                     contentColor = Color.White
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "撤回")
+                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo))
                 }
             }
 
@@ -310,7 +312,7 @@ fun MapScreen(app: TrackMasterApplication) {
                     containerColor = NeonAmber,
                     contentColor = Color.White
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "撤回")
+                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo))
                 }
             }
 
@@ -343,7 +345,7 @@ fun MapScreen(app: TrackMasterApplication) {
                         isDrawingMode || isEditingFence -> Icons.Filled.Close
                         else -> Icons.Filled.Add
                     },
-                    contentDescription = if (isDrawingMode || isEditingFence) "取消" else "绘制"
+                    contentDescription = if (isDrawingMode || isEditingFence) stringResource(R.string.cancel) else stringResource(R.string.draw)
                 )
             }
         }
@@ -410,13 +412,13 @@ fun MapScreen(app: TrackMasterApplication) {
     if (showRecalculateHint) {
         AlertDialog(
             onDismissRequest = { showRecalculateHint = false },
-            title = { Text("围栏创建成功") },
+            title = { Text(stringResource(R.string.fence_created)) },
             text = {
-                Text("建议前往「设置 → 重新计算父子关系」建立围栏的嵌套层级，统计时会自动累加子围栏的停留时长。")
+                Text(stringResource(R.string.recalculate_hint))
             },
             confirmButton = {
                 Button(onClick = { showRecalculateHint = false }) {
-                    Text("知道了")
+                    Text(stringResource(R.string.ok))
                 }
             }
         )
@@ -473,8 +475,8 @@ fun MapScreen(app: TrackMasterApplication) {
     if (showDeleteConfirm != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除围栏「${showDeleteConfirm!!.name}」吗？此操作不可恢复。") },
+            title = { Text(stringResource(R.string.confirm_delete)) },
+            text = { Text(stringResource(R.string.fence_delete_confirm, showDeleteConfirm!!.name)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -488,12 +490,12 @@ fun MapScreen(app: TrackMasterApplication) {
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Danger)
                 ) {
-                    Text("删除", color = Color.White)
+                    Text(stringResource(R.string.delete), color = Color.White)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = null }) {
-                    Text("取消")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -564,7 +566,7 @@ private fun TopStatusIsland(
             } else {
                 Icon(Icons.Filled.LocationOff, contentDescription = null, tint = Warning, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("${fences.size} 个围栏", fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.fence_count, fences.size), fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
             }
 
             Spacer(Modifier.width(16.dp))
@@ -578,20 +580,20 @@ private fun TopStatusIsland(
                 else -> Icons.Default.Map
             }
             val mapTypeDesc = when (mapType) {
-                1 -> "标准地图"
-                2 -> "卫星地图"
-                else -> "夜景地图"
+                1 -> stringResource(R.string.map_type_normal)
+                2 -> stringResource(R.string.map_type_satellite)
+                else -> stringResource(R.string.map_type_night)
             }
             Icon(
                 mapTypeIcon,
-                contentDescription = "切换地图图层($mapTypeDesc)",
+                contentDescription = stringResource(R.string.switch_map_layer, mapTypeDesc),
                 tint = NeonAmber,
                 modifier = Modifier.size(20.dp).clickable { onMapTypeChange(nextMapType) }
             )
             Spacer(Modifier.width(16.dp))
             Icon(
                 Icons.AutoMirrored.Filled.List,
-                contentDescription = "围栏列表",
+                contentDescription = stringResource(R.string.fence_list),
                 tint = Color.White,
                 modifier = Modifier.size(20.dp).clickable { onFenceListClick() }
             )
@@ -633,7 +635,7 @@ private fun DrawingToolbar(
                     FilterChip(
                         selected = fenceType == GeoFenceType.CIRCLE,
                         onClick = { if (drawingPoints.isEmpty()) onFenceTypeChange(GeoFenceType.CIRCLE) },
-                        label = { Text("圆形", fontSize = 12.sp) },
+                        label = { Text(stringResource(R.string.circle), fontSize = 12.sp) },
                         leadingIcon = { Icon(Icons.Filled.Circle, contentDescription = null, modifier = Modifier.size(14.dp)) },
                         modifier = Modifier.height(32.dp),
                         enabled = drawingPoints.isEmpty()
@@ -642,7 +644,7 @@ private fun DrawingToolbar(
                     FilterChip(
                         selected = fenceType == GeoFenceType.POLYGON,
                         onClick = { if (drawingPoints.isEmpty()) onFenceTypeChange(GeoFenceType.POLYGON) },
-                        label = { Text("多边形", fontSize = 12.sp) },
+                        label = { Text(stringResource(R.string.polygon), fontSize = 12.sp) },
                         leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null, modifier = Modifier.size(14.dp)) },
                         modifier = Modifier.height(32.dp),
                         enabled = drawingPoints.isEmpty()
@@ -651,7 +653,7 @@ private fun DrawingToolbar(
                     FilterChip(
                         selected = isPrecisionMode,
                         onClick = { onPrecisionModeChange(!isPrecisionMode) },
-                        label = { Text("精确", fontSize = 12.sp) },
+                        label = { Text(stringResource(R.string.precision), fontSize = 12.sp) },
                         leadingIcon = { Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(14.dp)) },
                         modifier = Modifier.height(32.dp)
                     )
@@ -666,7 +668,7 @@ private fun DrawingToolbar(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.Undo,
-                        contentDescription = "撤回",
+                        contentDescription = stringResource(R.string.undo),
                         tint = if (drawingPoints.isNotEmpty()) NeonAmber else Color.Gray,
                         modifier = Modifier.size(20.dp)
                     )
@@ -677,7 +679,7 @@ private fun DrawingToolbar(
                 ) {
                     Icon(
                         Icons.Filled.Close,
-                        contentDescription = "取消",
+                        contentDescription = stringResource(R.string.cancel),
                         tint = Color.Gray,
                         modifier = Modifier.size(20.dp)
                     )
@@ -692,7 +694,7 @@ private fun DrawingToolbar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 颜色选择器（可横向滚动）
-                Text("颜色:", fontSize = 10.sp, color = Color.Gray)
+                Text(stringResource(R.string.color) + ":", fontSize = 10.sp, color = Color.Gray)
                 Spacer(Modifier.width(6.dp))
                 Row(
                     modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
@@ -714,7 +716,7 @@ private fun DrawingToolbar(
                 Spacer(Modifier.width(8.dp))
 
                 // 透明度
-                Text("${(selectedAlpha * 100).toInt()}%", fontSize = 10.sp, color = Color.Gray)
+                Text(stringResource(R.string.transparency, (selectedAlpha * 100).toInt()), fontSize = 10.sp, color = Color.Gray)
                 Slider(
                     value = selectedAlpha,
                     onValueChange = onAlphaChange,
@@ -733,10 +735,10 @@ private fun DrawingToolbar(
             ) {
                 Text(
                     when (fenceType) {
-                        GeoFenceType.CIRCLE -> if (drawingPoints.isEmpty()) "点击地图选圆心" else "已选圆心，半径100m"
+                        GeoFenceType.CIRCLE -> if (drawingPoints.isEmpty()) stringResource(R.string.tap_map_for_center) else stringResource(R.string.center_selected_radius)
                         GeoFenceType.POLYGON -> {
                             val remaining = 3 - drawingPoints.size
-                            if (remaining > 0) "还需${remaining}个顶点" else "${drawingPoints.size}个顶点，已可创建"
+                            if (remaining > 0) stringResource(R.string.need_n_vertices, remaining) else stringResource(R.string.ready_to_create, drawingPoints.size)
                         }
                     },
                     fontSize = 11.sp,
@@ -754,7 +756,7 @@ private fun DrawingToolbar(
                     colors = ButtonDefaults.buttonColors(containerColor = primaryColor()),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
                 ) {
-                    Text("创建", fontSize = 13.sp)
+                    Text(stringResource(R.string.create), fontSize = 13.sp)
                 }
             }
         }
@@ -776,7 +778,7 @@ private fun EditingToolbar(
         Column {
             Row(Modifier.fillMaxWidth().padding(8.dp)) {
                 Text(
-                    "编辑「${fence.name}」- 点击地图添加顶点",
+                    stringResource(R.string.editing_fence_tap_to_add, fence.name),
                     fontSize = 12.sp,
                     color = NeonBlue,
                     modifier = Modifier.weight(1f)
@@ -784,19 +786,19 @@ private fun EditingToolbar(
                 FilterChip(
                     selected = isPrecisionMode,
                     onClick = { onPrecisionModeChange(!isPrecisionMode) },
-                    label = { Text("精确", fontSize = 11.sp) },
+                    label = { Text(stringResource(R.string.precision), fontSize = 11.sp) },
                     leadingIcon = { Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(14.dp)) },
                     modifier = Modifier.height(28.dp)
                 )
                 IconButton(onClick = onUndo) {
                     Icon(
                         Icons.AutoMirrored.Filled.Undo,
-                        contentDescription = "删除最后",
+                        contentDescription = stringResource(R.string.delete_last),
                         tint = if (editingPoints.isNotEmpty()) NeonAmber else Color.Gray
                     )
                 }
                 IconButton(onClick = onCancel) {
-                    Icon(Icons.Filled.Close, contentDescription = "取消", tint = Color.Gray)
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cancel), tint = Color.Gray)
                 }
             }
 
@@ -811,7 +813,7 @@ private fun EditingToolbar(
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Success)
                 ) {
-                    Text("保存", color = Color.White)
+                    Text(stringResource(R.string.save), color = Color.White)
                 }
             }
         }
@@ -832,19 +834,19 @@ private fun CreateFenceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("创建围栏") },
+        title = { Text(stringResource(R.string.create_fence)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("围栏名称") },
+                    label = { Text(stringResource(R.string.fence_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 when (fenceType) {
                     GeoFenceType.CIRCLE -> {
-                        Text("半径: ${radius.toInt()} 米", fontSize = 14.sp)
+                        Text(stringResource(R.string.radius_meters, radius.toInt()), fontSize = 14.sp)
                         Slider(
                             value = radius,
                             onValueChange = { radius = it },
@@ -852,19 +854,19 @@ private fun CreateFenceDialog(
                             steps = 18
                         )
                     }
-                    GeoFenceType.POLYGON -> Text("顶点: ${points.size} 个", fontSize = 14.sp, color = Color.Gray)
+                    GeoFenceType.POLYGON -> Text(stringResource(R.string.vertices_count, points.size), fontSize = 14.sp, color = Color.Gray)
                 }
                 Text(
-                    "💡 提示：围栏支持嵌套（父子关系），不支持相交。相交的两个围栏无法计算父子关系。",
+                    stringResource(R.string.fence_hint),
                     fontSize = 11.sp,
                     color = NeonBlue
                 )
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(name, color, alpha, radius) }, enabled = name.isNotBlank()) { Text("创建") }
+            Button(onClick = { onConfirm(name, color, alpha, radius) }, enabled = name.isNotBlank()) { Text(stringResource(R.string.create)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }
     )
 }
 
@@ -977,7 +979,7 @@ private fun FenceListDialog(
                         )
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            text = "围栏列表 (${visibleFences.size})",
+                            text = stringResource(R.string.fence_list_title, visibleFences.size),
                             style = MaterialTheme.typography.titleLarge,
                             color = Color.White
                         )
@@ -985,7 +987,7 @@ private fun FenceListDialog(
                     IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Filled.Close,
-                            contentDescription = "关闭",
+                            contentDescription = stringResource(R.string.close),
                             tint = Color.Gray
                         )
                     }
@@ -1006,7 +1008,7 @@ private fun FenceListDialog(
                                 modifier = Modifier.size(48.dp)
                             )
                             Spacer(Modifier.height(8.dp))
-                            Text("暂无围栏", color = Color.Gray, fontSize = 16.sp)
+                            Text(stringResource(R.string.no_fences), color = Color.Gray, fontSize = 16.sp)
                         }
                     }
                 } else {
@@ -1051,7 +1053,7 @@ private fun FenceListDialog(
                                         ) {
                                             Icon(
                                                 imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                                contentDescription = if (isExpanded) "收起" else "展开",
+                                                contentDescription = if (isExpanded) stringResource(R.string.collapse_short) else stringResource(R.string.expand_short),
                                                 tint = NeonBlue,
                                                 modifier = Modifier.size(20.dp)
                                             )
@@ -1075,8 +1077,8 @@ private fun FenceListDialog(
                                         )
                                         Text(
                                             when (fence.type) {
-                                                GeoFenceType.CIRCLE -> "圆形 ${fence.radius?.toInt() ?: 0}m"
-                                                GeoFenceType.POLYGON -> "多边形 ${fence.points?.size ?: 0}顶点"
+                                                GeoFenceType.CIRCLE -> stringResource(R.string.circle_with_radius, fence.radius?.toInt() ?: 0)
+                                                GeoFenceType.POLYGON -> stringResource(R.string.polygon_with_vertices, fence.points?.size ?: 0)
                                             },
                                             fontSize = 12.sp,
                                             color = Color.Gray
@@ -1085,7 +1087,7 @@ private fun FenceListDialog(
                                     if (matched) {
                                         Icon(
                                             imageVector = Icons.Filled.CheckCircle,
-                                            contentDescription = "已命中",
+                                            contentDescription = stringResource(R.string.hit),
                                             tint = Success,
                                             modifier = Modifier.size(18.dp)
                                         )
@@ -1093,16 +1095,16 @@ private fun FenceListDialog(
                                     if (isHighlighted) {
                                         Icon(
                                             imageVector = Icons.Filled.LocationOn,
-                                            contentDescription = "已高亮",
+                                            contentDescription = stringResource(R.string.highlighted),
                                             tint = NeonAmber,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
                                     IconButton(onClick = { onEditClick(fence) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = primaryColor(), modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.edit), tint = primaryColor(), modifier = Modifier.size(18.dp))
                                     }
                                     IconButton(onClick = { onDeleteClick(fence) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Filled.Delete, contentDescription = "删除", tint = Danger, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete), tint = Danger, modifier = Modifier.size(18.dp))
                                     }
                                 }
 
@@ -1134,18 +1136,18 @@ private fun EditFenceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("编辑围栏") },
+        title = { Text(stringResource(R.string.edit_fence)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("围栏名称") },
+                    label = { Text(stringResource(R.string.fence_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Text("颜色", fontSize = 12.sp, color = Color.Gray)
+                Text(stringResource(R.string.color), fontSize = 12.sp, color = Color.Gray)
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -1162,7 +1164,7 @@ private fun EditFenceDialog(
                     }
                 }
 
-                Text("透明度: ${(alpha * 100).toInt()}%", fontSize = 12.sp, color = Color.Gray)
+                Text(stringResource(R.string.transparency, (alpha * 100).toInt()), fontSize = 12.sp, color = Color.Gray)
                 Slider(
                     value = alpha,
                     onValueChange = { alpha = it },
@@ -1172,7 +1174,7 @@ private fun EditFenceDialog(
                 )
 
                 if (fence.type == GeoFenceType.CIRCLE) {
-                    Text("半径: ${radius.toInt()} 米", fontSize = 12.sp, color = Color.Gray)
+                    Text(stringResource(R.string.radius_meters, radius.toInt()), fontSize = 12.sp, color = Color.Gray)
                     Slider(
                         value = radius,
                         onValueChange = { radius = it },
@@ -1182,7 +1184,7 @@ private fun EditFenceDialog(
                     )
                 }
 
-                Text("点击「在地图上编辑」可在地图上添加或删除顶点", fontSize = 11.sp, color = NeonBlue)
+                Text(stringResource(R.string.edit_on_map_hint), fontSize = 11.sp, color = NeonBlue)
             }
         },
         confirmButton = {
@@ -1190,12 +1192,12 @@ private fun EditFenceDialog(
                 onClick = {
                     onConfirm(fence.copy(name = name, color = color, alpha = alpha, radius = if (fence.type == GeoFenceType.CIRCLE) radius else fence.radius))
                 }
-            ) { Text("在地图上编辑") }
+            ) { Text(stringResource(R.string.edit_on_map)) }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onDelete) { Text("删除", color = Danger) }
-                TextButton(onClick = onDismiss) { Text("取消") }
+                TextButton(onClick = onDelete) { Text(stringResource(R.string.delete), color = Danger) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
             }
         }
     )

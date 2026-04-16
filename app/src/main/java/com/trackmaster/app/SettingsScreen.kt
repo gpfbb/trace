@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +54,7 @@ fun SettingsPage(
     var stationaryThreshold by remember { mutableStateOf(prefs.stationaryThreshold) }
     var boundaryBuffer by remember { mutableStateOf(prefs.boundaryBuffer) }
     var driftThreshold by remember { mutableStateOf(prefs.driftThreshold) }
+    var recalculateIsSuccess by remember { mutableStateOf(false) }
 
 
     LaunchedEffect(Unit) {
@@ -91,13 +93,13 @@ fun SettingsPage(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = "设置",
+                        contentDescription = stringResource(R.string.settings),
                         tint = primaryColor(),
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        "应用设置",
+                        stringResource(R.string.app_settings),
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp,
                         color = primaryColor()
@@ -155,15 +157,15 @@ fun SettingsPage(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Map,
-                        contentDescription = "地图服务",
+                        contentDescription = stringResource(R.string.map_service),
                         tint = primaryColor(),
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("地图服务", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFFE0E0E0))
+                        Text(stringResource(R.string.map_service), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFFE0E0E0))
                         Text(
-                            if (prefs.mapProvider == MapProvider.GOOGLE) "Google Maps（全球精度）" else "高德地图（国内精度）",
+                            if (prefs.mapProvider == MapProvider.GOOGLE) stringResource(R.string.google_card_label) else stringResource(R.string.amap_card_label),
                             fontSize = 13.sp, color = Color(0xFFBDBDBD)
                         )
                     }
@@ -179,23 +181,23 @@ fun SettingsPage(
             if (showMapProviderPicker) {
                 AlertDialog(
                     onDismissRequest = { showMapProviderPicker = false },
-                    title = { Text("选择地图服务") },
+                    title = { Text(stringResource(R.string.map_provider_selector)) },
                     text = {
                         Column {
                             Text(
-                                "高德地图：国内精度高，适合国内使用",
+                                stringResource(R.string.amap_recommendation_desc),
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                             HorizontalDivider()
                             Text(
-                                "Google Maps：全球精度，需要 Google Play 服务",
+                                stringResource(R.string.google_recommendation_desc),
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "⚠️ 切换后请完全退出应用（清后台），重新打开才能生效",
+                                stringResource(R.string.map_switch_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NeonAmber
                             )
@@ -206,7 +208,7 @@ fun SettingsPage(
                             prefs.mapProvider = MapProvider.GOOGLE
                             showMapProviderPicker = false
                         }) {
-                            Text("Google Maps")
+                            Text(stringResource(R.string.google_card_label))
                         }
                     },
                     dismissButton = {
@@ -214,7 +216,7 @@ fun SettingsPage(
                             prefs.mapProvider = MapProvider.AMAP
                             showMapProviderPicker = false
                         }) {
-                            Text("高德地图")
+                            Text(stringResource(R.string.amap_card_label))
                         }
                     }
                 )
@@ -238,14 +240,14 @@ fun SettingsPage(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Palette,
-                            contentDescription = "主题",
+                            contentDescription = stringResource(R.string.theme),
                             tint = ThemeManager.getPrimaryColor(),
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "主题",
+                                stringResource(R.string.theme),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 color = Color(0xFFE0E0E0)
@@ -271,8 +273,8 @@ fun SettingsPage(
             if (onOpenDataImportExport != null) {
                 SettingsMenuCard(
                     icon = Icons.Default.Folder,
-                    title = "数据导入导出",
-                    description = "围栏与统计数据的导入导出",
+                    title = stringResource(R.string.data_import_export),
+                    description = stringResource(R.string.data_import_export_desc),
                     tint = primaryColor(),
                     onClick = onOpenDataImportExport
                 )
@@ -285,8 +287,8 @@ fun SettingsPage(
 
             SettingsMenuCard(
                 icon = Icons.Default.AccountTree,
-                title = "重新计算父子关系",
-                description = "根据几何位置自动判断围栏包含关系",
+                title = stringResource(R.string.recalculate_relationships),
+                description = stringResource(R.string.recalculate_desc),
                 tint = NeonBlue,
                 onClick = { showRecalculateDialog = true }
             )
@@ -294,121 +296,115 @@ fun SettingsPage(
             if (showRecalculateDialog) {
                 AlertDialog(
                     onDismissRequest = { showRecalculateDialog = false },
-                    title = { Text("重新计算父子关系") },
+                    title = { Text(stringResource(R.string.recalculate_title)) },
                     text = {
                         Column {
-                            Text("这将根据几何位置自动判断围栏的父子包含关系，确定继续？")
+                            Text(stringResource(R.string.recalculate_confirm))
                             if (recalculateMessage != null) {
                                 Spacer(Modifier.height(8.dp))
                                 Text(
                                     recalculateMessage!!,
-                                    color = if (recalculateMessage!!.startsWith("重新计算完成")) Success else Danger,
+                                    color = if (recalculateIsSuccess) Success else Danger,
                                     fontSize = 14.sp
                                 )
                             }
                         }
                     },
                     confirmButton = {
-                        val isSuccess = recalculateMessage?.startsWith("重新计算完成") == true
+                        // Pre-compute composable string values in composable scope (before onClick lambda)
+                        val intersectionWarningTemplate = stringResource(R.string.intersection_warning, 0)
+                        val successTemplate = stringResource(R.string.recalculate_success, 0)
+                        val errorTemplate = stringResource(R.string.recalculate_error, "")
+                        val okLabel = stringResource(R.string.ok)
+                        val confirmLabel = stringResource(R.string.confirm)
                         TextButton(
                             onClick = {
-                                if (isSuccess) {
+                                if (recalculateIsSuccess) {
                                     showRecalculateDialog = false
                                     recalculateMessage = null
                                 } else {
-                                    try {
-                                        app.fenceTreeManager.clearAll()
-                                        val fences = app.geoFences
-                                        val coreFences = fences.mapNotNull { fence ->
-                                            val type = try {
-                                                com.trackmaster.app.core.GeoFenceType.valueOf(fence.type.name)
-                                            } catch (_: Exception) { null }
-                                            if (type != null) {
-                                                // 计算中心点：圆形用center，多边形用重心
-                                                val centerPoint: com.trackmaster.app.core.GeoPoint? = when (type) {
-                                                    com.trackmaster.app.core.GeoFenceType.CIRCLE -> fence.center?.let {
-                                                        com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
-                                                    }
-                                                    com.trackmaster.app.core.GeoFenceType.POLYGON -> {
-                                                        // 计算多边形重心
-                                                        val pts = fence.points
-                                                        if (pts != null && pts.size >= 3) {
-                                                            var latSum = 0.0
-                                                            var lonSum = 0.0
-                                                            for (p in pts) {
-                                                                latSum += p.latitude
-                                                                lonSum += p.longitude
-                                                            }
-                                                            com.trackmaster.app.core.GeoPoint(
-                                                                latSum / pts.size,
-                                                                lonSum / pts.size
-                                                            )
-                                                        } else null
-                                                    }
+                                    app.fenceTreeManager.clearAll()
+                                    val fences = app.geoFences
+                                    val coreFences = fences.mapNotNull { fence ->
+                                        val type = try {
+                                            com.trackmaster.app.core.GeoFenceType.valueOf(fence.type.name)
+                                        } catch (_: Exception) { null }
+                                        if (type != null) {
+                                            // 计算中心点：圆形用center，多边形用重心
+                                            val centerPoint: com.trackmaster.app.core.GeoPoint? = when (type) {
+                                                com.trackmaster.app.core.GeoFenceType.CIRCLE -> fence.center?.let {
+                                                    com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
                                                 }
-                                                com.trackmaster.app.core.Geofence(
-                                                    id = fence.id,
-                                                    name = fence.name,
-                                                    type = type,
-                                                    polygon = fence.points?.map {
-                                                        com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
-                                                    } ?: emptyList(),
-                                                    center = centerPoint,
-                                                    radius = fence.radius?.toDouble()
-                                                )
-                                            } else null
-                                        }
-
-                                        // 第一步：检测围栏相交
-                                        val intersections = GeoMath.detectFenceIntersections(coreFences)
-                                        android.util.Log.d("SettingsPage", "相交检测完成，发现 ${intersections.size} 对相交")
-                                        if (intersections.isNotEmpty()) {
-                                            val msg = buildString {
-                                                appendLine("⚠️ 发现 ${intersections.size} 对相交的围栏，无法计算父子关系：")
-                                                intersections.take(10).forEach { pair ->
-                                                    appendLine("  • ${pair.description}")
-                                                }
-                                                if (intersections.size > 10) {
-                                                    appendLine("  • ...还有 ${intersections.size - 10} 对")
+                                                com.trackmaster.app.core.GeoFenceType.POLYGON -> {
+                                                    // 计算多边形重心
+                                                    val pts = fence.points
+                                                    if (pts != null && pts.size >= 3) {
+                                                        var latSum = 0.0
+                                                        var lonSum = 0.0
+                                                        for (p in pts) {
+                                                            latSum += p.latitude
+                                                            lonSum += p.longitude
+                                                        }
+                                                        com.trackmaster.app.core.GeoPoint(
+                                                            latSum / pts.size,
+                                                            lonSum / pts.size
+                                                        )
+                                                    } else null
                                                 }
                                             }
-                                            recalculateMessage = msg
-                                            return@TextButton
-                                        }
-
-                                        // 第二步：检测通过，执行父子关系计算
-                                        app.fenceTreeManager.clearAll()
-                                        var relationshipCount = 0
-                                        android.util.Log.d("SettingsPage", "开始计算父子关系，coreFences数量: ${coreFences.size}")
-                                        for (fenceA in coreFences) {
-                                            for (fenceB in coreFences) {
-                                                if (fenceA.id == fenceB.id) continue
-                                                val bInA = GeoMath.isFenceContainedByFence(fenceB, fenceA)
-                                                val aInB = GeoMath.isFenceContainedByFence(fenceA, fenceB)
-                                                android.util.Log.d("SettingsPage", "检查 ${fenceB.name} in ${fenceA.name}: $bInA, 反向: $aInB")
-                                                if (bInA) {
-                                                    if (!aInB) {
-                                                        app.fenceTreeManager.setParent(fenceB.id, fenceA.id)
-                                                        relationshipCount++
-                                                        android.util.Log.d("SettingsPage", "设置父子关系: ${fenceB.name} -> ${fenceA.name}")
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        android.util.Log.d("SettingsPage", "重新计算完成，建立了 $relationshipCount 对父子关系")
-                                        recalculateMessage = "重新计算完成，建立了 $relationshipCount 对父子关系"
-                                    } catch (e: Exception) {
-                                        recalculateMessage = "重新计算失败: ${e.message}"
+                                            com.trackmaster.app.core.Geofence(
+                                                id = fence.id,
+                                                name = fence.name,
+                                                type = type,
+                                                polygon = fence.points?.map {
+                                                    com.trackmaster.app.core.GeoPoint(it.latitude, it.longitude)
+                                                } ?: emptyList(),
+                                                center = centerPoint,
+                                                radius = fence.radius?.toDouble()
+                                            )
+                                        } else null
                                     }
+
+                                    // 第一步：检测围栏相交
+                                    val intersections = GeoMath.detectFenceIntersections(coreFences)
+                                    android.util.Log.d("SettingsPage", "相交检测完成，发现 ${intersections.size} 对相交")
+                                    if (intersections.isNotEmpty()) {
+                                        recalculateMessage = intersectionWarningTemplate.replace("%d", intersections.size.toString())
+                                        recalculateIsSuccess = false
+                                        return@TextButton
+                                    }
+
+                                    // 第二步：检测通过，执行父子关系计算
+                                    app.fenceTreeManager.clearAll()
+                                    var relationshipCount = 0
+                                    android.util.Log.d("SettingsPage", "开始计算父子关系，coreFences数量: ${coreFences.size}")
+                                    for (fenceA in coreFences) {
+                                        for (fenceB in coreFences) {
+                                            if (fenceA.id == fenceB.id) continue
+                                            val bInA = GeoMath.isFenceContainedByFence(fenceB, fenceA)
+                                            val aInB = GeoMath.isFenceContainedByFence(fenceA, fenceB)
+                                            android.util.Log.d("SettingsPage", "检查 ${fenceB.name} in ${fenceA.name}: $bInA, 反向: $aInB")
+                                            if (bInA) {
+                                                if (!aInB) {
+                                                    app.fenceTreeManager.setParent(fenceB.id, fenceA.id)
+                                                    relationshipCount++
+                                                    android.util.Log.d("SettingsPage", "设置父子关系: ${fenceB.name} -> ${fenceA.name}")
+                                                }
+                                            }
+                                        }
+                                    }
+                                    android.util.Log.d("SettingsPage", "重新计算完成，建立了 $relationshipCount 对父子关系")
+                                    recalculateMessage = successTemplate.replace("%d", relationshipCount.toString())
+                                    recalculateIsSuccess = true
                                 }
                             }
                         ) {
-                            Text(if (isSuccess) "知道了" else "确定", color = Success)
+                            Text(if (recalculateIsSuccess) okLabel else confirmLabel, color = Success)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showRecalculateDialog = false }) {
-                            Text("取消", color = Color.Gray)
+                            Text(stringResource(R.string.cancel), color = Color.Gray)
                         }
                     }
                 )
@@ -433,27 +429,27 @@ fun SettingsPage(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Tune,
-                            contentDescription = "高级设置",
+                            contentDescription = stringResource(R.string.advanced_settings),
                             tint = primaryColor(),
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "高级设置",
+                                stringResource(R.string.advanced_settings),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 color = Color(0xFFE0E0E0)
                             )
                             Text(
-                                "调整定位算法参数",
+                                stringResource(R.string.advanced_settings_desc),
                                 fontSize = 13.sp,
                                 color = Color(0xFFBDBDBD)
                             )
                         }
                         Icon(
                             imageVector = if (showAdvancedSettings) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (showAdvancedSettings) "收起" else "展开",
+                            contentDescription = if (showAdvancedSettings) stringResource(R.string.collapse) else stringResource(R.string.expand),
                             tint = Color(0xFFBDBDBD),
                             modifier = Modifier.size(28.dp)
                         )
@@ -571,12 +567,12 @@ fun SettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Settings,
-                    contentDescription = "设置",
+                    contentDescription = stringResource(R.string.settings),
                     tint = primaryColor(),
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("应用设置", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = primaryColor())
+                Text(stringResource(R.string.app_settings), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = primaryColor())
             }
         },
         text = {
@@ -588,7 +584,7 @@ fun SettingsScreen(
         },
         confirmButton = {
             GlassButton(onClick = onDismiss) {
-                Text("关闭", color = Color.White)
+                Text(stringResource(R.string.close), color = Color.White)
             }
         }
     )
@@ -617,15 +613,15 @@ fun PermissionSectionContent(
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            "权限管理",
+            stringResource(R.string.permission_management),
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
             color = primaryColor()
         )
 
         PermissionItem(
-            title = "位置权限",
-            description = "获取用户位置信息以监测地理围栏",
+            title = stringResource(R.string.location_permission),
+            description = stringResource(R.string.location_permission_desc),
             isGranted = permissionStatus.hasLocationPermission,
             onGrantClick = {
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -636,8 +632,8 @@ fun PermissionSectionContent(
         )
 
         PermissionItem(
-            title = "后台定位权限",
-            description = "在应用后台时仍能监测位置",
+            title = stringResource(R.string.background_location_permission),
+            description = stringResource(R.string.background_location_permission_desc),
             isGranted = permissionStatus.hasBackgroundLocationPermission,
             onGrantClick = {
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -648,8 +644,8 @@ fun PermissionSectionContent(
         )
 
         PermissionItem(
-            title = "电池优化白名单",
-            description = "防止后台服务被系统杀死",
+            title = stringResource(R.string.battery_optimization),
+            description = stringResource(R.string.battery_optimization_desc),
             isGranted = permissionStatus.isIgnoringBatteryOptimizations,
             onGrantClick = {
                 permissionManager.getBatteryOptimizationIntent()?.let { intent ->
@@ -674,7 +670,7 @@ fun PermissionSectionContent(
             ) {
                 Box(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "⚠️ 部分权限未授予，地理围栏功能可能无法正常工作。请点击上述按钮授予必要权限。",
+                        stringResource(R.string.permission_warning),
                         fontSize = 13.sp,
                         color = Color(0xFFFFCDD2)
                     )
@@ -725,13 +721,13 @@ fun PermissionItem(
             if (isGranted) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "已授予",
+                    contentDescription = stringResource(R.string.granted),
                     tint = Success,
                     modifier = Modifier.size(28.dp)
                 )
             } else {
                 GlassButton(onClick = onGrantClick) {
-                    Text("去设置", color = Color.White)
+                    Text(stringResource(R.string.go_to_settings), color = Color.White)
                 }
             }
         }
@@ -745,22 +741,22 @@ fun LocationModeSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            "定位模式",
+            stringResource(R.string.location_mode),
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
             color = primaryColor()
         )
 
         LocationModeItem(
-            title = "省电模式",
-            description = "超低功耗，适合睡觉/长时间静止。静止1分钟起2分钟/次，5分钟起8分钟/次，1小时以上仅30分钟/次",
+            title = stringResource(R.string.power_save_mode),
+            description = stringResource(R.string.power_save_desc),
             isSelected = selectedMode == PowerMode.POWERSAVE,
             onClick = { onModeSelected(PowerMode.POWERSAVE) }
         )
 
         LocationModeItem(
-            title = "均衡模式",
-            description = "智能平衡：静止1分钟/次起，2分钟降至3分钟/次，5分钟降至8分钟/次，10分钟以上10分钟/次",
+            title = stringResource(R.string.balanced_mode),
+            description = stringResource(R.string.balanced_desc),
             isSelected = selectedMode == PowerMode.BALANCED,
             onClick = { onModeSelected(PowerMode.BALANCED) }
         )
@@ -823,16 +819,13 @@ fun LocationModeItem(
 fun InfoSection() {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "使用说明",
+            stringResource(R.string.usage_instructions),
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
             color = primaryColor()
         )
         Text(
-            "1. 请授予所有必要权限以确保功能正常运行\n" +
-                    "2. 添加至电池优化白名单可防止后台服务被系统杀死\n" +
-                    "3. 可根据实际需求选择合适的定位模式\n" +
-                    "4. 省电模式适合长时间使用，性能模式适合需要高精确度的场景",
+            "1. ${stringResource(R.string.usage_tip_1)}\n2. ${stringResource(R.string.usage_tip_2)}\n3. ${stringResource(R.string.usage_tip_3)}\n4. ${stringResource(R.string.usage_tip_4)}",
             fontSize = 13.sp,
             color = Color(0xFFBDBDBD),
             lineHeight = 18.sp
@@ -863,13 +856,13 @@ fun AdvancedSettingsSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Star,
-                        contentDescription = "推荐",
+                        contentDescription = stringResource(R.string.recommended),
                         tint = Color(0xFF81C784),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "推荐默认配置",
+                        stringResource(R.string.recommended_defaults),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         color = Color(0xFF81C784)
@@ -877,9 +870,7 @@ fun AdvancedSettingsSection(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "• 静止判定: 20m (小围栏推荐10-30m)\n" +
-                            "• 边界缓冲: 10m (小围栏推荐3-20m)\n" +
-                            "• 漂移检测: 30m (过滤低精度GPS点)",
+                    "• ${stringResource(R.string.default_config_stationary, 20)}\n• ${stringResource(R.string.default_config_buffer, 10)}\n• ${stringResource(R.string.default_config_drift, 30)}",
                     fontSize = 12.sp,
                     color = Color(0xFFC8E6C9),
                     lineHeight = 18.sp
@@ -896,7 +887,7 @@ fun AdvancedSettingsSection(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("恢复默认设置", color = Color.White)
+            Text(stringResource(R.string.reset_defaults), color = Color.White)
         }
 
         // 静止判定阈值
@@ -906,7 +897,7 @@ fun AdvancedSettingsSection(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    "静止判定阈值",
+                    stringResource(R.string.stationary_threshold),
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
                     color = Color(0xFFE0E0E0)
@@ -930,7 +921,7 @@ fun AdvancedSettingsSection(
                 )
             )
             Text(
-                "判定为静止的距离阈值。值越大越容易判定为静止，越省电。小围栏建议30-50米。",
+                stringResource(R.string.stationary_threshold_desc),
                 fontSize = 11.sp,
                 color = Color(0xFF9E9E9E)
             )
@@ -943,7 +934,7 @@ fun AdvancedSettingsSection(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    "边界缓冲距离",
+                    stringResource(R.string.boundary_buffer),
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
                     color = Color(0xFFE0E0E0)
@@ -967,7 +958,7 @@ fun AdvancedSettingsSection(
                 )
             )
             Text(
-                "围栏边界扩展区域。小围栏建议3-20米，过大(如100m+)会导致室内外判断失误。",
+                stringResource(R.string.boundary_buffer_desc),
                 fontSize = 11.sp,
                 color = Color(0xFF9E9E9E)
             )
@@ -980,7 +971,7 @@ fun AdvancedSettingsSection(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    "漂移检测阈值",
+                    stringResource(R.string.drift_threshold),
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
                     color = Color(0xFFE0E0E0)
@@ -1004,7 +995,7 @@ fun AdvancedSettingsSection(
                 )
             )
             Text(
-                "GPS精度过滤阈值。定位点精度超过此值会被丢弃，防止误判。小围栏建议15-30米。",
+                stringResource(R.string.drift_threshold_desc),
                 fontSize = 11.sp,
                 color = Color(0xFF9E9E9E)
             )

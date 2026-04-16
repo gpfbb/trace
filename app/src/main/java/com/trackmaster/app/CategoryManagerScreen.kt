@@ -15,7 +15,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
+import com.trackmaster.app.R
 import com.trackmaster.app.model.Category
 import kotlinx.coroutines.launch
 
@@ -26,27 +28,30 @@ fun CategoryManagerScreen(
     val context = LocalContext.current
     val app = context.applicationContext as TrackMasterApplication
     val scope = rememberCoroutineScope()
-    
+
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf<Category?>(null) }
     var showDeleteDialog by remember { mutableStateOf<Category?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    
+
+    val createFailedMsg = stringResource(R.string.create_failed)
+    val updateFailedMsg = stringResource(R.string.update_failed)
+    val deleteFailedMsg = stringResource(R.string.delete_failed)
+
     fun formatDuration(seconds: Long): String {
         val hours = seconds / 3600
         val minutes = (seconds % 3600) / 60
         return String.format("%02d:%02d", hours, minutes)
     }
-    
+
     suspend fun loadCategories() {
         categories = app.categoryManager.getAllCategories()
     }
-    
+
     LaunchedEffect(Unit) {
         loadCategories()
     }
-    
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -57,7 +62,7 @@ fun CategoryManagerScreen(
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("分类管理", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text(stringResource(R.string.category_management), fontWeight = FontWeight.Bold, fontSize = 20.sp)
             }
         },
         text = {
@@ -88,7 +93,7 @@ fun CategoryManagerScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "暂无分类，点击下方按钮创建",
+                            stringResource(R.string.no_categories_hint),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center
@@ -116,10 +121,10 @@ fun CategoryManagerScreen(
                 Button(onClick = { showCreateDialog = true }) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("新建分类")
+                    Text(stringResource(R.string.new_category))
                 }
                 Button(onClick = onDismiss) {
-                    Text("关闭")
+                    Text(stringResource(R.string.close))
                 }
             }
         }
@@ -137,7 +142,7 @@ fun CategoryManagerScreen(
                         showCreateDialog = false
                         errorMessage = null
                     } else {
-                        errorMessage = result.exceptionOrNull()?.message ?: "创建失败"
+                        errorMessage = result.exceptionOrNull()?.message ?: createFailedMsg
                     }
                 }
             }
@@ -157,7 +162,7 @@ fun CategoryManagerScreen(
                         showEditDialog = null
                         errorMessage = null
                     } else {
-                        errorMessage = result.exceptionOrNull()?.message ?: "更新失败"
+                        errorMessage = result.exceptionOrNull()?.message ?: updateFailedMsg
                     }
                 }
             }
@@ -176,20 +181,22 @@ fun CategoryManagerScreen(
                         showDeleteDialog = null
                         errorMessage = null
                     } else {
-                        errorMessage = result.exceptionOrNull()?.message ?: "删除失败"
+                        errorMessage = result.exceptionOrNull()?.message ?: deleteFailedMsg
                     }
                 }
             }
         )
     }
 }
-
 @Composable
 fun CategoryItem(
     category: Category,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val editLabel = stringResource(R.string.edit)
+    val deleteLabel = stringResource(R.string.delete)
+    
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -219,16 +226,15 @@ fun CategoryItem(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "编辑")
+                    Icon(Icons.Default.Edit, contentDescription = editLabel)
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "删除")
+                    Icon(Icons.Default.Delete, contentDescription = deleteLabel)
                 }
             }
         }
     }
 }
-
 @Composable
 fun CreateEditCategoryDialog(
     category: Category?,
@@ -239,11 +245,11 @@ fun CreateEditCategoryDialog(
     var selectedIcon by remember { mutableStateOf(category?.icon) }
     var showIconPicker by remember { mutableStateOf(false) }
     
+    val dialogTitle = if (category == null) stringResource(R.string.new_category) else stringResource(R.string.edit_category)
+    
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(if (category == null) "新建分类" else "编辑分类")
-        },
+        title = { Text(dialogTitle) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -251,12 +257,12 @@ fun CreateEditCategoryDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("分类名称") },
+                    label = { Text(stringResource(R.string.category_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 
-                Text("选择图标", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.select_icon), style = MaterialTheme.typography.labelMedium)
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -282,7 +288,7 @@ fun CreateEditCategoryDialog(
                 }
                 
                 TextButton(onClick = { showIconPicker = true }) {
-                    Text("更多图标")
+                    Text(stringResource(R.string.more_icons))
                 }
             }
         },
@@ -291,12 +297,12 @@ fun CreateEditCategoryDialog(
                 onClick = { onConfirm(name, selectedIcon) },
                 enabled = name.isNotBlank()
             ) {
-                Text(if (category == null) "创建" else "保存")
+                Text(if (category == null) stringResource(R.string.create) else stringResource(R.string.save))
             }
         },
         dismissButton = {
             Button(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
@@ -311,7 +317,6 @@ fun CreateEditCategoryDialog(
         )
     }
 }
-
 @Composable
 fun IconPickerDialog(
     onDismiss: () -> Unit,
@@ -319,7 +324,7 @@ fun IconPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择图标") },
+        title = { Text(stringResource(R.string.select_icon)) },
         text = {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -349,26 +354,24 @@ fun IconPickerDialog(
         },
         confirmButton = {
             Button(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
 }
-
 @Composable
 fun DeleteCategoryDialog(
     category: Category,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
+    val deleteCategoryConfirmMsg = stringResource(R.string.delete_category_confirm, category.name)
+    
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("删除分类") },
+        title = { Text(stringResource(R.string.delete_category)) },
         text = {
-            Text(
-                "确定要删除分类「${category.name}」吗？\n\n" +
-                "该分类下的所有围栏将被移动到「未分类」分组。"
-            )
+            Text(deleteCategoryConfirmMsg)
         },
         confirmButton = {
             Button(
@@ -377,12 +380,12 @@ fun DeleteCategoryDialog(
                     containerColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("删除")
+                Text(stringResource(R.string.delete))
             }
         },
         dismissButton = {
             Button(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(R.string.cancel))
             }
         }
     )

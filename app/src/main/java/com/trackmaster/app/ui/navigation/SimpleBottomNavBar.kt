@@ -21,8 +21,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.ui.navigation.Screen
+import com.trackmaster.app.R
 import com.trackmaster.app.ui.theme.glassPanel
 import com.trackmaster.app.ui.theme.primaryColor
 
@@ -58,6 +60,7 @@ fun SimpleBottomNavBar(
                 animationSpec = tween(150),
                 label = "textColor"
             )
+            val resolvedTitle = stringResource(item.titleRes)
 
             Column(
                 modifier = Modifier
@@ -69,13 +72,13 @@ fun SimpleBottomNavBar(
             ) {
                 Icon(
                     imageVector = item.icon,
-                    contentDescription = item.title,
+                    contentDescription = resolvedTitle,
                     tint = iconColor,
                     modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = item.title,
+                    text = resolvedTitle,
                     fontSize = 10.sp,
                     color = textColor,
                     fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
@@ -87,11 +90,11 @@ fun SimpleBottomNavBar(
 
 private enum class SimpleNavItem(
     val screen: Screen,
-    val title: String,
+    @androidx.annotation.StringRes val titleRes: Int,
     val icon: ImageVector
 ) {
-    HOME(Screen.Home, "首页", Icons.Filled.Home),
-    MAP(Screen.Map, "地图", Icons.Filled.Map),
-    HISTORY(Screen.History, "历史", Icons.AutoMirrored.Filled.List),
-    SETTINGS(Screen.Settings, "设置", Icons.Filled.Settings)
+    HOME(Screen.Home, R.string.nav_home, Icons.Filled.Home),
+    MAP(Screen.Map, R.string.nav_map, Icons.Filled.Map),
+    HISTORY(Screen.History, R.string.nav_history, Icons.AutoMirrored.Filled.List),
+    SETTINGS(Screen.Settings, R.string.nav_settings, Icons.Filled.Settings)
 }

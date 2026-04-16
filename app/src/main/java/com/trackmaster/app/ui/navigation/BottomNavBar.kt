@@ -21,7 +21,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
+import com.trackmaster.app.R
 import com.trackmaster.app.ui.theme.*
 
 @Composable
@@ -43,7 +45,7 @@ fun BottomNavBar(
             val isSelected = currentRoute == item.screen.route
             NavItem(
                 icon = item.toIcon(),
-                label = item.title,
+                label = stringResource(item.titleRes),
                 isSelected = isSelected,
                 onClick = { onNavigate(item.screen) }
             )
