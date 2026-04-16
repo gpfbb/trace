@@ -20,6 +20,7 @@ import com.amap.api.location.AMapLocationClient
 import com.amap.api.location.AMapLocationClientOption
 import com.amap.api.location.AMapLocationListener
 import com.trackmaster.app.locationservice.Location
+import com.trackmaster.app.locationservice.LocationType
 import com.trackmaster.app.locationservice.LocationCallback
 import com.trackmaster.app.locationservice.LocationProvider
 import com.trackmaster.app.locationservice.google.GoogleLocationProvider
@@ -209,7 +210,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 appCallback = object : LocationCallback {
                     override fun onLocationChanged(location: Location) {
                         // 将 unified Location 转换为 AMapLocation，复用现有的 onLocationChanged 处理逻辑
-                        val aMapLoc = AMapLocation(location.locationType.name).apply {
+                        val locationId = when (location.locationType) {
+                            LocationType.GPS -> "gps"
+                            LocationType.NETWORK -> "network"
+                            else -> "offline"
+                        }
+                        val aMapLoc = AMapLocation(locationId).apply {
                             latitude = location.latitude
                             longitude = location.longitude
                             accuracy = location.accuracy
@@ -676,14 +682,14 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         // shouldProcess=false 意味着 SmartScheduler 认为这是GPS噪声或无需处理的定位
         // 如果每次回调都更新 serviceState，前台UI会每5秒刷新一次，失去throttle意义
         if (shouldProcess) {
-            val isInFence = app?.engine?.currentMatchedFenceIds?.isNotEmpty() == true
+            // 【Bug修复】使用 currentMatchedFences 而非 engine.currentMatchedFenceIds
+            // currentMatchedFences 在 checkGeoFences 中已通过 checkFenceMatch(fix) 同步更新
+            // engine.currentMatchedFenceIds 是上一次 onLocationUpdate 的结果，存在延迟
+            val matchedFences = app?.currentMatchedFences ?: emptyList()
+            val isInFence = matchedFences.isNotEmpty()
 
             val currentFenceName = if (isInFence) {
-                val matchedIds = app?.engine?.currentMatchedFenceIds ?: emptyList()
-                val firstMatchId = matchedIds.firstOrNull()
-                if (firstMatchId != null) {
-                    app?.geoFences?.find { it.id == firstMatchId }?.name
-                } else null
+                matchedFences.firstOrNull()?.name
             } else null
 
             serviceState = serviceState.copy(

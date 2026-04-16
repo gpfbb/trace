@@ -348,7 +348,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_ALPHA, fence.alpha)
 
         val result = db.insert(TABLE_FENCES, null, values)
-        invalidateFenceCache()
+        if (result != -1L) invalidateFenceCache()
         return result
     }
 
@@ -1356,20 +1356,25 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         db.beginTransaction()
         try {
             for (record in records) {
-                val values = ContentValues().apply {
-                    put(KEY_STAY_ID, record.id ?: UUID.randomUUID().toString())
-                    put(KEY_FENCE_ID, record.fenceId)
-                    put(KEY_FENCE_NAME, record.fenceName)
-                    put(KEY_ENTER_TIME, record.enterTime.time)
-                    put(KEY_EXIT_TIME, record.exitTime?.time)
-                    put(KEY_DURATION, record.durationSeconds)
-                }
-                db.insertWithOnConflict(
-                    TABLE_STAYS,
-                    null,
-                    values,
-                    SQLiteDatabase.CONFLICT_REPLACE
-                )
+                // 【Bug修复 H6】使用 ON CONFLICT DO UPDATE 代替 CONFLICT_REPLACE
+                // CONFLICT_REPLACE = DELETE + INSERT，会触发 ON DELETE CASCADE 级联删除关联events
+                // DO UPDATE = 直接更新，不删除原行，不触发级联
+                db.execSQL("""
+                    INSERT INTO $TABLE_STAYS ($KEY_STAY_ID, $KEY_FENCE_ID, $KEY_FENCE_NAME, $KEY_ENTER_TIME, $KEY_EXIT_TIME, $KEY_DURATION)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT($KEY_STAY_ID) DO UPDATE SET
+                        $KEY_FENCE_NAME = excluded.$KEY_FENCE_NAME,
+                        $KEY_ENTER_TIME = excluded.$KEY_ENTER_TIME,
+                        $KEY_EXIT_TIME = excluded.$KEY_EXIT_TIME,
+                        $KEY_DURATION = excluded.$KEY_DURATION
+                """, arrayOf(
+                    record.id ?: UUID.randomUUID().toString(),
+                    record.fenceId,
+                    record.fenceName,
+                    record.enterTime.time,
+                    record.exitTime?.time,
+                    record.durationSeconds
+                ))
             }
             db.setTransactionSuccessful()
         } finally {
@@ -1383,22 +1388,29 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         db.beginTransaction()
         try {
             for (event in events) {
-                val values = ContentValues().apply {
-                    put(KEY_EVENT_ID, event.id)
-                    put(KEY_FENCE_ID, event.fenceId)
-                    put(KEY_FENCE_NAME, event.fenceName)
-                    put(KEY_ACTION, event.action.name)
-                    put(KEY_TIMESTAMP, event.time.time)
-                    put(KEY_LATITUDE, event.latitude)
-                    put(KEY_LONGITUDE, event.longitude)
-                    put(KEY_ACCURACY, event.accuracy)
-                }
-                db.insertWithOnConflict(
-                    TABLE_EVENTS,
-                    null,
-                    values,
-                    SQLiteDatabase.CONFLICT_REPLACE
-                )
+                // 【Bug修复 H7】使用 ON CONFLICT DO UPDATE 代替 CONFLICT_REPLACE
+                // CONFLICT_REPLACE = DELETE + INSERT，会触发 ON DELETE CASCADE 级联删除
+                // DO UPDATE = 直接更新，不删除原行
+                db.execSQL("""
+                    INSERT INTO $TABLE_EVENTS ($KEY_EVENT_ID, $KEY_FENCE_ID, $KEY_FENCE_NAME, $KEY_ACTION, $KEY_TIMESTAMP, $KEY_LATITUDE, $KEY_LONGITUDE, $KEY_ACCURACY)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT($KEY_EVENT_ID) DO UPDATE SET
+                        $KEY_FENCE_NAME = excluded.$KEY_FENCE_NAME,
+                        $KEY_ACTION = excluded.$KEY_ACTION,
+                        $KEY_TIMESTAMP = excluded.$KEY_TIMESTAMP,
+                        $KEY_LATITUDE = excluded.$KEY_LATITUDE,
+                        $KEY_LONGITUDE = excluded.$KEY_LONGITUDE,
+                        $KEY_ACCURACY = excluded.$KEY_ACCURACY
+                """, arrayOf(
+                    event.id,
+                    event.fenceId,
+                    event.fenceName,
+                    event.action.name,
+                    event.time.time,
+                    event.latitude,
+                    event.longitude,
+                    event.accuracy
+                ))
             }
             db.setTransactionSuccessful()
         } finally {
@@ -1590,7 +1602,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
                     val fence = GeoFence(
                         id = if (preserveId) {
-                            val existing = fenceJson.optString("id", null)
+                            val existing = fenceJson.optString("id", "").takeIf { it.isNotEmpty() }
                             if (existing != null && getFenceById(existing) == null) existing else UUID.randomUUID().toString()
                         } else {
                             UUID.randomUUID().toString()

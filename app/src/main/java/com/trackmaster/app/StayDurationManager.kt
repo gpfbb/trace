@@ -151,7 +151,8 @@ class StayDurationManager(private val context: Context) {
         val sessionAccumulated = if (session.lastSaveTime != null) {
             session.accumulatedDuration + (now - session.lastSaveTime.time) / 1000
         } else {
-            (now - session.enterTime.time) / 1000
+            // 恢复的会话: accumulatedDuration 已包含之前的累积，gap 从 enterTime 算起
+            session.accumulatedDuration + (now - session.enterTime.time) / 1000
         }
 
         // 关闭该围栏的开放记录，避免残留

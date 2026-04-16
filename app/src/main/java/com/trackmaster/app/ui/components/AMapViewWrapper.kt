@@ -87,7 +87,11 @@ fun AMapViewWrapper(
     }
 
     // 相机移动时实时保存位置（AMapViewWrapper 进入时判断 hasCameraPosition）
-    LaunchedEffect(isMapReady) {
+    // 【Bug修复 H10】合并两个相机监听器为一个，避免重复注册
+    // 原代码：第一个 LaunchedEffect(isMapReady) 和第二个 LaunchedEffect(isPrecisionMode, isMapReady)
+    // 都调用 setOnCameraCenterChangeListener，导致监听器累积
+    // 合并后统一由一个 LaunchedEffect(isMapReady) 处理precision模式的切换
+    LaunchedEffect(isMapReady, isPrecisionMode) {
         if (!isMapReady) return@LaunchedEffect
         mapPresenter.setOnCameraCenterChangeListener { lat, lng ->
             try {
@@ -96,16 +100,15 @@ fun AMapViewWrapper(
                 appPrefs.cameraZoom = mapPresenter.getZoom() ?: 15f
                 appPrefs.hasCameraPosition = true
             } catch (e: Exception) { Log.e(TAG, "保存相机位置失败", e) }
+            // precision模式下同步更新相机中心点坐标
+            if (isPrecisionMode) {
+                cameraCenterLat = lat
+                cameraCenterLng = lng
+                hasCameraMoved = true
+            }
         }
     }
 
-    // 生命周期由 AMapPresenter 内部管理，地图点击监听
-    LaunchedEffect(isMapReady) {
-        if (!isMapReady) return@LaunchedEffect
-        mapPresenter.setOnMapClickListener { lat, lng ->
-            onMapClick(lat, lng)
-        }
-    }
 
     // 每次进入地图页：等 currentLocation 到达后跳转（reactive，无硬延迟）
     LaunchedEffect(isMapReady) {
@@ -124,24 +127,15 @@ fun AMapViewWrapper(
         mapPresenter.configureMap(mapType = mapType)
     }
 
-    // 精确模式下，跟踪相机中心点
-    LaunchedEffect(isPrecisionMode, isMapReady) {
-        if (!isMapReady) return@LaunchedEffect
-        if (isPrecisionMode) {
-            mapPresenter.setOnCameraCenterChangeListener { lat, lng ->
-                cameraCenterLat = lat
-                cameraCenterLng = lng
-                hasCameraMoved = true
-            }
-        }
-    }
-
-    // 精确模式下，点击使用相机中心点而非实际点击位置
+    // 地图点击监听: 精确模式下使用相机中心点
     LaunchedEffect(isPrecisionMode, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
         mapPresenter.setOnMapClickListener { lat, lng ->
-            if (isPrecisionMode && hasCameraMoved) {
-                onMapClick(cameraCenterLat, cameraCenterLng)
+            if (isPrecisionMode) {
+                // 精确模式:使用相机中心点
+                mapPresenter.getCameraCenter()?.let { (centerLat, centerLng) ->
+                    onMapClick(centerLat, centerLng)
+                } ?: onMapClick(lat, lng)
             } else {
                 onMapClick(lat, lng)
             }

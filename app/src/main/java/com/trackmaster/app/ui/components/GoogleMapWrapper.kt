@@ -92,8 +92,19 @@ fun GoogleMapWrapper(
     }
 
     // 相机移动时实时保存位置
-    LaunchedEffect(isMapReady) {
+    // 【Bug修复 H11】合并两个相机监听器为一个，避免重复注册
+    // 第一个 LaunchedEffect(isMapReady) 和第二个 LaunchedEffect(isPrecisionMode, isMapReady)
+    // 都调用 setOnCameraCenterChangeListener，导致监听器累积
+    LaunchedEffect(isMapReady, isPrecisionMode) {
         if (!isMapReady) return@LaunchedEffect
+        // precision模式进入时立即初始化相机中心（不用等相机移动）
+        if (isPrecisionMode) {
+            mapPresenter.getCameraCenter()?.let { (lat, lng) ->
+                cameraCenterLat = lat
+                cameraCenterLng = lng
+                hasCameraMoved = true
+            }
+        }
         mapPresenter.setOnCameraCenterChangeListener { lat, lng ->
             try {
                 appPrefs.cameraLatitude = lat
@@ -101,6 +112,12 @@ fun GoogleMapWrapper(
                 appPrefs.cameraZoom = mapPresenter.getZoom() ?: 17f
                 appPrefs.hasCameraPosition = true
             } catch (e: Exception) { Log.e(TAG, "保存相机位置失败", e) }
+            // precision模式下同步更新相机中心点坐标
+            if (isPrecisionMode) {
+                cameraCenterLat = lat
+                cameraCenterLng = lng
+                hasCameraMoved = true
+            }
         }
     }
 
@@ -194,39 +211,16 @@ fun GoogleMapWrapper(
         }
     }
 
-    // 地图点击监听
-    LaunchedEffect(isMapReady) {
-        if (!isMapReady) return@LaunchedEffect
-        mapPresenter.setOnMapClickListener { lat, lng ->
-            onMapClick(lat, lng)
-        }
-    }
 
-    // 精确模式下，跟踪相机中心点，并在激活时立即初始化相机中心
-    LaunchedEffect(isPrecisionMode, isMapReady) {
-        if (!isMapReady) return@LaunchedEffect
-        if (isPrecisionMode) {
-            // 立即初始化相机中心（不用等相机移动）
-            mapPresenter.getCameraCenter()?.let { (lat, lng) ->
-                cameraCenterLat = lat
-                cameraCenterLng = lng
-                hasCameraMoved = true
-            }
-            // 持续跟踪相机中心
-            mapPresenter.setOnCameraCenterChangeListener { lat, lng ->
-                cameraCenterLat = lat
-                cameraCenterLng = lng
-                hasCameraMoved = true
-            }
-        }
-    }
-
-    // 精确模式下，点击使用相机中心点而非实际点击位置
+    // 地图点击监听: 精确模式下使用相机中心点
     LaunchedEffect(isPrecisionMode, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
         mapPresenter.setOnMapClickListener { lat, lng ->
-            if (isPrecisionMode && hasCameraMoved) {
-                onMapClick(cameraCenterLat, cameraCenterLng)
+            if (isPrecisionMode) {
+                // 精确模式:使用相机中心点
+                mapPresenter.getCameraCenter()?.let { (centerLat, centerLng) ->
+                    onMapClick(centerLat, centerLng)
+                } ?: onMapClick(lat, lng)
             } else {
                 onMapClick(lat, lng)
             }

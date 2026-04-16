@@ -2,6 +2,7 @@ package com.trackmaster.app.storage
 
 import com.trackmaster.app.core.DailySummary
 import com.trackmaster.app.core.StaySegment
+import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -13,7 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 class Repository(
     private val adapter: StorageAdapter,
-    private val batchSize: Int = 5,  // 降低到5条，减少 crash 时最多丢4条（原20条最坏丢19条）
+    private val batchSize: Int = 5,
 ) {
     private val writeBuffer = CopyOnWriteArrayList<StaySegment>()
     private val segmentCache = mutableMapOf<String, List<StaySegment>>()
@@ -56,20 +57,28 @@ class Repository(
     /** 按日期获取 Segment（缓存优先） */
     suspend fun getSegmentsByDate(dateKey: String): List<StaySegment> {
         segmentCache[dateKey]?.let { return it }
-        val segs = adapter.querySegmentsByDate(dateKey)
-        segmentCache[dateKey] = segs
-        return segs
+        val dbSegs = adapter.querySegmentsByDate(dateKey)
+        // Merge with pending writeBuffer segments for same date
+        val pendingSegs = writeBuffer.filter { formatDateKey(it.startTs) == dateKey }
+        val merged = (dbSegs + pendingSegs).sortedBy { it.startTs }
+        segmentCache[dateKey] = merged
+        return merged
     }
 
     /** 获取未关闭的 Segment */
     suspend fun getOpenSegments(): List<StaySegment> =
-        adapter.queryOpenSegments()
+        adapter.queryOpenSegments() ?: emptyList()
 
     /** 保存日汇总（T+1 聚合产物） */
     suspend fun saveDailySummaries(dateKey: String, summaries: List<DailySummary>) {
         adapter.beginTransaction()
-        adapter.saveDailySummaries(summaries)
-        adapter.commitTransaction()
+        try {
+            adapter.saveDailySummaries(summaries)
+            adapter.commitTransaction()
+        } catch (e: Exception) {
+            adapter.rollbackTransaction()
+            throw e
+        }
         summaryCache[dateKey] = summaries
     }
 
@@ -95,7 +104,8 @@ class Repository(
 
     companion object {
         fun formatDateKey(ts: Long): String {
-            val cal = java.util.Calendar.getInstance()
+            // 【MEDIUM修复】使用 Locale.US 确保日期格式化不受系统语言影响
+            val cal = java.util.Calendar.getInstance(Locale.US)
             cal.timeInMillis = ts
             val y = cal.get(java.util.Calendar.YEAR)
             val m = cal.get(java.util.Calendar.MONTH) + 1

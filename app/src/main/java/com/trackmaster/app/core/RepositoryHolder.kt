@@ -23,6 +23,12 @@ import java.util.concurrent.CopyOnWriteArrayList
 class RepositoryHolder(
     private val storageAdapter: StorageAdapter
 ) {
+    companion object {
+        // 【Bug修复 H12】geoFenceEvents 上限，防止无限增长导致 O(n) 性能衰减
+        // 保留最近 5000 条事件，超出后清理最旧的
+        private const val MAX_EVENTS_SIZE = 5000
+    }
+
     val repository: Repository = Repository(storageAdapter)
 
     // ============================================================
@@ -34,6 +40,25 @@ class RepositoryHolder(
     val fenceEnterTimes = ConcurrentHashMap<String, Date>()
     val fenceStayRecords = CopyOnWriteArrayList<FenceStayRecord>()
     val geoFenceEvents = CopyOnWriteArrayList<GeoFenceEvent>()
+
+    /**
+     * 添加围栏事件，带自动清理
+     * 当事件数超过 MAX_EVENTS_SIZE 时，删除最旧的 10% 事件
+     * 防止 CopyOnWriteArrayList 无限增长导致 filter 等操作 O(n) 衰减
+     */
+    fun addEvent(event: GeoFenceEvent) {
+        geoFenceEvents.add(event)
+        if (geoFenceEvents.size > MAX_EVENTS_SIZE) {
+            // 按时间排序，删除最旧的 10%
+            val toRemove = (MAX_EVENTS_SIZE * 0.1).toInt().coerceAtLeast(1)
+            val sortedEvents = geoFenceEvents.sortedBy { it.time }
+            // 通过 ID 在原列表中删除（sortedEvents 是副本，不能直接删原列表）
+            for (i in 0 until toRemove) {
+                val idToRemove = sortedEvents[i].id
+                geoFenceEvents.removeIf { it.id == idToRemove }
+            }
+        }
+    }
 
     /** 当前所有命中的围栏列表（包括嵌套的父级和子级，按深度排序） */
     val currentMatchedFences = CopyOnWriteArrayList<GeoFence>()

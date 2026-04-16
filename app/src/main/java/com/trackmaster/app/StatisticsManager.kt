@@ -27,7 +27,9 @@ data class FenceStatisticTree(
     val totalDurationSeconds: Long, // 总时长（含子围栏）
     val children: List<FenceStatisticTree>,
     val isExpanded: Boolean = false,
-    val depth: Int = 0
+    val depth: Int = 0,
+    /** 直接子节点的时长之和（不含自身），用于顶层累加计算 */
+    val totalChildrenDirect: Long = 0L
 )
 
 /**
@@ -125,9 +127,8 @@ class StatisticsManager(private val context: Context) {
         android.util.Log.d("StatisticsManager", "Active sessions: ${activeSessions.size}")
         val now = Date()
         for ((fenceId, session) in activeSessions) {
-            val sessionEnded = false
-            val overlapsWithRange = session.enterTime <= timeRange.endTime && !sessionEnded
-            if (overlapsWithRange) {
+            // 活跃会话都是未结束的，直接用 enterTime 判断是否与时间范围重叠
+            if (session.enterTime <= timeRange.endTime) {
                 val effectiveStartTime = maxOf(session.enterTime, timeRange.startTime)
                 val effectiveEndTime = minOf(now, timeRange.endTime)
                 val effectiveDurationSeconds = maxOf(0L, (effectiveEndTime.time - effectiveStartTime.time) / 1000)
@@ -189,19 +190,20 @@ class StatisticsManager(private val context: Context) {
 
             var totalChildrenDirect = 0L
             for (childId in childIds) {
-                val childTree = buildTree(childId, depth + 1, statsMap[childId]?.totalDurationSeconds ?: 0L)
+                val childAccumulated = statsMap[childId]?.totalDurationSeconds ?: 0L
+                val childTree = buildTree(childId, depth + 1, childAccumulated)
                 if (childTree != null) {
                     childTrees.add(childTree)
                     totalChildrenDirect += childTree.ownDurationSeconds
                 }
             }
 
-            // 按总时长降序排列子节点
-            childTrees.sortByDescending { it.totalDurationSeconds }
-
             // 自身时长 + 子节点时长 = 总时长
             val ownDur = stat?.totalDurationSeconds ?: ownDuration
             val totalDur = ownDur + totalChildrenDirect
+
+            // 按总时长降序排列子节点
+            childTrees.sortByDescending { it.totalDurationSeconds }
 
             return FenceStatisticTree(
                 fenceId = fenceId,
@@ -211,7 +213,8 @@ class StatisticsManager(private val context: Context) {
                 totalDurationSeconds = totalDur,
                 children = childTrees,
                 isExpanded = false,
-                depth = depth
+                depth = depth,
+                totalChildrenDirect = ownDur + totalChildrenDirect
             )
         }
 

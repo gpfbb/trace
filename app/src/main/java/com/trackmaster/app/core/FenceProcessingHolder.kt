@@ -60,11 +60,16 @@ class FenceProcessingHolder(
 
         persistentStateManager.saveLastLocation(location.latitude, location.longitude, Date(location.timestamp))
         val shouldProcess = engine.evaluateLocation(fix)
-        engine.setCurrentMatchedFenceIds(engine.checkFenceMatch(fix))
+        // 【Bug修复 H1+H3】删除外部 setCurrentMatchedFenceIds 调用
+        // 原因：onLocationUpdate (appScope.launch 内部) 会用动态 bufferM 更新 currentMatchedFenceIds
+        // 外部 checkFenceMatch(bufferM=0.0) 先写入，onLocationUpdate 后写入 → TOCTOU 竞态
+        // 围栏状态以 onLocationUpdate 结果为准，外部调用删除
 
         // 【关键修复】立即同步更新 currentMatchedFences 和通知 UI 变化
         // 让 HomeViewModel 等组件能立即感知围栏状态变化，而不是等待异步处理完成
-        val allMatchedFenceIds = engine.currentMatchedFenceIds
+        // 使用 checkFenceMatch(fix) 同步获取当前定位的围栏匹配结果
+        // 注意：engine.currentMatchedFenceIds 是上一次 onLocationUpdate 的结果，存在延迟
+        val allMatchedFenceIds = engine.checkFenceMatch(fix)
         currentMatchedFences.clear()
         for (fenceId in allMatchedFenceIds) {
             val fence = geoFences.find { it.id == fenceId }
@@ -77,7 +82,7 @@ class FenceProcessingHolder(
             if (closedSeg != null) {
                 handleFenceExit(closedSeg.leafGeofenceId, closedSeg.leafGeofenceId, location)
             }
-            handleAllMatchedFences(location, closedSeg?.leafGeofenceId)
+            handleAllMatchedFences(location, closedSeg?.leafGeofenceId, fix)
         }
 
         return shouldProcess
@@ -175,8 +180,10 @@ class FenceProcessingHolder(
         persistentStateManager.clearCurrentFenceState()
     }
 
-    private fun handleAllMatchedFences(location: Location, justExitedFenceId: String?) {
-        val allMatchedFenceIds = engine.currentMatchedFenceIds
+    private fun handleAllMatchedFences(location: Location, justExitedFenceId: String?, fix: LocationFix) {
+        // 使用 checkFenceMatch 而非 engine.currentMatchedFenceIds
+        // 确保与 checkGeoFences 同步更新使用相同的 buffer 策略
+        val allMatchedFenceIds = engine.checkFenceMatch(fix)
         if (allMatchedFenceIds.isEmpty()) {
             if (!isRestoringFirstLocation) {
                 currentMatchedFences.clear()
@@ -229,16 +236,21 @@ class FenceProcessingHolder(
         val previousId = previousSmallestFenceId.get()
         if (previousId == null || previousId == smallestFenceId) return
 
-        // Bug 4 修复：如果 previousId 仍在 matched 列表中，检查是否是 sibling 切换
+        // 【Bug修复 H2】子→父升级 vs 同级切换的区分逻辑
+        // case A→B（同级切换，same parent）：prevParent==currParent，两者都还在 allMatchedFenceIds → 不 exit
+        // case A→P（子→父升级）：prevParent是P，currParent是P的parent → prevParent!=currParent
+        //   此时 previousId(A) 仍在 allMatchedFenceIds（因为A的polygon被P的polygon包含）→ 需要 exit A
+        // case A→Q（完全无关）：previousId 不在 allMatchedFenceIds → 需要 exit A
         if (previousId in allMatchedFenceIds) {
             val prevParent = fenceTreeManager.getParent(previousId)
             val currParent = fenceTreeManager.getParent(smallestFenceId ?: "")
-            // sibling 切换：同一父级的子围栏之间切换，继续处理 exit
+            // 同级切换：两者有相同的直接父级（prevParent == currParent）→ 用户还在同一父围栏内，不 exit
+            // 子→父升级：prevParent != currParent → previousId 已在 allMatchedFenceIds，需要 exit
             if (prevParent != null && prevParent == currParent) {
-                // 继续执行 exit 处理
-            } else {
+                // 同级 sibling 切换，不 exit
                 return
             }
+            // 子→父升级：prevParent != currParent → fall through，执行 exit
         }
 
         val oldFenceName = geoFences.find { it.id == previousId }?.name ?: previousId ?: ""
@@ -362,7 +374,7 @@ class FenceProcessingHolder(
             time = Date(location.timestamp), latitude = location.latitude,
             longitude = location.longitude, accuracy = location.accuracy
         )
-        geoFenceEvents.add(event)
+        repositoryHolder.addEvent(event)  // 【Bug修复 H12】通过带cap的addEvent方法添加，自动清理超限事件
         dbHelper.insertEvent(event)
         Log.d(TAG, "记录围栏事件: ${action.name} - $fenceName")
     }

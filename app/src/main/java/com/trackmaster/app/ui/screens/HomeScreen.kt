@@ -60,10 +60,47 @@ fun HomeScreen(
     }
 
     val fenceStateVersion by app.fenceStateVersion.collectAsState()
+
+    // 【关键修复】fenceStateVersion 变化时立即更新当前围栏状态和热门围栏
+    // 确保灵动岛/首页的"当前所在围栏"和"本月热门围栏"能实时反映围栏状态变化
     LaunchedEffect(fenceStateVersion) {
         val matched = app.currentMatchedFences
         isInsideFence = matched.isNotEmpty()
         currentFenceName = matched.firstOrNull()?.name
+
+        // 更新热门围栏数据（包含 activeSessions 的实时时长）
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        val allDailyRecords = mutableListOf<com.trackmaster.app.DailyStayRecord>()
+        val nowCal = Calendar.getInstance()
+        while (!cal.after(nowCal)) {
+            val dateKey = dateFormat.format(cal.time)
+            allDailyRecords.addAll(app.dbHelper.getDailyStayRecordsByDate(dateKey))
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+        }
+
+        val dailyDurations = allDailyRecords
+            .groupBy { it.fenceName }
+            .mapValues { (_, recs) -> recs.sumOf { it.totalDurationSeconds } }
+            .toMutableMap()
+
+        val activeSessions = app.stayDurationManager.activeSessions
+        for ((fenceId, session) in activeSessions) {
+            val currentDuration = app.stayDurationManager.getCurrentDuration(fenceId) ?: 0L
+            val totalDuration = (session.accumulatedDuration + currentDuration)
+            if (totalDuration > 0) {
+                val currentName = dailyDurations.keys.find { it == session.fenceName } ?: session.fenceName
+                dailyDurations[currentName] = (dailyDurations[currentName] ?: 0L) + totalDuration
+            }
+        }
+
+        val top = dailyDurations
+            .entries
+            .sortedByDescending { it.value }
+            .take(3)
+            .map { it.key to it.value }
+        monthTopFences = top
     }
 
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
@@ -78,29 +115,7 @@ fun HomeScreen(
                 todayEnterCount = todayEvents.count { it.action == GeoFenceAction.ENTER }
                 todayExitCount = todayEvents.count { it.action == GeoFenceAction.EXIT }
 
-                // 【关键修复】使用 daily_stays 表（按天合并的精确数据）替代 stays 表
-                // 避免 stays 表中可能存在的多条开放/重复记录导致时长叠加错误
-                val cal = Calendar.getInstance()
-                cal.set(Calendar.DAY_OF_MONTH, 1)
-                val allDailyRecords = mutableListOf<com.trackmaster.app.DailyStayRecord>()
-                val nowCal = Calendar.getInstance()
-                while (!cal.after(nowCal)) {
-                    val dateKey = dateFormat.format(cal.time)
-                    allDailyRecords.addAll(app.dbHelper.getDailyStayRecordsByDate(dateKey))
-                    cal.add(Calendar.DAY_OF_MONTH, 1)
-                }
-                val top = allDailyRecords
-                    .groupBy { it.fenceName }
-                    .mapValues { (_, recs) -> recs.sumOf { it.totalDurationSeconds } }
-                    .entries
-                    .sortedByDescending { it.value }
-                    .take(3)
-                    .map { it.key to it.value }
-                monthTopFences = top
-
-                val matched = app.currentMatchedFences
-                isInsideFence = matched.isNotEmpty()
-                currentFenceName = matched.firstOrNull()?.name
+                // monthTopFences 和 isInsideFence/currentFenceName 已由 LaunchedEffect(fenceStateVersion) 更新
             }
         }
         lifecycle.addObserver(observer)

@@ -253,7 +253,7 @@ class DataManager(private val context: Context) {
             val fencesArray = json.optJSONArray("fences") ?: JSONArray()
             for (i in 0 until fencesArray.length()) {
                 val fenceJson = fencesArray.getJSONObject(i)
-                val originalId = fenceJson.optString("id", null)
+                val originalId = fenceJson.optString("id", "").takeIf { it.isNotEmpty() }
                 // 完整备份：原ID不冲突则用，否则生成新的
                 val fenceId = if (originalId != null && dbHelper.getFenceById(originalId) == null) {
                     originalId
@@ -310,7 +310,7 @@ class DataManager(private val context: Context) {
             
             val eventsArray = json.optJSONArray("events") ?: JSONArray()
             for (i in 0 until eventsArray.length()) {
-                val eventJson = eventsArray.getJSONObject(i)
+                val eventJson = eventsArray.optJSONObject(i) ?: continue
                 val time = dateTimeFormat.parse(eventJson.getString("time")) ?: Date()
                 val event = GeoFenceEvent(
                     id = eventJson.optString("id", UUID.randomUUID().toString()),
@@ -521,7 +521,7 @@ class DataManager(private val context: Context) {
                 val obj = jsonArray.getJSONObject(i)
                 val type = GeoFenceType.valueOf(obj.getString("type"))
                 // 优先保留原始 ID，若与已有围栏冲突则生成新 ID
-                val originalId = obj.optString("id", null)
+                val originalId = obj.optString("id", "").takeIf { it.isNotEmpty() }
                 val existingFence = originalId?.let { dbHelper.getFenceById(it) }
                 val fenceId = if (existingFence != null) UUID.randomUUID().toString() else originalId ?: UUID.randomUUID().toString()
                 val fence = if (type == GeoFenceType.CIRCLE) {
@@ -704,7 +704,7 @@ class DataManager(private val context: Context) {
             val stayRecords = mutableListOf<FenceStayRecord>()
             for (i in 0 until staysArray.length()) {
                 val obj = staysArray.getJSONObject(i)
-                val id: String? = obj.optString("id", null).takeIf { it.isNotEmpty() }
+                val id: String? = obj.optString("id", "").takeIf { it.isNotEmpty() }
                 val enterTime = try {
                     dateTimeFormat.parse(obj.getString("enterTime")) ?: Date()
                 } catch (e: Exception) {

@@ -87,11 +87,13 @@ class AppPreferences(context: Context) {
         set(value) = prefs.edit().putLong(KEY_LAST_RESET_DATE, value).apply()
 
     fun incrementLocations(shouldProcess: Boolean) {
-        // totalLocations = 所有收到的定位（包括被忽略的）
-        // processedLocations = 实际处理的定位
-        totalLocations++
-        if (shouldProcess) {
-            processedLocations++
+        synchronized(this) {
+            // totalLocations = 所有收到的定位（包括被忽略的）
+            // processedLocations = 实际处理的定位
+            totalLocations++
+            if (shouldProcess) {
+                processedLocations++
+            }
         }
     }
 
@@ -169,7 +171,7 @@ class AppPreferences(context: Context) {
     val mapProviderFlow: StateFlow<MapProvider> = _mapProviderFlow.asStateFlow()
 
     var mapProvider: MapProvider
-        get() = _mapProviderFlow.value
+        get() = prefs.getString(KEY_MAP_PROVIDER, null)?.let { MapProvider.valueOf(it) } ?: MapProvider.AMAP
         set(value) {
             prefs.edit().putString(KEY_MAP_PROVIDER, value.name).apply()
             _mapProviderFlow.value = value

@@ -215,7 +215,7 @@ fun MapScreen(app: TrackMasterApplication) {
             },
             onFenceListClick = { showFenceList = true },
             onFenceClick = { fenceId ->
-                // 切换显示状态：点击同一围栏则取消显示，否则显示该围栏的点（只读）
+                // 切换显示状态：点击同一围栏则取消显示，否则跳转并显示该围栏
                 app.setDisplayedFenceId(if (displayedFenceId == fenceId) null else fenceId)
             },
             modifier = Modifier
@@ -435,7 +435,7 @@ fun MapScreen(app: TrackMasterApplication) {
                 // 关闭对话框时保持高亮状态，直到用户再次点击同一围栏
             },
             onHighlightClick = { fence ->
-                // 【修复】点击列表围栏时显示围栏的所有点，不要高亮
+                // 点击列表围栏时显示围栏的所有点，跳转并高亮显示
                 app.setDisplayedFenceId(if (displayedFenceId == fence.id) null else fence.id)
             },
             onEditClick = { fence ->
