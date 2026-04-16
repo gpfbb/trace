@@ -160,7 +160,9 @@
     <string name="monthly_top_fences">TOP 3 Geofence Mengikut Tempoh Tinggal Bulanan</string>
     <string name="view_statistics">Lihat Statistik</string>
     <string name="no_data">Tiada data</string>
-    <string name="duration_hours_minutes" formatted="false">%dj %dm</string>
+    <string name="duration_hours_minutes">%1$dj %2$dm</string>
+    <string name="duration_hours_minutes_seconds">%1$dj %2$dm %3$ds</string>
+    <string name="duration_minutes_seconds">%1$dj %2$ds</string>
     <string name="duration_minutes">%d min</string>
     <string name="duration_less_than_minute">&lt; 1 minit</string>
     <!-- Advanced Settings -->

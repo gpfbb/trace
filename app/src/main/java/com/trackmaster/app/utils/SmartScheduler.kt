@@ -48,9 +48,9 @@ data class ThrottleConfig(
     /** 阶梯降频各阶段（静止分钟 → 间隔ms） */
     val throttleSteps: List<ThrottleStep> = DEFAULT_THROTTLE_STEPS,
     /** 立即重置距离阈值（米），位移超过此值立即重置降频 */
-    val resetDistanceM: Double = 50.0,
-    /** 边界 Buffer 区宽度（米），省电模式下只有非常接近围栏边界才提频 */
-    val boundaryBufferM: Double = 10.0,
+    val resetDistanceM: Double = 30.0,
+    /** 边界 Buffer 区宽度（米），接近围栏边界时自动提频，小围栏用户减小缓冲 */
+    val boundaryBufferM: Double = 5.0,
     /** SLC 兜底位移阈值（米） */
     val slcDriftM: Double = 300.0,
     /** 基础定位间隔（ms） */
@@ -65,16 +65,27 @@ data class ThrottleStep(
 )
 
 /**
- * 均衡模式降频阶梯
- * 适用于 BALANCED 模式
- * 优化：更激进的降频，静止2分钟即降到3分钟/次，5分钟降到8分钟/次
+ * 均衡模式降频阶梯（优化版）
+ * 适用于 BALANCED 模式，围栏外/非静止时
  */
 val BALANCED_THROTTLE_STEPS = listOf(
-    ThrottleStep(afterMin = 0, intervalMs = 60_000L),     // 0-1min: 1min/次
-    ThrottleStep(afterMin = 1, intervalMs = 120_000L),    // 1-2min: 2min/次
-    ThrottleStep(afterMin = 2, intervalMs = 180_000L),     // 2-5min: 3min/次
-    ThrottleStep(afterMin = 5, intervalMs = 480_000L),     // 5-10min: 8min/次
-    ThrottleStep(afterMin = 10, intervalMs = 600_000L),   // ≥10min: 10min/次
+    ThrottleStep(afterMin = 0, intervalMs = 30_000L),     // 0-1min: 30s/次
+    ThrottleStep(afterMin = 1, intervalMs = 60_000L),   // 1-2min: 1min/次
+    ThrottleStep(afterMin = 2, intervalMs = 120_000L),  // 2-5min: 2min/次
+    ThrottleStep(afterMin = 5, intervalMs = 180_000L),  // ≥5min: 3min/次
+)
+
+/**
+ * 均衡模式降频阶梯（围栏内激进版）
+ * 适用于 BALANCED 模式，围栏内且静止时
+ * 围栏内已确认安全，允许更激进降频，最长10min/次
+ */
+val BALANCED_INSIDE_FENCE_THROTTLE_STEPS = listOf(
+    ThrottleStep(afterMin = 0, intervalMs = 30_000L),     // 0-1min: 30s/次
+    ThrottleStep(afterMin = 1, intervalMs = 60_000L),    // 1-2min: 1min/次
+    ThrottleStep(afterMin = 2, intervalMs = 120_000L),   // 2-5min: 2min/次
+    ThrottleStep(afterMin = 5, intervalMs = 300_000L),   // 5-10min: 5min/次
+    ThrottleStep(afterMin = 10, intervalMs = 600_000L),  // ≥10min: 10min/次
 )
 
 /**
@@ -110,6 +121,8 @@ data class ScheduleDecision(
     val nextIntervalMs: Long,
     /** 是否处于边界 Buffer 区（省电模式提频） */
     val inBoundaryBuffer: Boolean,
+    /** 是否在围栏内（用于决定是否使用围栏内激进降频） */
+    val isInsideFence: Boolean,
 )
 
 // ============================================================
@@ -195,11 +208,15 @@ class SmartScheduler(
     }
 
     /**
-     * 根据当前电源模式获取对应的降频阶梯
+     * 根据当前电源模式和围栏状态获取对应的降频阶梯
+     * @param isInsideFence 是否在围栏内（围栏内静止时可用更激进的降频）
      */
-    private fun getCurrentThrottleSteps(): List<ThrottleStep> {
+    private fun getCurrentThrottleSteps(isInsideFence: Boolean): List<ThrottleStep> {
         return when (mode) {
-            PowerMode.BALANCED -> BALANCED_THROTTLE_STEPS
+            PowerMode.BALANCED -> {
+                if (isInsideFence) BALANCED_INSIDE_FENCE_THROTTLE_STEPS
+                else BALANCED_THROTTLE_STEPS
+            }
             PowerMode.POWERSAVE -> POWERSAVE_THROTTLE_STEPS
         }
     }
@@ -231,7 +248,7 @@ class SmartScheduler(
         val currentPoint = GeoPoint(fix.lat, fix.lng)
 
         // ---- 降频检查：是否到了该处理的时间 ----
-        val interval = getIntervalForLevel()
+        val interval = getIntervalForLevel(false)  // 提前检查用默认值，继续处理时再使用实际值
         if (lastProcessedTs > 0 && ts - lastProcessedTs < interval) {
             return decision(false)
         }
@@ -240,28 +257,26 @@ class SmartScheduler(
         val distance = lastPoint?.let { GeoMath.haversine(it, currentPoint) } ?: Double.MAX_VALUE
         val isStationary = checkStationary(distance, fix.accuracy, accel)
 
-        // ---- 边界 Buffer 检测（省电模式） ----
-        val inBuffer = mode == PowerMode.POWERSAVE && checkBoundaryBuffer(currentPoint)
+        // ---- 边界 Buffer 检测（所有模式都启用，小围栏用户边界敏感） ----
+        val inBuffer = checkBoundaryBuffer(currentPoint)
+
+        // ---- 是否在围栏内（用于围栏内激进降频） ----
+        val isInsideFence = checkFenceInside(currentPoint)
 
         // ---- 立即重置条件检查 ----
         val shouldReset = distance > config.resetDistanceM
 
         if (shouldReset) {
             resetThrottle()
-        } else if (isStationary && !inBuffer) {
+        } else if (isStationary) {
             if (stationarySinceTs == 0L) {
                 stationarySinceTs = ts
             }
             accumulatedStationaryMs = ts - stationarySinceTs
-            updateThrottleLevel()
-        } else if (!isStationary) {
+            updateThrottleLevel(isInsideFence)
+        } else {
             stationarySinceTs = 0L
             accumulatedStationaryMs = 0L
-            level = 0
-        }
-
-        // 省电模式下边界 Buffer 区临时提频
-        if (inBuffer && level > 0) {
             level = 0
         }
 
@@ -279,7 +294,7 @@ class SmartScheduler(
             locationHistory.removeFirst()
         }
 
-        return decision(true, inBuffer)
+        return decision(true, inBuffer, isInsideFence)
     }
 
     /** 活动识别回调，WALKING/DRIVING/CYCLING 时立即重置 */
@@ -301,8 +316,8 @@ class SmartScheduler(
     /** 获取当前降频等级 */
     fun getLevel(): Int = level
 
-    /** 是否应注册 SLC 兜底 */
-    fun shouldRegisterSLC(): Boolean = level >= 2 && !slcRegistered
+    /** 是否应注册 SLC 兜底（level>=1即静止1分钟即可注册，兜底>300m位移） */
+    fun shouldRegisterSLC(): Boolean = level >= 1 && !slcRegistered
 
     /** 标记 SLC 已注册 */
     fun markSLCRegistered() { slcRegistered = true }
@@ -500,9 +515,11 @@ class SmartScheduler(
         return magnitudes.sumOf { (it - mean) * (it - mean) } / n
     }
 
-    /** 更新降频阶梯等级 */
-    private fun updateThrottleLevel() {
-        val steps = getCurrentThrottleSteps()
+    /** 更新降频阶梯等级
+     * @param isInsideFence 是否在围栏内（围栏内静止时使用更激进的降频阶梯）
+     */
+    private fun updateThrottleLevel(isInsideFence: Boolean) {
+        val steps = getCurrentThrottleSteps(isInsideFence)
         var newLevel = 0
         for (i in steps.indices.reversed()) {
             if (accumulatedStationaryMs >= steps[i].afterMin * 60_000L) {
@@ -513,9 +530,11 @@ class SmartScheduler(
         level = newLevel
     }
 
-    /** 获取当前等级对应的定位间隔 */
-    private fun getIntervalForLevel(): Long {
-        val steps = getCurrentThrottleSteps()
+    /** 获取当前等级对应的定位间隔
+     * @param isInsideFence 是否在围栏内（围栏内静止时使用更激进的降频阶梯）
+     */
+    private fun getIntervalForLevel(isInsideFence: Boolean): Long {
+        val steps = getCurrentThrottleSteps(isInsideFence)
         return steps[level.coerceAtMost(steps.size - 1)].intervalMs
     }
 
@@ -581,6 +600,21 @@ class SmartScheduler(
         return false
     }
 
+    /**
+     * 检查点是否在围栏内（精确检测，无缓冲区）
+     * 用于决定围栏内激进降频策略
+     */
+    private fun checkFenceInside(point: GeoPoint): Boolean {
+        for (leaf in leavesByDepth) {
+            val bbox = bboxCache[leaf.id] ?: continue
+            if (!GeoMath.pointInBBox(point.lat, point.lng, bbox)) continue
+            if (GeoMath.pointInPolygon(point.lat, point.lng, leaf.polygon)) {
+                return true
+            }
+        }
+        return false
+    }
+
     /** 重置降频状态 */
     private fun resetThrottle() {
         level = 0
@@ -589,11 +623,12 @@ class SmartScheduler(
     }
 
     /** 构造调度决策 */
-    private fun decision(shouldProcess: Boolean, inBuffer: Boolean = false): ScheduleDecision =
+    private fun decision(shouldProcess: Boolean, inBuffer: Boolean = false, isInsideFence: Boolean = false): ScheduleDecision =
         ScheduleDecision(
             shouldProcess = shouldProcess,
             level = level,
-            nextIntervalMs = getIntervalForLevel(),
+            nextIntervalMs = getIntervalForLevel(isInsideFence),
             inBoundaryBuffer = inBuffer,
+            isInsideFence = isInsideFence,
         )
 }

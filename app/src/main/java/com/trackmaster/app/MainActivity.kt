@@ -98,15 +98,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private var locationServiceListener: ((com.trackmaster.app.LocationServiceState) -> Unit)? = null
+    private val locationSetupHandler = Handler(Looper.getMainLooper())
+    private val locationSetupRetryRunnable = Runnable { setupLocationServiceListener() }
 
     private fun startLocation() {
         try {
             Log.d("TrackMaster", "启动定位服务")
             val app = application as TrackMasterApplication
             app.startLocationService()
-            Handler(Looper.getMainLooper()).postDelayed({
-                setupLocationServiceListener()
-            }, 500)
+            locationSetupHandler.postDelayed(locationSetupRetryRunnable, 500)
         } catch (e: Exception) {
             Log.e("TrackMaster", "启动定位失败", e)
         }
@@ -127,14 +127,13 @@ class MainActivity : ComponentActivity() {
             Log.d("TrackMaster", "已设置定位服务状态监听")
         } else {
             Log.w("TrackMaster", "定位服务尚未绑定，稍后重试")
-            Handler(Looper.getMainLooper()).postDelayed({
-                setupLocationServiceListener()
-            }, 1000)
+            locationSetupHandler.postDelayed(locationSetupRetryRunnable, 1000)
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        locationSetupHandler.removeCallbacks(locationSetupRetryRunnable)
         val app = application as TrackMasterApplication
         app.saveStateOnAppClose()
         val service = app.getLocationService()
@@ -143,5 +142,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-

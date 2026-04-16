@@ -177,7 +177,6 @@ class HomeViewModel(
         // 收集当月所有日期的 daily_stays
         val allDailyRecords = mutableListOf<DailyStayRecord>()
         calendar.set(Calendar.DAY_OF_MONTH, 1)
-        val monthStart = calendar.time
         val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
 
         for (day in 1..daysInMonth) {

@@ -45,12 +45,16 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         private const val CHANNEL_ID = "geofence_location_channel"
         private const val CHANNEL_NAME = "地理围栏定位服务"
         private const val FIRST_LOCATION_TIMEOUT = 20000L
-        private const val STOP_THRESHOLD = 3
-        private const val CHECK_INTERVAL_WHEN_STOPPED = 5
+        private const val STOP_THRESHOLD = 5
+        private const val CHECK_INTERVAL_WHEN_STOPPED = 8
 
         const val ACTION_WAKEUP = "com.trackmaster.app.ACTION_LOCATION_WAKEUP"
         private const val ALARM_REQUEST_CODE = 1001
         private const val WAKEUP_INTERVAL_MS = CHECK_INTERVAL_WHEN_STOPPED * 60 * 1000L
+
+        // AMap 定位类型常量（与 AMapLocation.locationType 对应）
+        private const val AMAP_TYPE_GPS = 1
+        private const val AMAP_TYPE_NETWORK = 2
     }
 
     private val binder = LocalBinder()
@@ -77,6 +81,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
     private var isLocationClientStopped = false
     private var lastResumeCheckTime = 0L
     private var isTemporaryCheck = false
+    private var appCallback: LocationCallback? = null
+    /** 临时检查是否已完成单次定位（避免连续启动） */
+    private var temporaryCheckCompleted = false
 
     private val powerSaveHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val powerSaveCheckRunnable = object : Runnable {
@@ -135,6 +142,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         Log.d(TAG, "定位服务销毁")
         powerSaveHandler.removeCallbacks(powerSaveCheckRunnable)
         stopLocation()
+        // 移除定位回调，防止泄漏
+        locationProvider?.removeLocationCallback()
         if (isUsingGoogleProvider) {
             (locationProvider as? GoogleLocationProvider)?.destroy()
         } else {
@@ -197,7 +206,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             // Google Fused Location Provider（全球精度）
             try {
                 locationProvider = GoogleLocationProvider(applicationContext)
-                locationProvider?.setLocationCallback(object : LocationCallback {
+                appCallback = object : LocationCallback {
                     override fun onLocationChanged(location: Location) {
                         // 将 unified Location 转换为 AMapLocation，复用现有的 onLocationChanged 处理逻辑
                         val aMapLoc = AMapLocation(location.locationType.name).apply {
@@ -213,7 +222,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                     override fun onLocationError(errorCode: Int, errorInfo: String) {
                         this@GeoFenceLocationService.onLocationError(errorCode, errorInfo)
                     }
-                })
+                }
+                locationProvider?.setLocationCallback(appCallback!!)
                 Log.d(TAG, "初始化 Google Fused Location Provider")
             } catch (e: Exception) {
                 Log.e(TAG, "初始化 Google 定位客户端失败，降级到 AMap", e)
@@ -245,9 +255,13 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
     private fun initAmapClient() {
         isUsingGoogleProvider = false
         try {
-            locationClient = AMapLocationClient(applicationContext)
+            AMapLocationClient(applicationContext).apply {
+                // 隐私合规：必须在 AMapLocationClient 创建后、setLocationListener 之前调用
+                AMapLocationClient.updatePrivacyShow(applicationContext, true, true)
+                AMapLocationClient.updatePrivacyAgree(applicationContext, true)
+            }.also { locationClient = it }
             locationClient?.setLocationListener(this)
-            Log.d(TAG, "初始化 AMap 定位客户端")
+            Log.d(TAG, "初始化 AMap 定位客户端（隐私合规已调用）")
         } catch (e: Exception) {
             Log.e(TAG, "初始化定位客户端失败", e)
         }
@@ -416,6 +430,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
 
         if (isTemporaryCheck) {
             isTemporaryCheck = false
+            temporaryCheckCompleted = true
             if (shouldProcess) {
                 Log.d(TAG, "省电: 临时检查需要处理，恢复定位")
                 isLocationClientStopped = false
@@ -438,7 +453,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 Log.d(TAG, "省电: 定时检查，临时恢复定位")
                 lastResumeCheckTime = now
                 isTemporaryCheck = true
-                resumeLocationWithNormalMode()
+                temporaryCheckCompleted = false
+                temporaryResumeForCheck()
             }
         } else {
             if (shouldProcess) {
@@ -450,11 +466,22 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 Log.d(TAG, "省电: 不需要处理 ($consecutiveNotProcessCount/$STOP_THRESHOLD)")
 
                 if (consecutiveNotProcessCount >= STOP_THRESHOLD) {
-                    Log.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不需要处理，停止定位，调度 Alarm")
-                    isLocationClientStopped = true
-                    lastResumeCheckTime = now
-                    stopLocation()
-                    scheduleNextWakeup()
+                    // 围栏内不停止，只降频到5min/次继续监控（防止漏检出围栏）
+                    if (serviceState.isInsideFence) {
+                        Log.d(TAG, "省电: 围栏内连续${consecutiveNotProcessCount}次不处理，降频到5min/次继续监控")
+                        consecutiveNotProcessCount = 0
+                        updateLocationOptionsForContinuous(300_000L)
+                        if (!serviceState.isRunning) {
+                            locationClient?.startLocation()
+                            serviceState = serviceState.copy(isRunning = true)
+                        }
+                    } else {
+                        Log.d(TAG, "省电: 围栏外连续${consecutiveNotProcessCount}次不需要处理，停止定位，调度 Alarm")
+                        isLocationClientStopped = true
+                        lastResumeCheckTime = now
+                        stopLocation()
+                        scheduleNextWakeup()
+                    }
                 }
             }
         }
@@ -560,7 +587,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 locationProvider?.start()
             } else {
                 locationOption = AMapLocationClientOption().apply {
-                    locationMode = AMapLocationClientOption.AMapLocationMode.Battery_Saving
+                    locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
                     isOnceLocation = true
                     isNeedAddress = false
                     isWifiScan = true
@@ -619,7 +646,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         }
 
         Log.d(TAG, "定位成功: 精度=${location.accuracy}m, 速度=${location.speed}m/s, " +
-                "来源=${if (location.locationType == 1) "GPS" else if (location.locationType == 2) "前次" else "网络"}")
+                "来源=${if (location.locationType == AMAP_TYPE_GPS) "GPS" else if (location.locationType == AMAP_TYPE_NETWORK) "前次" else "网络"}")
 
         val app = application as? TrackMasterApplication
         val shouldProcess = app?.checkGeoFences(toLocation(location)) ?: false
@@ -684,8 +711,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
     /** 将 AMapLocation 转换为统一的 Location 类型 */
     private fun toLocation(aMapLocation: AMapLocation): Location {
         val locationType = when (aMapLocation.locationType) {
-            1 -> com.trackmaster.app.locationservice.LocationType.GPS
-            2 -> com.trackmaster.app.locationservice.LocationType.NETWORK
+            AMAP_TYPE_GPS -> com.trackmaster.app.locationservice.LocationType.GPS
+            AMAP_TYPE_NETWORK -> com.trackmaster.app.locationservice.LocationType.NETWORK
             else -> com.trackmaster.app.locationservice.LocationType.UNKNOWN
         }
         return Location(

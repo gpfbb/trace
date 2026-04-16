@@ -160,7 +160,9 @@
     <string name="monthly_top_fences">Top 3 Fences by Monthly Stay Duration</string>
     <string name="view_statistics">View Statistics</string>
     <string name="no_data">No data</string>
-    <string name="duration_hours_minutes" formatted="false">%dh %dm</string>
+    <string name="duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="duration_hours_minutes_seconds">%1$dh %2$dm %3$ds</string>
+    <string name="duration_minutes_seconds">%1$dm %2$ds</string>
     <string name="duration_minutes">%d min</string>
     <string name="duration_less_than_minute">&lt; 1 minute</string>
     <!-- Advanced Settings -->

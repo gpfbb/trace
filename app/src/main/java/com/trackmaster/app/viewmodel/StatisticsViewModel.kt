@@ -143,15 +143,7 @@ class StatisticsViewModel(
     }
 
     /**
-     * 格式化时长
+     * 返回 raw 秒数，格式化由 UI 层通过 stringResource 完成
      */
-    fun formatDuration(seconds: Long): String {
-        val hours = seconds / 3600
-        val minutes = (seconds % 3600) / 60
-        return when {
-            hours > 0 -> "${hours}小时${minutes}分"
-            minutes > 0 -> "${minutes}分钟"
-            else -> "< 1分钟"
-        }
-    }
+    fun formatDuration(seconds: Long): Long = seconds
 }

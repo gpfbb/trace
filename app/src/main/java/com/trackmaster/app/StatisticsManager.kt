@@ -219,18 +219,9 @@ class StatisticsManager(private val context: Context) {
     }
 
     /**
-     * 格式化时长
+     * 返回 raw 秒数，格式化由 UI 层通过 stringResource 完成
      */
-    fun formatDuration(seconds: Long): String {
-        val hours = seconds / 3600
-        val minutes = (seconds % 3600) / 60
-        val secs = seconds % 60
-        return when {
-            hours > 0 -> String.format("%d小时%d分%d秒", hours, minutes, secs)
-            minutes > 0 -> String.format("%d分%d秒", minutes, secs)
-            else -> String.format("%d秒", secs)
-        }
-    }
+    fun formatDuration(seconds: Long): Long = seconds
 
     fun getDateRange(year: Int, month: Int, day: Int): TimeRange {
         val calendar = Calendar.getInstance()

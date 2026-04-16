@@ -43,6 +43,18 @@ val chartColors = listOf(
 )
 
 @Composable
+private fun formatDuration(seconds: Long): String {
+    val hours = seconds / 3600
+    val mins = (seconds % 3600) / 60
+    val secs = seconds % 60
+    return when {
+        hours > 0 -> stringResource(R.string.duration_hours_minutes_seconds, hours, mins, secs)
+        mins > 0 -> stringResource(R.string.duration_minutes_seconds, mins, secs)
+        else -> stringResource(R.string.duration_less_than_minute)
+    }
+}
+
+@Composable
 fun StatisticsScreen(
     onDismiss: () -> Unit,
     statisticsManager: StatisticsManager
@@ -639,7 +651,7 @@ fun FenceTreeSection(
                     color = NeonCoral
                 )
                 Text(
-                    stringResource(R.string.total_duration, statisticsManager.formatDuration(totalDuration)),
+                    stringResource(R.string.total_duration, formatDuration(totalDuration)),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFFBDBDBD)
                 )
@@ -755,7 +767,7 @@ private fun FenceTreeItem(
                             color = NeonCoral
                         )
                         Text(
-                            text = statisticsManager.formatDuration(node.totalDurationSeconds),
+                            text = formatDuration(node.totalDurationSeconds),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFFBDBDBD)
                         )
@@ -832,7 +844,7 @@ fun DurationProgressSection(
                     color = NeonCoral
                 )
                 Text(
-                    stringResource(R.string.total_duration, statisticsManager.formatDuration(totalDuration)),
+                    stringResource(R.string.total_duration, formatDuration(totalDuration)),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFFBDBDBD)
                 )
@@ -904,7 +916,7 @@ fun DurationProgressSection(
                                         color = NeonCoral
                                     )
                                     Text(
-                                        text = statisticsManager.formatDuration(stat.totalDurationSeconds),
+                                        text = formatDuration(stat.totalDurationSeconds),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = Color(0xFFBDBDBD)
                                     )
@@ -964,7 +976,7 @@ fun LeaderboardSection(
                 LeaderboardItem(
                     rank = index + 1,
                     name = stat.fenceName,
-                    duration = statisticsManager.formatDuration(stat.totalDurationSeconds),
+                    duration = formatDuration(stat.totalDurationSeconds),
                     percentage = if (totalDuration > 0) {
                         "%.1f%%".format(stat.totalDurationSeconds * 100f / totalDuration)
                     } else "0%",

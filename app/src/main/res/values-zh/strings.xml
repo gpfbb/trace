@@ -160,7 +160,9 @@
     <string name="monthly_top_fences">本月热门围栏</string>
     <string name="view_statistics">查看统计</string>
     <string name="no_data">暂无数据</string>
-    <string name="duration_hours_minutes" formatted="false">%d小时%d分钟</string>
+    <string name="duration_hours_minutes">%1$d小时%2$d分钟</string>
+    <string name="duration_hours_minutes_seconds">%1$d小时%2$d分钟%3$d秒</string>
+    <string name="duration_minutes_seconds">%1$d分钟%2$d秒</string>
     <string name="duration_minutes">%d分钟</string>
     <string name="duration_less_than_minute">&lt;1分钟</string>
     <!-- Advanced Settings -->

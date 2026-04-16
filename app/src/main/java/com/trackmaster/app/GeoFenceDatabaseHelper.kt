@@ -1341,10 +1341,13 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                     arrayOf(record.date, record.fenceId),
                     null, null, null
                 )
-                val existingDuration = if (cursor.moveToFirst()) {
-                    cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION))
-                } else 0L
-                cursor.close()
+                val existingDuration = try {
+                    if (cursor.moveToFirst()) {
+                        cursor.getLong(cursor.getColumnIndexOrThrow(KEY_DAILY_DURATION))
+                    } else 0L
+                } finally {
+                    cursor.close()
+                }
 
                 val values = ContentValues().apply {
                     put(KEY_DAILY_DATE, record.date)

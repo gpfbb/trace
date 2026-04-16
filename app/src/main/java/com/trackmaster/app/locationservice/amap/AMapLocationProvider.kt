@@ -25,9 +25,15 @@ class AMapLocationProvider(
         private const val DEFAULT_TIMEOUT_MS = 10000L
         private const val HIGH_ACCURACY_INTERVAL_MS = 5000L
         private const val BATTERY_SAVING_INTERVAL_MS = 10000L
+        private const val AMAP_TYPE_GPS = 1
+        private const val AMAP_TYPE_NETWORK = 2
     }
 
-    private val client: AMapLocationClient = AMapLocationClient(context)
+    private val client: AMapLocationClient = AMapLocationClient(context).apply {
+        // 隐私合规：必须在 AMapLocationClient 创建后、setLocationListener 之前调用
+        AMapLocationClient.updatePrivacyShow(context, true, true)
+        AMapLocationClient.updatePrivacyAgree(context, true)
+    }
 
     private var callback: LocationCallback? = null
     private var currentMode: LocationMode = LocationMode.HIGH_ACCURACY
@@ -179,8 +185,8 @@ class AMapLocationProvider(
 
     private fun toLocation(aMapLocation: AMapLocation): Location {
         val locationType = when (aMapLocation.locationType) {
-            1 -> com.trackmaster.app.locationservice.LocationType.GPS
-            2 -> com.trackmaster.app.locationservice.LocationType.NETWORK
+            AMAP_TYPE_GPS -> com.trackmaster.app.locationservice.LocationType.GPS
+            AMAP_TYPE_NETWORK -> com.trackmaster.app.locationservice.LocationType.NETWORK
             else -> com.trackmaster.app.locationservice.LocationType.UNKNOWN
         }
         return Location(

@@ -532,7 +532,7 @@ private fun TopStatusIsland(
                     area += pts[i].longitude * pts[j].latitude
                     area -= pts[j].longitude * pts[i].latitude
                 }
-                kotlin.math.abs(area) / 2.0 * 111000.0 * 111000.0 // 粗略转换
+                kotlin.math.abs(area) / 2.0 * 111000.0 * 111000.0 // approximate m² conversion
             }
         }
     }

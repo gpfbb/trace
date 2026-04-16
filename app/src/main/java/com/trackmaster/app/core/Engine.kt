@@ -363,11 +363,8 @@ class Engine(
                 status = if (enterDateKey != exitDateKey) SegmentStatus.CROSSED_DAY else SegmentStatus.COMPLETED,
             )
 
-            try {
-                repo.enqueueSegment(closedSeg)
-            } catch (e: Exception) {
-                Log.e(TAG, "Segment 写入错误", e)
-            }
+            runCatching { repo.enqueueSegment(closedSeg) }
+                .onFailure { Log.e(TAG, "Segment 写入错误", it) }
         }
 
         // 打开新的
@@ -455,12 +452,9 @@ class Engine(
                 status = SegmentStatus.COMPLETED,
             )
 
-            try {
-                repo.enqueueSegment(closedSeg)
-                Log.d(TAG, "真空期关闭Segment: ${latest.leafGeofenceId}, 离开时间=$exitTs")
-            } catch (e: Exception) {
-                Log.e(TAG, "真空期Segment关闭错误", e)
-            }
+            runCatching { repo.enqueueSegment(closedSeg) }
+                .onFailure { Log.e(TAG, "真空期Segment关闭错误", it) }
+            Log.d(TAG, "真空期关闭Segment: ${latest.leafGeofenceId}, 离开时间=$exitTs")
 
             // 清除当前状态
             currentLeafId = null

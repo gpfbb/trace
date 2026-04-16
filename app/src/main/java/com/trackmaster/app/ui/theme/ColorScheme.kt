@@ -249,6 +249,7 @@ enum class AppTheme(
 }
 
 /** 获取主题配色 */
+@Suppress("IMPLICIT_CAST_TO_ANY")
 fun getThemeColors(theme: AppTheme) = when (theme) {
     AppTheme.DARK_NIGHT -> DarkNightScheme
     AppTheme.SOFT_EYE -> SoftEyeScheme

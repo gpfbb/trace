@@ -48,25 +48,26 @@ class StayDurationManager(private val context: Context) {
     public val activeSessions: ConcurrentHashMap<String, FenceActiveSession> = ConcurrentHashMap()
     private val dailyCache = ConcurrentHashMap<String, MutableMap<String, DailyStayRecord>>()
 
+    // Handler for periodic saving (leak prevention: keep reference to remove callbacks on destroy)
+    private val periodicSaveHandler = Handler(Looper.getMainLooper())
+    private val saveRunnable = object : Runnable {
+        override fun run() {
+            if (activeSessions.isNotEmpty()) {
+                Log.d(TAG, "定时保存活跃会话: ${activeSessions.size}个")
+                saveAllActiveSessions()
+            }
+            periodicSaveHandler.postDelayed(this, PERIODIC_SAVE_INTERVAL_MS)
+        }
+    }
+
     init {
         Log.d(TAG, "停留时长管理器初始化")
         loadActiveSessionsFromDatabase()
 
         // 启动定时保存：每5分钟自动保存一次活跃会话到数据库
         // 这样即使App被后台清理或强制关闭，已累积的时长也会被保存
-        val periodicSaveHandler = Handler(Looper.getMainLooper())
-        val saveRunnable = object : Runnable {
-            override fun run() {
-                if (activeSessions.isNotEmpty()) {
-                    Log.d(TAG, "定时保存活跃会话: ${activeSessions.size}个")
-                    saveAllActiveSessions()
-                }
-                periodicSaveHandler.postDelayed(this, PERIODIC_SAVE_INTERVAL_MS)
-            }
-        }
         periodicSaveHandler.postDelayed(saveRunnable, PERIODIC_SAVE_INTERVAL_MS)
     }
-
     fun getDateKey(date: Date): String {
         return formatDate(date)
     }
@@ -573,5 +574,14 @@ class StayDurationManager(private val context: Context) {
                 lastSaveTime = Date()
             )
         }
+    }
+
+    /**
+     * 清理 Handler，防止内存泄漏
+     * 当 StayDurationManager 需要被重建时调用
+     */
+    fun destroy() {
+        Log.d(TAG, "停留时长管理器销毁，清理 Handler")
+        periodicSaveHandler.removeCallbacks(saveRunnable)
     }
 }
