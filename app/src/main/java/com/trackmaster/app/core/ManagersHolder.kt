@@ -35,8 +35,11 @@ class ManagersHolder {
         categoryManager = CategoryManager(context)
         statisticsManager = StatisticsManager(context)
         dataManager = DataManager(context)
-        stayDurationManager = StayDurationManager(context)
+        // 【Bug修复】persistentStateManager 必须在 stayDurationManager 之前创建
+        // stayDurationManager.init{} 中 loadActiveSessionsFromDatabase() 需要访问 persistentStateManager
+        // 调换顺序后 lazy 字段访问在 persistentStateManager 已初始化时求值
         persistentStateManager = PersistentStateManager(context)
         appPreferences = AppPreferences(context)
+        stayDurationManager = StayDurationManager(context)
     }
 }
