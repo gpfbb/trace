@@ -25,7 +25,9 @@ data class FenceActiveSession(
     val accumulatedDuration: Long = 0L,
     val lastSaveTime: Date? = null,
     // 记录子围栏进入时父围栏的累积时长，用于精确计算父围栏在子围栏退出后的新增时长
-    val parentAccumulatedSnapshotAtChildEnter: Long? = null
+    val parentAccumulatedSnapshotAtChildEnter: Long? = null,
+    // App关闭时刻，用于崩溃恢复后正确计算gap时长
+    val gapStartTime: Date? = null
 )
 
 class StayDurationManager(private val context: Context) {
@@ -44,6 +46,7 @@ class StayDurationManager(private val context: Context) {
     }
 
     private val dbHelper = (context.applicationContext as TrackMasterApplication).dbHelper
+    private val persistentStateManager = (context.applicationContext as TrackMasterApplication).persistentStateManager
 
     public val activeSessions: ConcurrentHashMap<String, FenceActiveSession> = ConcurrentHashMap()
     private val dailyCache = ConcurrentHashMap<String, MutableMap<String, DailyStayRecord>>()
@@ -151,8 +154,11 @@ class StayDurationManager(private val context: Context) {
         val sessionAccumulated = if (session.lastSaveTime != null) {
             session.accumulatedDuration + (now - session.lastSaveTime.time) / 1000
         } else {
-            // 恢复的会话: accumulatedDuration 已包含之前的累积，gap 从 enterTime 算起
-            session.accumulatedDuration + (now - session.enterTime.time) / 1000
+            // 【Bug修复】恢复的会话: accumulatedDuration 已包含之前的累积，gap 应从 gapStartTime 算起（而非 enterTime）
+            // 错误原因: enterTime 是原始进入时间（如8天前），用它计算 gap 会导致 pre-gap 时长被重复累加
+            // 正确做法: gapStartTime 记录的是 App 关闭时刻（gap 开始），用 (now - gapStartTime) 计算 gap 时长
+            val effectiveGapStart = session.gapStartTime ?: session.enterTime
+            session.accumulatedDuration + (now - effectiveGapStart.time) / 1000
         }
 
         // 关闭该围栏的开放记录，避免残留
@@ -462,20 +468,24 @@ class StayDurationManager(private val context: Context) {
 
     fun getCurrentDuration(fenceId: String): Long? {
         val session = activeSessions[fenceId] ?: return null
-        val currentDuration = (System.currentTimeMillis() - session.enterTime.time) / 1000
+        val now = System.currentTimeMillis()
 
-        // 对于从崩溃恢复的会话（accumulatedDuration > 0 且 lastSaveTime == null）
-        if (session.accumulatedDuration > 0 && session.lastSaveTime == null) {
-            val postGapTime = maxOf(0L, currentDuration - session.accumulatedDuration)
-            return session.accumulatedDuration + postGapTime
+        // 【Bug修复】对于崩溃恢复的会话（gapStartTime != null && lastSaveTime == null）
+        // 正确计算: accumulatedDuration(纯活跃时长) + (now - gapStartTime)(gap期间，App未运行)
+        // 注意: gapStartTime 在 loadActiveSessionsFromDatabase 时被设为重启时刻，而非真实崩溃时刻
+        // 这是 Android 的固有限制，gapDuration 会在重启后略大于真实 gap（重启到崩溃之间的时长）
+        if (session.gapStartTime != null && session.lastSaveTime == null) {
+            val gapDuration = (now - session.gapStartTime.time) / 1000
+            return session.accumulatedDuration + gapDuration
         }
 
         if (session.lastSaveTime != null) {
-            val timeSinceLastSave = (System.currentTimeMillis() - session.lastSaveTime.time) / 1000
+            val timeSinceLastSave = (now - session.lastSaveTime.time) / 1000
             return session.accumulatedDuration + timeSinceLastSave
         }
 
-        return currentDuration
+        // 正常新会话：从未保存过，直接返回从 enterTime 到现在
+        return (now - session.enterTime.time) / 1000
     }
 
     private fun saveDailyRecord(record: DailyStayRecord) {
@@ -512,7 +522,11 @@ class StayDurationManager(private val context: Context) {
                 enterTime = stay.enterTime,
                 dateKey = getDateKey(stay.enterTime),
                 accumulatedDuration = accumulatedDuration,
-                lastSaveTime = null
+                lastSaveTime = null,
+                // 【Bug修复】gapStartTime 应设为 lastAppCloseTime（App 真正关闭的时刻）
+                // 而非 Date()（重启时刻），否则 gap 时长会被计算为重启到当前的时间而非关闭到当前的时间
+                // 如果 persistentStateManager 没有 lastAppCloseTime 记录（App 未正常关闭就崩溃），则 fallback 到 Date()
+                gapStartTime = persistentStateManager.getLastAppCloseTime() ?: Date()
             )
             activeSessions[stay.fenceId] = session
             Log.d(TAG, "恢复活动会话: ${stay.fenceName}, 累积时长=${accumulatedDuration}秒")
@@ -576,7 +590,8 @@ class StayDurationManager(private val context: Context) {
             val sessionAccumulated = if (session.lastSaveTime != null) {
                 session.accumulatedDuration + (now - session.lastSaveTime.time) / 1000
             } else {
-                currentTotalDuration
+                val gapStart = session.gapStartTime ?: session.enterTime
+                session.accumulatedDuration + (now - gapStart.time) / 1000
             }
 
             // 【关键修复】只更新 stays 表的已有开放记录，不插入新行
@@ -589,9 +604,13 @@ class StayDurationManager(private val context: Context) {
             }
 
             // 更新本地session的累积时长和lastSaveTime
+            // 【Bug修复】同时重置 gapStartTime = Date()，将 gapStartTime 锚定到本次 save 的时刻
+            // 防止 gapStartTime 残留旧值导致下一个 crash cycle 的 gap 计算包含 pre-crash 累积
+            // 效果：每次 periodic save 后，gap 的计算基准都重置为当前时刻
             activeSessions[session.fenceId] = session.copy(
                 accumulatedDuration = sessionAccumulated,
-                lastSaveTime = Date()
+                lastSaveTime = Date(),
+                gapStartTime = Date()
             )
         }
     }
