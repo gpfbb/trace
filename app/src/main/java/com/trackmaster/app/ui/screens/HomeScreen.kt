@@ -22,7 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.R
 import com.trackmaster.app.data.GeoFenceAction
-import com.trackmaster.app.LocationServiceState
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.ui.theme.*
 import java.text.SimpleDateFormat
@@ -41,23 +40,6 @@ fun HomeScreen(
     var todayEnterCount by remember { mutableStateOf(0) }
     var todayExitCount by remember { mutableStateOf(0) }
     var monthTopFences by remember { mutableStateOf<List<Pair<String, Long>>>(emptyList()) }
-
-    DisposableEffect(Unit) {
-        val service = app.getLocationService()
-        var listener: ((LocationServiceState) -> Unit)? = null
-        if (service != null) {
-            listener = { state ->
-                isInsideFence = state.isInsideFence
-                currentFenceName = state.currentFenceName
-            }
-            service.addStateListener(listener)
-        }
-        onDispose {
-            if (service != null && listener != null) {
-                service.removeStateListener(listener)
-            }
-        }
-    }
 
     val fenceStateVersion by app.fenceStateVersion.collectAsState()
 
@@ -87,11 +69,11 @@ fun HomeScreen(
 
         val activeSessions = app.stayDurationManager.activeSessions
         for ((fenceId, session) in activeSessions) {
+            // getCurrentDuration 已经包含 accumulatedDuration，不需要再相加
             val currentDuration = app.stayDurationManager.getCurrentDuration(fenceId) ?: 0L
-            val totalDuration = (session.accumulatedDuration + currentDuration)
-            if (totalDuration > 0) {
+            if (currentDuration > 0) {
                 val currentName = dailyDurations.keys.find { it == session.fenceName } ?: session.fenceName
-                dailyDurations[currentName] = (dailyDurations[currentName] ?: 0L) + totalDuration
+                dailyDurations[currentName] = (dailyDurations[currentName] ?: 0L) + currentDuration
             }
         }
 
@@ -114,8 +96,9 @@ fun HomeScreen(
                 val todayEvents = app.geoFenceEvents.filter { dateFormat.format(it.time).startsWith(todayStr) }
                 todayEnterCount = todayEvents.count { it.action == GeoFenceAction.ENTER }
                 todayExitCount = todayEvents.count { it.action == GeoFenceAction.EXIT }
+                app.notifyFenceStateChanged()
 
-                // monthTopFences 和 isInsideFence/currentFenceName 已由 LaunchedEffect(fenceStateVersion) 更新
+                // notifyFenceStateChanged() 会触发 LaunchedEffect(fenceStateVersion) 更新状态
             }
         }
         lifecycle.addObserver(observer)

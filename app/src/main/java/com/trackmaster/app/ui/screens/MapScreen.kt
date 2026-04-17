@@ -216,7 +216,9 @@ fun MapScreen(app: TrackMasterApplication) {
             onFenceListClick = { showFenceList = true },
             onFenceClick = { fenceId ->
                 // 切换显示状态：点击同一围栏则取消显示，否则跳转并显示该围栏
-                app.setDisplayedFenceId(if (displayedFenceId == fenceId) null else fenceId)
+                val targetId = if (displayedFenceId == fenceId) null else fenceId
+                app.setDisplayedFenceId(targetId)
+                app.setHighlightedFenceId(targetId)
             },
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -436,7 +438,9 @@ fun MapScreen(app: TrackMasterApplication) {
             },
             onHighlightClick = { fence ->
                 // 点击列表围栏时显示围栏的所有点，跳转并高亮显示
-                app.setDisplayedFenceId(if (displayedFenceId == fence.id) null else fence.id)
+                val targetId = if (displayedFenceId == fence.id) null else fence.id
+                app.setDisplayedFenceId(targetId)
+                app.setHighlightedFenceId(targetId)
             },
             onEditClick = { fence ->
                 selectedFence = fence

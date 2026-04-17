@@ -45,6 +45,10 @@ class Repository(
             adapter.beginTransaction()
             adapter.insertSegments(batch)
             adapter.commitTransaction()
+            // 【修复】清除本次写入相关的缓存，让下次查询重新填充
+            batch.forEach { seg ->
+                segmentCache.remove(formatDateKey(seg.startTs))
+            }
         } catch (e: Exception) {
             adapter.rollbackTransaction()
             synchronized(flushLock) {

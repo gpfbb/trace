@@ -87,13 +87,17 @@ class AppPreferences(context: Context) {
         set(value) = prefs.edit().putLong(KEY_LAST_RESET_DATE, value).apply()
 
     fun incrementLocations(shouldProcess: Boolean) {
-        synchronized(this) {
-            // totalLocations = 所有收到的定位（包括被忽略的）
-            // processedLocations = 实际处理的定位
-            totalLocations++
-            if (shouldProcess) {
-                processedLocations++
+        synchronized(prefs) {
+            val total = prefs.getInt(KEY_TOTAL_LOCATIONS, 0) + 1
+            val processed = if (shouldProcess) {
+                prefs.getInt(KEY_PROCESSED_LOCATIONS, 0) + 1
+            } else {
+                prefs.getInt(KEY_PROCESSED_LOCATIONS, 0)
             }
+            prefs.edit()
+                .putInt(KEY_TOTAL_LOCATIONS, total)
+                .putInt(KEY_PROCESSED_LOCATIONS, processed)
+                .apply()
         }
     }
 

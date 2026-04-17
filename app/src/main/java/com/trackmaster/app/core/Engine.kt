@@ -324,6 +324,28 @@ class Engine(
         return matched.map { it.id }
     }
 
+    /**
+     * 使用动态 buffer 检查位置是否在围栏内（不更新状态）
+     *
+     * 用于 FenceProcessingHolder 的同步围栏检测，与 onLocationUpdate 使用相同的动态 buffer 策略
+     *
+     * @param fix 位置信息
+     * @return 命中的围栏 ID 列表（按深度降序排列，最深在前）
+     */
+    fun checkFenceMatchWithDynamicBuffer(fix: LocationFix): List<String> {
+        var currentBufferSize = 0.0
+        if (bufferManager != null) {
+            val bufferState = bufferManager.update(
+                accuracyM = fix.accuracy.toDouble(),
+                speedMps = fix.speed?.toDouble(),
+                powerMode = currentPowerMode
+            )
+            currentBufferSize = bufferState.bufferSizeM
+        }
+        val matched = findAllMatchedFences(fix, currentBufferSize, true)
+        return matched.map { it.id }
+    }
+
     /** BBox 快速排除 → 精确 point-in-polygon，返回最深叶子 */
     private fun findDeepestMatch(fix: LocationFix): Geofence? {
         var deepest: Geofence? = null

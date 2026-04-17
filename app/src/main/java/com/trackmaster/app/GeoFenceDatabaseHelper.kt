@@ -500,7 +500,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_CATEGORY_CREATED_AT, category.createdAt.time)
 
         val result = db.insert(TABLE_CATEGORIES, null, values)
-        invalidateCategoryCache()
+        if (result != -1L) invalidateCategoryCache()
         return result
     }
 
