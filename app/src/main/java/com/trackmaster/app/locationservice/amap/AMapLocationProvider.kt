@@ -23,8 +23,8 @@ class AMapLocationProvider(
     companion object {
         private const val TAG = "AMapLocationProvider"
         private const val DEFAULT_TIMEOUT_MS = 10000L
-        private const val HIGH_ACCURACY_INTERVAL_MS = 5000L
-        private const val BATTERY_SAVING_INTERVAL_MS = 10000L
+        private const val HIGH_ACCURACY_INTERVAL_MS = 60_000L
+        private const val BATTERY_SAVING_INTERVAL_MS = 60_000L
         private const val AMAP_TYPE_GPS = 1
         private const val AMAP_TYPE_NETWORK = 2
     }

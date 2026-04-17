@@ -351,6 +351,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             if (isUsingGoogleProvider) {
                 locationProvider?.start()
             } else {
+                // 【P1修复】先stop再设置option+start，确保isOnceLocation=true模式正确切换
+                // 防止service restart时旧配置残留导致定位模式混乱
+                locationClient?.stopLocation()
                 updateLocationOptionsForFastFirst()
                 locationClient?.startLocation()
             }
@@ -386,7 +389,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
     }
 
     private fun startContinuousLocation() {
-        startContinuousLocationWithSmartInterval(10_000L)
+        startContinuousLocationWithSmartInterval(60_000L)
     }
 
     private fun startContinuousLocationWithSmartInterval(baseIntervalMs: Long) {
@@ -588,7 +591,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             if (isUsingGoogleProvider) {
                 locationProvider?.start()
             } else {
-                updateLocationOptionsForContinuous(30_000L)
+                updateLocationOptionsForContinuous(60_000L)
                 locationClient?.startLocation()
             }
             serviceState = serviceState.copy(isRunning = true, isFirstLocation = false)
@@ -609,6 +612,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 )
                 locationProvider?.start()
             } else {
+                // 【P1修复】先stop再设置option+start，确保isOnceLocation=true切换生效
+                // 否则AMap SDK可能仍使用之前的连续定位配置，导致临时检查变成连续高频定位
+                locationClient?.stopLocation()
                 locationOption = AMapLocationClientOption().apply {
                     locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
                     isOnceLocation = true
@@ -707,7 +713,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         } else {
             // Throttled回调：仍然调用省电state更新（用于计数累加），但不更新UI状态
             Log.d(TAG, "Throttled回调（不更新UI）: shouldProcess=$shouldProcess, isStopped=$isLocationClientStopped")
-            val isInFence = serviceState.isInsideFence  // 复用上次的围栏状态
+            // 【修复】重新从 currentMatchedFences 获取围栏状态
+            val matchedFences = app?.currentMatchedFences ?: emptyList()
+            val isInFence = matchedFences.isNotEmpty()
             val shouldStopForPowerSave = isInFence.not()
             updatePowerSavingState(shouldStopForPowerSave)
         }
@@ -720,7 +728,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             (application as? TrackMasterApplication)?.handleFirstLocationAfterRestore(toLocation(location))
 
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                startContinuousLocationWithSmartInterval(10_000L)
+                startContinuousLocationWithSmartInterval(60_000L)
             }, 1000)
         }
     }

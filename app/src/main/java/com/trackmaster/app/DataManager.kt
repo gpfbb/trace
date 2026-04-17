@@ -260,8 +260,14 @@ class DataManager(private val context: Context) {
                 } else {
                     UUID.randomUUID().toString()
                 }
-                val name = fenceJson.getString("name")
-                val type = GeoFenceType.valueOf(fenceJson.getString("type"))
+                val name = fenceJson.optString("name", "").takeIf { it.isNotBlank() }
+                val typeStr = fenceJson.optString("type", "")
+                val type = try {
+                    GeoFenceType.valueOf(typeStr)
+                } catch (e: IllegalArgumentException) {
+                    null
+                }
+                if (name == null || type == null) continue
                 val categoryId = fenceJson.optString("categoryId", Category.UNASSIGNED_ID)
                 val createdAt = try {
                     dateTimeFormat.parse(fenceJson.getString("createdAt"))
@@ -270,15 +276,16 @@ class DataManager(private val context: Context) {
                 }
 
                 val fence = if (type == GeoFenceType.CIRCLE) {
+                    val centerLat = fenceJson.optDouble("centerLat", Double.NaN)
+                    val centerLng = fenceJson.optDouble("centerLng", Double.NaN)
+                    val radius = fenceJson.optDouble("radius", Double.NaN).toFloat()
+                    if (centerLat.isNaN() || centerLng.isNaN() || radius.isNaN()) continue
                     GeoFence(
                         id = fenceId,
                         name = name,
                         type = type,
-                        center = GeoFencePoint(
-                            fenceJson.getDouble("centerLat"),
-                            fenceJson.getDouble("centerLng")
-                        ),
-                        radius = fenceJson.getDouble("radius").toFloat(),
+                        center = GeoFencePoint(centerLat, centerLng),
+                        radius = radius,
                         categoryId = categoryId,
                         createdAt = createdAt
                     )
@@ -312,15 +319,25 @@ class DataManager(private val context: Context) {
             for (i in 0 until eventsArray.length()) {
                 val eventJson = eventsArray.optJSONObject(i) ?: continue
                 val time = dateTimeFormat.parse(eventJson.getString("time")) ?: Date()
+                val actionStr = eventJson.optString("action", "")
+                val action = try {
+                    GeoFenceAction.valueOf(actionStr)
+                } catch (e: IllegalArgumentException) {
+                    null
+                }
+                val lat = eventJson.optDouble("latitude", Double.NaN)
+                val lng = eventJson.optDouble("longitude", Double.NaN)
+                if (action == null || lat.isNaN() || lng.isNaN()) continue
+
                 val event = GeoFenceEvent(
                     id = eventJson.optString("id", UUID.randomUUID().toString()),
-                    fenceId = eventJson.getString("fenceId"),
-                    fenceName = eventJson.getString("fenceName"),
-                    action = GeoFenceAction.valueOf(eventJson.getString("action")),
+                    fenceId = eventJson.optString("fenceId", ""),
+                    fenceName = eventJson.optString("fenceName", ""),
+                    action = action,
                     time = time,
-                    latitude = eventJson.getDouble("latitude"),
-                    longitude = eventJson.getDouble("longitude"),
-                    accuracy = eventJson.getDouble("accuracy").toFloat(),
+                    latitude = lat,
+                    longitude = lng,
+                    accuracy = eventJson.optDouble("accuracy", 0.0).toFloat(),
                     durationSeconds = eventJson.optLong("durationSeconds").takeIf { it > 0 }
                 )
                 dbHelper.insertEvent(event)
@@ -519,18 +536,30 @@ class DataManager(private val context: Context) {
             var count = 0
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
-                val type = GeoFenceType.valueOf(obj.getString("type"))
+                val typeStr = obj.optString("type", "")
+                val type = try {
+                    GeoFenceType.valueOf(typeStr)
+                } catch (e: IllegalArgumentException) {
+                    null
+                }
+                if (type == null) continue
                 // 优先保留原始 ID，若与已有围栏冲突则生成新 ID
                 val originalId = obj.optString("id", "").takeIf { it.isNotEmpty() }
                 val existingFence = originalId?.let { dbHelper.getFenceById(it) }
                 val fenceId = if (existingFence != null) UUID.randomUUID().toString() else originalId ?: UUID.randomUUID().toString()
+                val name = obj.optString("name", "")
+                if (name.isBlank()) continue
                 val fence = if (type == GeoFenceType.CIRCLE) {
+                    val centerLat = obj.optDouble("centerLat", Double.NaN)
+                    val centerLng = obj.optDouble("centerLng", Double.NaN)
+                    val radius = obj.optDouble("radius", Double.NaN).toFloat()
+                    if (centerLat.isNaN() || centerLng.isNaN() || radius.isNaN()) continue
                     GeoFence(
                         id = fenceId,
-                        name = obj.getString("name"),
+                        name = name,
                         type = type,
-                        center = GeoFencePoint(obj.getDouble("centerLat"), obj.getDouble("centerLng")),
-                        radius = obj.getDouble("radius").toFloat(),
+                        center = GeoFencePoint(centerLat, centerLng),
+                        radius = radius,
                         categoryId = obj.optString("categoryId", Category.UNASSIGNED_ID),
                         color = obj.optString("color", "#FF0000"),
                         alpha = obj.optDouble("alpha", 0.3).toFloat(),
@@ -544,7 +573,7 @@ class DataManager(private val context: Context) {
                     }
                     GeoFence(
                         id = fenceId,
-                        name = obj.getString("name"),
+                        name = name,
                         type = type,
                         points = pts,
                         categoryId = obj.optString("categoryId", Category.UNASSIGNED_ID),
@@ -782,16 +811,26 @@ class DataManager(private val context: Context) {
                     continue // 跳过无效记录
                 }
 
+                val actionStr = obj.optString("action", "")
+                val action = try {
+                    GeoFenceAction.valueOf(actionStr)
+                } catch (e: IllegalArgumentException) {
+                    null
+                }
+                val lat = obj.optDouble("latitude", Double.NaN)
+                val lng = obj.optDouble("longitude", Double.NaN)
+                if (action == null || lat.isNaN() || lng.isNaN()) continue
+
                 eventRecords.add(
                     GeoFenceEvent(
                         id = obj.optString("id", UUID.randomUUID().toString()),
                         fenceId = fenceId,
                         fenceName = fenceName,
-                        action = GeoFenceAction.valueOf(obj.getString("action")),
+                        action = action,
                         time = timestamp,
-                        latitude = obj.getDouble("latitude"),
-                        longitude = obj.getDouble("longitude"),
-                        accuracy = obj.getDouble("accuracy").toFloat()
+                        latitude = lat,
+                        longitude = lng,
+                        accuracy = obj.optDouble("accuracy", 0.0).toFloat()
                     )
                 )
             }

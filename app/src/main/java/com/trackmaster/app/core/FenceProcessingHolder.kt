@@ -65,11 +65,17 @@ class FenceProcessingHolder(
         // 外部 checkFenceMatch(bufferM=0.0) 先写入，onLocationUpdate 后写入 → TOCTOU 竞态
         // 围栏状态以 onLocationUpdate 结果为准，外部调用删除
 
+        // 【P0修复】只有 shouldProcess=true 时才执行围栏匹配计算
+        // Throttled GPS 回调不应触发昂贵的空间计算，否则会导致每分钟30+次无意义的CPU开销
+        if (!shouldProcess) {
+            return false
+        }
+
         // 【关键修复】立即同步更新 currentMatchedFences 和通知 UI 变化
         // 让 HomeViewModel 等组件能立即感知围栏状态变化，而不是等待异步处理完成
         // 使用 checkFenceMatch(fix) 同步获取当前定位的围栏匹配结果
         // 注意：engine.currentMatchedFenceIds 是上一次 onLocationUpdate 的结果，存在延迟
-        val allMatchedFenceIds = engine.checkFenceMatch(fix)
+        val allMatchedFenceIds = engine.checkFenceMatchWithDynamicBuffer(fix)
         currentMatchedFences.clear()
         for (fenceId in allMatchedFenceIds) {
             val fence = geoFences.find { it.id == fenceId }
@@ -183,7 +189,7 @@ class FenceProcessingHolder(
     private fun handleAllMatchedFences(location: Location, justExitedFenceId: String?, fix: LocationFix) {
         // 使用 checkFenceMatch 而非 engine.currentMatchedFenceIds
         // 确保与 checkGeoFences 同步更新使用相同的 buffer 策略
-        val allMatchedFenceIds = engine.checkFenceMatch(fix)
+        val allMatchedFenceIds = engine.checkFenceMatchWithDynamicBuffer(fix)
         if (allMatchedFenceIds.isEmpty()) {
             if (!isRestoringFirstLocation) {
                 currentMatchedFences.clear()

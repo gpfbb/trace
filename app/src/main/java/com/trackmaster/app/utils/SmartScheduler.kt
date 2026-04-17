@@ -244,14 +244,22 @@ class SmartScheduler(
 
         // ---- 漂移过滤 ----
         if (fix.accuracy > config.driftThresholdM) {
+            // 漂移时【不】更新lastProcessedTs，保持与上次有效处理的时间差
+            // 否则GPS噪声会导致throttle机制完全失效（每次都更新时间戳，下次检查永远是小间隔）
             return decision(false)
         }
 
         val currentPoint = GeoPoint(fix.lat, fix.lng)
 
+        // ---- 是否在围栏内（用于围栏内激进降频） ----
+        val isInsideFence = checkFenceInside(currentPoint)
+
         // ---- 降频检查：是否到了该处理的时间 ----
-        val interval = getIntervalForLevel(false)  // 提前检查用默认值，继续处理时再使用实际值
+        val interval = getIntervalForLevel(isInsideFence)  // 使用实际isInsideFence状态
         if (lastProcessedTs > 0 && ts - lastProcessedTs < interval) {
+            // Throttled：【不】更新lastProcessedTs
+            // 保持与上次【有效处理】的时间差，throttle才能正确工作
+            // 修复前：每次throttled回调都更新时间戳 → 下次ts-lastProcessedTs永远是小间隔 → 30秒后仍有32次/分
             return decision(false)
         }
 
@@ -261,9 +269,6 @@ class SmartScheduler(
 
         // ---- 边界 Buffer 检测（所有模式都启用，小围栏用户边界敏感） ----
         val inBuffer = checkBoundaryBuffer(currentPoint)
-
-        // ---- 是否在围栏内（用于围栏内激进降频） ----
-        val isInsideFence = checkFenceInside(currentPoint)
 
         // ---- 立即重置条件检查 ----
         // 【核心修复】单次GPS跳点(>30m)不能判断为"真移动"
