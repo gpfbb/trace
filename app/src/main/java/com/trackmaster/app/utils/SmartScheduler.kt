@@ -91,9 +91,10 @@ val BALANCED_INSIDE_FENCE_THROTTLE_STEPS = listOf(
 /**
  * 省电模式降频阶梯（优化版）
  * 更激进的降频，适合睡觉/长时间静止场景
+ * 用户要求：省电模式一分钟一次起步
  */
 val POWERSAVE_THROTTLE_STEPS = listOf(
-    ThrottleStep(afterMin = 0, intervalMs = 30_000L),      // 0-1min: 30s/次
+    ThrottleStep(afterMin = 0, intervalMs = 60_000L),      // 0-1min: 60s/次（1次/分）
     ThrottleStep(afterMin = 1, intervalMs = 120_000L),     // 1-3min: 2min/次
     ThrottleStep(afterMin = 3, intervalMs = 300_000L),      // 3-5min: 5min/次
     ThrottleStep(afterMin = 5, intervalMs = 480_000L),     // 5-10min: 8min/次
