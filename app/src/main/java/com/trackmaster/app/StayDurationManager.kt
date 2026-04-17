@@ -45,8 +45,8 @@ class StayDurationManager(private val context: Context) {
         }
     }
 
-    private val dbHelper = (context.applicationContext as TrackMasterApplication).dbHelper
-    private val persistentStateManager = (context.applicationContext as TrackMasterApplication).persistentStateManager
+    private val dbHelper by lazy { (context.applicationContext as TrackMasterApplication).dbHelper }
+    private val persistentStateManager by lazy { (context.applicationContext as TrackMasterApplication).persistentStateManager }
 
     public val activeSessions: ConcurrentHashMap<String, FenceActiveSession> = ConcurrentHashMap()
     private val dailyCache = ConcurrentHashMap<String, MutableMap<String, DailyStayRecord>>()
