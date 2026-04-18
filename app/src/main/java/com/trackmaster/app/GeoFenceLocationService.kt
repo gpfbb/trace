@@ -485,9 +485,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 consecutiveNotProcessCount++
                 Log.d(TAG, "省电: 不需要处理 ($consecutiveNotProcessCount/$STOP_THRESHOLD)")
 
-                // 【Bug修复】围栏内阈值从5降到2，interval从300s降到60s
-                // 围栏内用户对定位精度要求低，2次throttled即可触发降频
-                // 60s间隔足够检测用户进出围栏，不会漏检
+                // 【Bug修复】围栏内阈值：先降频（2次），STOP_THRESHOLD=5 对所有场景生效（5次后停止GPS）
+                // 围栏内用户对定位精度要求低，2次throttled即可触发降频到60s
+                // 但无论围栏内外，STOP_THRESHOLD=5 统一触发停止GPS（防止围栏内静止时GPS永不停止）
                 val INSIDE_FENCE_THRESHOLD = 2
                 if (consecutiveNotProcessCount >= INSIDE_FENCE_THRESHOLD && serviceState.isInsideFence) {
                     Log.d(TAG, "省电: 围栏内连续${consecutiveNotProcessCount}次不处理，降频到60s/次继续监控")
@@ -496,9 +496,10 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                         locationClient?.startLocation()
                         serviceState = serviceState.copy(isRunning = true)
                     }
-                } else if (consecutiveNotProcessCount >= STOP_THRESHOLD) {
-                    // 围栏外：STOP_THRESHOLD=5次throttled后停止GPS
-                    Log.d(TAG, "省电: 围栏外连续${consecutiveNotProcessCount}次不需要处理，停止定位，调度 Alarm")
+                }
+                // STOP_THRESHOLD=5 对所有场景统一生效（围栏内/外均适用）
+                if (consecutiveNotProcessCount >= STOP_THRESHOLD) {
+                    Log.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不处理，停止GPS，调度Alarm")
                     isLocationClientStopped = true
                     lastResumeCheckTime = now
                     stopLocation()
