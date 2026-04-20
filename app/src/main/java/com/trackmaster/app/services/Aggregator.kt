@@ -95,6 +95,7 @@ class Aggregator(
             // 计算覆盖的分钟集合（去重）
             val startMin = effectiveStart / 60_000L
             val endMin = effectiveEnd / 60_000L
+            if (startMin > endMin) continue
 
             var addedMinutes = 0
             for (m in startMin..endMin) {

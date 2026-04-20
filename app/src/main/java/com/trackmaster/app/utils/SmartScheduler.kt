@@ -541,6 +541,7 @@ class SmartScheduler(
      * 计算窗口内的中心点
      */
     private fun computeWindowCenter(records: List<LocationHistoryRecord>): GeoPoint {
+        if (records.isEmpty()) return GeoPoint(0.0, 0.0)
         val latSum = records.sumOf { it.point.lat }
         val lngSum = records.sumOf { it.point.lng }
         val count = records.size

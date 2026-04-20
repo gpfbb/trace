@@ -90,8 +90,12 @@ class HomeViewModel(
 
         // 监听围栏状态版本变化，立即刷新 UI
         viewModelScope.launch {
-            app.fenceStateVersion.collect {
-                refreshStats()
+            try {
+                app.fenceStateVersion.collect {
+                    refreshStats()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "fenceStateVersion collect error", e)
             }
         }
     }
@@ -203,11 +207,15 @@ class HomeViewModel(
      */
     private fun startAutoRefresh() {
         viewModelScope.launch {
-            while (isActive) {
-                delay(60_000) // 1分钟
-                if (_isInsideFence.value) {
-                    updateCurrentFenceStatus()
+            try {
+                while (isActive) {
+                    delay(60_000) // 1分钟
+                    if (_isInsideFence.value) {
+                        updateCurrentFenceStatus()
+                    }
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "autoRefresh error", e)
             }
         }
     }

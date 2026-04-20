@@ -42,12 +42,13 @@ class Repository(
         }
         // 在临界区外执行数据库操作
         try {
-            // 【P1修复】先清缓存再commit：若crash在commit之后、clear之前，
+            // DB有新数据但缓存是旧的，getSegmentsByDate()会返回stale数据
+            adapter.beginTransaction()
+            // 清缓存在transaction成功后：若crash在commit之后，
             // DB有新数据但缓存是旧的，getSegmentsByDate()会返回stale数据
             batch.forEach { seg ->
                 segmentCache.remove(formatDateKey(seg.startTs))
             }
-            adapter.beginTransaction()
             adapter.insertSegments(batch)
             adapter.commitTransaction()
         } catch (e: Exception) {
