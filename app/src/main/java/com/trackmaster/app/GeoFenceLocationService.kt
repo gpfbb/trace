@@ -9,6 +9,10 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -24,6 +28,7 @@ import com.trackmaster.app.locationservice.LocationType
 import com.trackmaster.app.locationservice.LocationCallback
 import com.trackmaster.app.locationservice.LocationProvider
 import com.trackmaster.app.locationservice.google.GoogleLocationProvider
+import com.trackmaster.app.core.AccelerometerData
 import java.util.Date
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -86,6 +91,25 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
     /** 临时检查是否已完成单次定位（避免连续启动） */
     private var temporaryCheckCompleted = false
 
+    // ============================================================
+    // 加速度传感器（用于静止检测）
+    // ============================================================
+    private var sensorManager: SensorManager? = null
+    private var accelerometerData: AccelerometerData? = null
+    private val accelListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent) {
+            if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+                accelerometerData = AccelerometerData(
+                    x = event.values[0],
+                    y = event.values[1],
+                    z = event.values[2],
+                    timestamp = System.currentTimeMillis()
+                )
+            }
+        }
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
+
     private val powerSaveHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val powerSaveCheckRunnable = object : Runnable {
         override fun run() {
@@ -120,6 +144,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         // 监听 MapProvider 切换
         (application as? TrackMasterApplication)?.appPreferences?.sharedPreferences
             ?.registerOnSharedPreferenceChangeListener(prefsListener)
+        // 【Bug修复】注册加速度传感器，用于静止检测（GPS速度不可靠）
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { accel ->
+            sensorManager?.registerListener(accelListener, accel, SensorManager.SENSOR_DELAY_NORMAL)
+            Log.d(TAG, "加速度传感器已注册")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -152,6 +182,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         }
         (application as? TrackMasterApplication)?.appPreferences?.sharedPreferences
             ?.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        // 注销加速度传感器
+        sensorManager?.unregisterListener(accelListener)
+        Log.d(TAG, "加速度传感器已注销")
     }
 
     private fun createNotificationChannel() {
@@ -379,7 +412,16 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             temporaryResumeForCheck()
         } else {
             consecutiveNotProcessCount = 0
-            Log.d(TAG, "电源模式切换: 定位运行中，重置省电计数器")
+            // 【Bug修复】切换电源模式后同步 GPS interval
+            // 新模式 level=0 的起始间隔为 60s，立即同步到 GPS provider
+            // 避免引擎已切换模式但 GPS 仍以旧间隔运行
+            val newIntervalMs = 60_000L
+            if (isUsingGoogleProvider) {
+                locationProvider?.setInterval(newIntervalMs)
+            } else {
+                updateLocationOptionsForContinuous(newIntervalMs)
+            }
+            Log.d(TAG, "电源模式切换: 定位运行中，重置省电计数器，同步GPS间隔到${newIntervalMs}ms")
         }
     }
 
@@ -443,7 +485,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         }
     }
 
-    private fun updatePowerSavingState(shouldProcess: Boolean) {
+    private fun updatePowerSavingState(shouldProcess: Boolean, engineIntervalMs: Long = 60_000L) {
         val now = System.currentTimeMillis()
 
         if (isTemporaryCheck) {
@@ -492,16 +534,19 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 Log.d(TAG, "省电: 不需要处理 ($consecutiveNotProcessCount/$STOP_THRESHOLD)")
 
                 // 【Bug修复】围栏内阈值：先降频（2次），STOP_THRESHOLD=5 对所有场景生效（5次后停止GPS）
-                // 围栏内用户对定位精度要求低，2次throttled即可触发降频到60s
+                // 围栏内用户对定位精度要求低，2次throttled即可触发降频
                 // 但无论围栏内外，STOP_THRESHOLD=5 统一触发停止GPS（防止围栏内静止时GPS永不停止）
                 val INSIDE_FENCE_THRESHOLD = 2
                 if (consecutiveNotProcessCount >= INSIDE_FENCE_THRESHOLD && serviceState.isInsideFence) {
-                    Log.d(TAG, "省电: 围栏内连续${consecutiveNotProcessCount}次不处理，降频到60s/次继续监控")
+                    // 【Bug修复】使用 engine.lastComputedIntervalMs 而非硬编码 60s
+                    // engine 已根据 stationary 检测计算出合适的下次间隔，直接使用
+                    val engineInterval = engineIntervalMs
+                    Log.d(TAG, "省电: 围栏内连续${consecutiveNotProcessCount}次不处理，降频到${engineInterval}ms/次继续监控")
                     // 【Bug修复】Google provider 也需要 setInterval，否则降频不生效
                     if (isUsingGoogleProvider) {
-                        locationProvider?.setInterval(60_000L)
+                        locationProvider?.setInterval(engineInterval)
                     } else {
-                        updateLocationOptionsForContinuous(60_000L)
+                        updateLocationOptionsForContinuous(engineInterval)
                     }
                     if (!serviceState.isRunning) {
                         locationClient?.startLocation()
@@ -675,6 +720,17 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             else {
                 // BUG-006 FIX: 连续定位模式：已有定时调度，不额外重试
                 Log.d(TAG, "连续定位模式下定位失败，等待下次定时调度")
+                // 【Bug修复】GPS 失败时重置临时检查标志，避免状态机卡住
+                // 如果此次失败属于临时检查，flags 必须重置让睡眠循环恢复
+                if (isTemporaryCheck) {
+                    isTemporaryCheck = false
+                    temporaryCheckCompleted = false
+                    Log.d(TAG, "省电: 临时检查GPS失败，重置标志，继续停止+调度Alarm")
+                    isLocationClientStopped = true
+                    lastResumeCheckTime = System.currentTimeMillis()
+                    stopLocation()
+                    scheduleNextWakeup()
+                }
             }
             return
         }
@@ -697,7 +753,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 "来源=${if (location.locationType == AMAP_TYPE_GPS) "GPS" else if (location.locationType == AMAP_TYPE_NETWORK) "前次" else "网络"}")
 
         val app = application as? TrackMasterApplication
-        val shouldProcess = app?.checkGeoFences(toLocation(location)) ?: false
+        // 【Bug修复】传递加速度数据，使 SmartScheduler 静止判定使用加速度数据
+        // 避免仅依赖 GPS 速度（GPS 噪声导致 0.5m/s 阈值频繁触发，阻止降频）
+        val shouldProcess = app?.checkGeoFences(toLocation(location), accelerometerData) ?: false
 
         // 【Bug修复】只有 shouldProcess=true 时才更新 serviceState 和围栏状态
         // shouldProcess=false 意味着 SmartScheduler 认为这是GPS噪声或无需处理的定位
@@ -724,7 +782,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             Log.d(TAG, "省电检查: shouldProcess=$shouldProcess, isInFence=$isInFence, isStopped=$isLocationClientStopped")
 
             val shouldStopForPowerSave = isInFence.not()
-            updatePowerSavingState(shouldStopForPowerSave)
+            val engineInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
+            updatePowerSavingState(shouldStopForPowerSave, engineInterval)
         } else {
             // Throttled回调：仍然调用省电state更新（用于计数累加），但不更新UI状态
             Log.d(TAG, "Throttled回调（不更新UI）: shouldProcess=$shouldProcess, isStopped=$isLocationClientStopped")
@@ -738,7 +797,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 val nextInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
                 locationProvider?.setInterval(nextInterval)
             }
-            updatePowerSavingState(shouldStopForPowerSave)
+            val engineInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
+            updatePowerSavingState(shouldStopForPowerSave, engineInterval)
         }
 
         updateNotification()

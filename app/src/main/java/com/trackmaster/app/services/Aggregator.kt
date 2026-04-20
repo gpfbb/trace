@@ -142,11 +142,13 @@ class Aggregator(
                 totalMin = leafMinutes[fence.id] ?: 0
                 allCategoryMap[fence.id] = leafCategoryMinutes[fence.id] ?: emptyMap()
             } else {
-                // 父级：累加所有子级
+                // 父级：累加所有子级 + 父级独立停留时长
                 val children = childrenMap[fence.id] ?: emptyList()
                 for (child in children) {
                     totalMin += allMinutes[child.id] ?: 0
                 }
+                // 【Bug修复】父级自己的独立时长（非子围栏贡献的部分）也需累加
+                totalMin += leafMinutes[fence.id] ?: 0
                 allCategoryMap[fence.id] = emptyMap() // 父级无分类
             }
 

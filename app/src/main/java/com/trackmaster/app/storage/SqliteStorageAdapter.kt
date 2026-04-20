@@ -50,16 +50,24 @@ class SqliteStorageAdapter(
 
     override suspend fun insertSegments(segments: List<StaySegment>) {
         val db = dbHelper.writableDatabase
-        for (seg in segments) {
-            val values = ContentValues().apply {
-                put(COL_STAY_ID, seg.id)
-                put(COL_FENCE_ID, seg.leafGeofenceId)
-                put(COL_FENCE_NAME, seg.leafGeofenceId) // 名称由后续 join 补全
-                put(COL_ENTER_TIME, seg.startTs)
-                put(COL_EXIT_TIME, seg.endTs)
-                put(COL_DURATION, seg.endTs?.let { (it - seg.startTs) / 1000 })
+        // 【Bug修复】添加批量事务保护，确保所有 segment 原子写入
+        // 事务成功：全部提交；事务失败：全部回滚
+        db.beginTransaction()
+        try {
+            for (seg in segments) {
+                val values = ContentValues().apply {
+                    put(COL_STAY_ID, seg.id)
+                    put(COL_FENCE_ID, seg.leafGeofenceId)
+                    put(COL_FENCE_NAME, seg.leafGeofenceId) // 名称由后续 join 补全
+                    put(COL_ENTER_TIME, seg.startTs)
+                    put(COL_EXIT_TIME, seg.endTs)
+                    put(COL_DURATION, seg.endTs?.let { (it - seg.startTs) / 1000 })
+                }
+                db.insertWithOnConflict(TABLE_STAYS, null, values, SQLiteDatabase.CONFLICT_IGNORE)
             }
-            db.insertWithOnConflict(TABLE_STAYS, null, values, SQLiteDatabase.CONFLICT_IGNORE)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
     }
 
@@ -131,14 +139,16 @@ class SqliteStorageAdapter(
     override suspend fun saveDailySummaries(summaries: List<DailySummary>) {
         val db = dbHelper.writableDatabase
         for (s in summaries) {
-            val values = ContentValues().apply {
-                put(COL_DAILY_DATE, s.date)
-                put(COL_DAILY_FENCE_ID, s.geofenceId)
-                put(COL_DAILY_FENCE_NAME, s.name)
-                put(COL_DAILY_DURATION, s.spatialDurationMin * 60) // 分钟→秒
-                put(COL_DAILY_LAST_UPDATED, System.currentTimeMillis())
-            }
-            db.insertWithOnConflict(TABLE_DAILY_STAYS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            // 【Bug修复】使用 ON CONFLICT UPDATE ... = ... + excluded.xxx 增量模式
+            // 避免 CONFLICT_REPLACE 覆盖 StayDurationManager 之前累加的时长数据
+            db.execSQL("""
+                INSERT INTO $TABLE_DAILY_STAYS ($COL_DAILY_DATE, $COL_DAILY_FENCE_ID, $COL_DAILY_FENCE_NAME, $COL_DAILY_DURATION, $COL_DAILY_LAST_UPDATED)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT($COL_DAILY_DATE, $COL_DAILY_FENCE_ID) DO UPDATE SET
+                    $COL_DAILY_DURATION = $COL_DAILY_DURATION + excluded.$COL_DAILY_DURATION,
+                    $COL_DAILY_FENCE_NAME = excluded.$COL_DAILY_FENCE_NAME,
+                    $COL_DAILY_LAST_UPDATED = excluded.$COL_DAILY_LAST_UPDATED
+            """, arrayOf(s.date, s.geofenceId, s.name, s.spatialDurationMin * 60, System.currentTimeMillis()))
         }
     }
 

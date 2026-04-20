@@ -885,16 +885,23 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
     fun insertStayRecord(record: FenceStayRecord): Long {
         val db = writableDatabase
-        val values = ContentValues()
-        values.put(KEY_STAY_ID, UUID.randomUUID().toString())
-        values.put(KEY_FENCE_ID, record.fenceId)
-        values.put(KEY_FENCE_NAME, record.fenceName)
-        values.put(KEY_ENTER_TIME, record.enterTime.time)
-        values.put(KEY_EXIT_TIME, record.exitTime?.time)
-        values.put(KEY_DURATION, record.durationSeconds)
+        // 【Bug修复】添加事务保护，确保单条记录写入的原子性
+        db.beginTransaction()
+        return try {
+            val values = ContentValues()
+            values.put(KEY_STAY_ID, UUID.randomUUID().toString())
+            values.put(KEY_FENCE_ID, record.fenceId)
+            values.put(KEY_FENCE_NAME, record.fenceName)
+            values.put(KEY_ENTER_TIME, record.enterTime.time)
+            values.put(KEY_EXIT_TIME, record.exitTime?.time)
+            values.put(KEY_DURATION, record.durationSeconds)
 
-        val result = db.insert(TABLE_STAYS, null, values)
-        return result
+            val result = db.insert(TABLE_STAYS, null, values)
+            db.setTransactionSuccessful()
+            result
+        } finally {
+            db.endTransaction()
+        }
     }
 
     /**
@@ -922,18 +929,25 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
      */
     fun closeOpenStayRecord(fenceId: String, exitTime: Date, durationSeconds: Long): Int {
         val db = writableDatabase
-        val values = ContentValues()
-        values.put(KEY_EXIT_TIME, exitTime.time)
-        values.put(KEY_DURATION, durationSeconds)
+        // 【Bug修复】添加事务保护，确保 UPDATE 的原子性
+        db.beginTransaction()
+        return try {
+            val values = ContentValues()
+            values.put(KEY_EXIT_TIME, exitTime.time)
+            values.put(KEY_DURATION, durationSeconds)
 
-        val result = db.update(
-            TABLE_STAYS,
-            values,
-            "$KEY_FENCE_ID = ? AND $KEY_EXIT_TIME IS NULL",
-            arrayOf(fenceId)
-        )
-        Log.d("GeoFenceDB", "关闭开放停留记录: fenceId=$fenceId, exitTime=$exitTime, duration=$durationSeconds, updatedRows=$result")
-        return result
+            val result = db.update(
+                TABLE_STAYS,
+                values,
+                "$KEY_FENCE_ID = ? AND $KEY_EXIT_TIME IS NULL",
+                arrayOf(fenceId)
+            )
+            db.setTransactionSuccessful()
+            Log.d("GeoFenceDB", "关闭开放停留记录: fenceId=$fenceId, exitTime=$exitTime, duration=$durationSeconds, updatedRows=$result")
+            result
+        } finally {
+            db.endTransaction()
+        }
     }
 
     fun getStayRecordsByFence(fenceId: String): List<FenceStayRecord> {

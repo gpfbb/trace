@@ -181,9 +181,10 @@ class Engine(
     /**
      * 仅评估位置是否应该处理（用于省电控制）
      * 不执行完整的围栏检测逻辑，返回是否应该处理
+     * 【Bug修复】接受 accel 参数，使静止判定能使用加速度数据
      */
-    fun evaluateLocation(fix: LocationFix): Boolean {
-        val decision = scheduler.evaluate(fix, null)
+    fun evaluateLocation(fix: LocationFix, accel: AccelerometerData? = null): Boolean {
+        val decision = scheduler.evaluate(fix, accel)
         lastShouldProcess = decision.shouldProcess
         lastComputedIntervalMs = decision.nextIntervalMs
         return decision.shouldProcess

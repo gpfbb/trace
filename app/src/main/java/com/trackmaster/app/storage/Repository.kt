@@ -29,7 +29,9 @@ class Repository(
         val shouldFlush: Boolean
         synchronized(flushLock) {
             writeBuffer.add(seg)
+            // 【Bug修复】跨天 segment：需清除 startTs 和 endTs 所在日期的缓存
             segmentCache.remove(formatDateKey(seg.startTs))
+            seg.endTs?.let { segmentCache.remove(formatDateKey(it)) }
             shouldFlush = writeBuffer.size >= batchSize
         }
         if (shouldFlush) {
@@ -55,7 +57,9 @@ class Repository(
             // DB有新数据，下次getSegmentsByDate()会从DB读取最新数据（正确）
             // 若在transaction成功前crash（rollback）：缓存未被清，下次回读旧缓存（也是正确）
             batch.forEach { seg ->
+                // 【Bug修复】跨天 segment：需清除 startTs 和 endTs 所在日期的缓存
                 segmentCache.remove(formatDateKey(seg.startTs))
+                seg.endTs?.let { segmentCache.remove(formatDateKey(it)) }
             }
         } catch (e: Exception) {
             adapter.rollbackTransaction()

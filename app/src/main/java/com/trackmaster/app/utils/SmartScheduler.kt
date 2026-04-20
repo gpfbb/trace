@@ -39,8 +39,10 @@ data class ThrottleConfig(
     val stationaryMinDistanceM: Double = 30.0,
     /** 静止判定：加速度方差阈值，越大越容易判定静止 */
     val stationaryAccelVariance: Double = 2.0,
-    /** 静止判定：速度阈值（米/秒），越大越容易判定静止 */
-    val stationarySpeedThreshold: Double = 0.5,
+    /** 静止判定：速度阈值（米/秒），越大越容易判定静止
+     *  【Bug修复】从 0.5 调整到 1.5：GPS 位置噪声（10-50m）在 60s 间隔下
+     *  计算速度可达 0.17-0.83 m/s，原 0.5m/s 阈值导致静止时频繁误判为移动，阻止降频 */
+    val stationarySpeedThreshold: Double = 1.5,
     /** 静止判定：时间窗口大小（定位点数），越小越容易判定静止 */
     val stationaryWindowSize: Int = 3,
     /** 静止判定：需要在窗口内有多少个点满足条件才判定为静止，越小越容易 */

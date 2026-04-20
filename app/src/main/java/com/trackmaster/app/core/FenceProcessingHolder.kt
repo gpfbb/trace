@@ -50,7 +50,7 @@ class FenceProcessingHolder(
     // 公开 API
     // ============================================================
 
-    fun checkGeoFences(location: Location): Boolean {
+    fun checkGeoFences(location: Location, accel: AccelerometerData? = null): Boolean {
         val fix = com.trackmaster.app.core.LocationFix(
             lat = location.latitude,
             lng = location.longitude,
@@ -59,7 +59,9 @@ class FenceProcessingHolder(
         )
 
         persistentStateManager.saveLastLocation(location.latitude, location.longitude, Date(location.timestamp))
-        val shouldProcess = engine.evaluateLocation(fix)
+        // 【Bug修复】传递 accel 数据，使 SmartScheduler 静止判定能使用加速度数据
+        // 在无加速度数据时（accel=null），仍可正常工作
+        val shouldProcess = engine.evaluateLocation(fix, accel)
         // 【Bug修复 H1+H3】删除外部 setCurrentMatchedFenceIds 调用
         // 原因：onLocationUpdate (appScope.launch 内部) 会用动态 bufferM 更新 currentMatchedFenceIds
         // 外部 checkFenceMatch(bufferM=0.0) 先写入，onLocationUpdate 后写入 → TOCTOU 竞态
@@ -199,6 +201,9 @@ class FenceProcessingHolder(
         val allMatchedFenceIds = engine.checkFenceMatchWithDynamicBuffer(fix)
         if (allMatchedFenceIds.isEmpty()) {
             if (!isRestoringFirstLocation) {
+                // 【Bug修复】清除所有围栏的进入时间，防止 stale 状态
+                // fenceEnterTimes 记录各围栏的进入时间，围栏为空时必须全量清空
+                fenceEnterTimes.keys.toList().forEach { fenceEnterTimes.remove(it) }
                 currentMatchedFences.clear()
                 onNotifyFenceStateChanged()
             }

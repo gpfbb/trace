@@ -202,8 +202,8 @@ class TrackMasterApplication : Application() {
     // 围栏处理（委托给 FenceProcessingHolder）
     // ============================================================
 
-    fun checkGeoFences(location: Location): Boolean =
-        fenceProcessingHolder.checkGeoFences(location)
+    fun checkGeoFences(location: Location, accel: com.trackmaster.app.core.AccelerometerData? = null): Boolean =
+        fenceProcessingHolder.checkGeoFences(location, accel)
 
     fun handleFirstLocationAfterRestore(location: Location) =
         fenceProcessingHolder.handleFirstLocationAfterRestore(location)
