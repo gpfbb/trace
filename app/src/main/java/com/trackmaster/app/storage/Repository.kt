@@ -3,6 +3,7 @@ package com.trackmaster.app.storage
 import com.trackmaster.app.core.DailySummary
 import com.trackmaster.app.core.StaySegment
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -17,8 +18,8 @@ class Repository(
     private val batchSize: Int = 5,
 ) {
     private val writeBuffer = CopyOnWriteArrayList<StaySegment>()
-    private val segmentCache = mutableMapOf<String, List<StaySegment>>()
-    private val summaryCache = mutableMapOf<String, List<DailySummary>>()
+    private val segmentCache = ConcurrentHashMap<String, List<StaySegment>>()
+    private val summaryCache = ConcurrentHashMap<String, List<DailySummary>>()
 
     // 使用同步锁保护 flush 操作，避免并发 flush
     private val flushLock = Any()
