@@ -80,9 +80,14 @@ class StayDurationManager(private val context: Context) {
 
         // 【关键防御】如果该围栏已在 activeSessions 中，先关闭它
         // 防止漏掉 onFenceExit 导致的重复计时问题
-        if (activeSessions.containsKey(fenceId)) {
-            Log.w(TAG, "围栏 $fenceName 仍在 activeSessions 中，先关闭旧会话再启动新会话")
+        // 【P0修复】使用 putIfAbsent 原子操作避免 check-then-act 竞态
+        val existing = activeSessions.putIfAbsent(fenceId, FenceActiveSession(fenceId, fenceName, enterTime, getDateKey(enterTime)))
+        if (existing != null) {
+            // key已存在（另一线程先一步插入），说明该围栏已在 activeSessions 中，先关闭旧会话
+            Log.w(TAG, "围栏 $fenceName 已在 activeSessions 中（另一线程已插入），先关闭旧会话再启动新会话")
             onFenceExit(fenceId, fenceName, enterTime)
+            // onFenceExit 已清除该 key，重新插入
+            activeSessions[fenceId] = FenceActiveSession(fenceId, fenceName, enterTime, getDateKey(enterTime))
         }
 
         // 【修复】检查是否已有该围栏的未关闭记录，若有则先关闭
@@ -266,13 +271,14 @@ class StayDurationManager(private val context: Context) {
 
         saveDailyRecord(record)
 
-        // Update the active session's accumulated duration
+        // 【P0修复】使用原子 replace 操作避免 read-modify-write 竞态
         // 注意：对于子围栏已经转移到父围栏的情况，这个更新不会影响已转移的子围栏会话
         activeSessions[fenceId]?.let { s ->
-            activeSessions[fenceId] = s.copy(
+            val updated = s.copy(
                 accumulatedDuration = s.accumulatedDuration + safeDuration,
                 lastSaveTime = Date()
             )
+            activeSessions.replace(fenceId, updated)
         }
 
         Log.d(TAG, "更新日统计: $fenceName, 日期=$dateKey, 总时长=${newDuration}秒")

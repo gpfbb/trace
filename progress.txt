@@ -30,3 +30,30 @@
   - Pattern: FenceActiveSession can be extended with new fields with default values for backward compatibility
   - Gotcha: getCurrentDuration returns time since enterTime, which includes gap duration. Need to account for gap when session is restored after restart.
   - Gotcha: MockStayDurationManager in test file has pre-existing issues causing test failures unrelated to implementation changes
+---
+
+## 2026-04-20 - Round9: GPS节流 + 存储竞态修复
+- What was implemented
+  - P0 GPS fix: GoogleLocationProvider.setInterval() 接口已实现但从未被调用，导致Google provider 永远以 5000ms 运行
+  - Added setInterval(intervalMs: Long) to LocationProvider interface
+  - Added currentIntervalMs field and setInterval() implementation in GoogleLocationProvider
+  - Engine.evaluateLocation() now saves nextIntervalMs to lastComputedIntervalMs field
+  - GeoFenceLocationService calls setInterval() in three places: startContinuous, throttled callback path, inside-fence throttle path
+  - Repository.flush() cache clear moved from before-commit to after-commit (prevents stale cache after crash)
+  - FenceProcessingHolder.handleFenceExit() now receives matched fence snapshot (fixes TOCTOU race)
+- Files changed
+  - app/src/main/java/com/trackmaster/app/locationservice/LocationProvider.kt
+  - app/src/main/java/com/trackmaster/app/locationservice/google/GoogleLocationProvider.kt
+  - app/src/main/java/com/trackmaster/app/locationservice/amap/AMapLocationProvider.kt
+  - app/src/main/java/com/trackmaster/app/GeoFenceLocationService.kt
+  - app/src/main/java/com/trackmaster/app/core/Engine.kt
+  - app/src/main/java/com/trackmaster/app/core/EngineHolder.kt
+  - app/src/main/java/com/trackmaster/app/core/FenceProcessingHolder.kt
+  - app/src/main/java/com/trackmaster/app/storage/Repository.kt
+- **Learnings for future iterations:**
+  - Pattern: Interface methods must be explicitly implemented - having an interface method without a calling site is a silent P0 bug
+  - Pattern: Engine.onLocationProcessed callback is for statistics; actual shouldProcess is returned directly
+  - Pattern: For Google provider, createGmsRequest() uses currentIntervalMs - must call setInterval() to update it
+  - Gotcha: SmartScheduler computes nextIntervalMs but it was not exposed - needed to add lastComputedIntervalMs to Engine
+  - Gotcha: Repository flush lock only protects writeBuffer, not segmentCache operations
+  - Gotcha: Async appScope.launch in checkGeoFences can have TOCTOU race if engine state changes between capture and use

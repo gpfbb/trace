@@ -615,7 +615,6 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
 
     private fun temporaryResumeForCheck() {
         try {
-            isTemporaryCheck = true
             if (isUsingGoogleProvider) {
                 // 【Bug修复】显式设置高精度模式，确保临时检查使用GPS精度
                 // 防止服务停止前切换到省电模式，导致临时检查精度不足
@@ -623,6 +622,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                     com.trackmaster.app.locationservice.LocationMode.HIGH_ACCURACY
                 )
                 locationProvider?.start()
+                // 【P0修复】flag必须在start()成功后才设置，避免start()失败后状态不一致
+                isTemporaryCheck = true
             } else {
                 // 【P1修复】先stop再设置option+start，确保isOnceLocation=true切换生效
                 // 否则AMap SDK可能仍使用之前的连续定位配置，导致临时检查变成连续高频定位
@@ -637,6 +638,8 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 }
                 locationClient?.setLocationOption(locationOption)
                 locationClient?.startLocation()
+                // 【P0修复】flag必须在start()成功后才设置，避免start()失败后状态不一致
+                isTemporaryCheck = true
             }
             Log.d(TAG, "临时恢复定位检查")
         } catch (e: Exception) {

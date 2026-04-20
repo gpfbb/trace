@@ -152,13 +152,18 @@ class FenceProcessingHolder(
         val enterTime = Date(enterTs)
 
         fenceEnterTimes[smallestFenceId] = enterTime
-        if (!stayDurationManager.activeSessions.containsKey(smallestFenceId)) {
-            stayDurationManager.activeSessions[smallestFenceId] = FenceActiveSession(
+        // 【P0修复】使用 putIfAbsent 原子操作避免 check-then-act 竞态
+        val existingSession = stayDurationManager.activeSessions.putIfAbsent(
+            smallestFenceId,
+            FenceActiveSession(
                 fenceId = smallestFenceId,
                 fenceName = fenceName,
                 enterTime = enterTime,
                 dateKey = com.trackmaster.app.StayDurationManager.formatDate(enterTime)
             )
+        )
+        if (existingSession != null) {
+            // 另一线程已插入，直接使用现有session（不做重复创建）
         }
         persistentStateManager.saveCurrentFenceState(smallestFenceId, fenceName, enterTime)
         engine.setCurrentFenceForRecovery(smallestFenceId, enterTs)
@@ -345,13 +350,15 @@ class FenceProcessingHolder(
         Log.d(TAG, "更新围栏状态: $fenceName, 进入时间=$enterTime")
         fenceEnterTimes[fenceId] = enterTime
 
-        if (!stayDurationManager.activeSessions.containsKey(fenceId)) {
-            stayDurationManager.activeSessions[fenceId] = FenceActiveSession(
+        // 【P0修复】使用 putIfAbsent 原子操作避免 check-then-act 竞态
+        stayDurationManager.activeSessions.putIfAbsent(
+            fenceId,
+            FenceActiveSession(
                 fenceId = fenceId, fenceName = fenceName,
                 enterTime = enterTime,
                 dateKey = com.trackmaster.app.StayDurationManager.formatDate(enterTime)
             )
-        }
+        )
         persistentStateManager.saveCurrentFenceState(fenceId, fenceName, enterTime)
         currentMatchedFences.clear()
         val fenceObj = geoFences.find { it.id == fenceId }
