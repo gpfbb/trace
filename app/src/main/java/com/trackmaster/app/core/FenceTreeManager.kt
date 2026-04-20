@@ -45,17 +45,22 @@ class FenceTreeManager(private val context: Context) {
 
     /** 设置围栏的父级（null = 设为顶级） */
     fun setParent(fenceId: String, parentId: String?) {
-        if (parentId == null) {
-            prefs.edit().remove("$KEY_PREFIX$fenceId").apply()
-        } else {
-            // 防止循环引用：不能设自己为父级
-            if (fenceId == parentId) {
-                Log.w(TAG, "不能设置围栏自身为父级: $fenceId")
-                return
-            }
-            prefs.edit().putString("$KEY_PREFIX$fenceId", parentId).apply()
+        // 防止循环引用：不能设自己为父级
+        if (fenceId == parentId) {
+            Log.w(TAG, "不能设置围栏自身为父级: $fenceId")
+            return
         }
-        bumpVersion()
+        // 【P0修复】将父子关系写入和版本号递增合并为单次原子commit
+        // 避免apply()异步写入和bumpVersion()之间发生crash导致数据不一致
+        val edit = prefs.edit()
+        if (parentId == null) {
+            edit.remove("$KEY_PREFIX$fenceId")
+        } else {
+            edit.putString("$KEY_PREFIX$fenceId", parentId)
+        }
+        version++
+        edit.putInt(KEY_VERSION, version)
+        edit.commit()
         Log.d(TAG, "设置父级: $fenceId → ${parentId ?: "顶级"}")
     }
 
@@ -83,8 +88,9 @@ class FenceTreeManager(private val context: Context) {
 
     /** 清除所有父子关系 */
     fun clearAll() {
-        prefs.edit().clear().apply()
-        bumpVersion()
+        // 【P0修复】合并为单次原子commit，避免clear和version bump之间的crash导致不一致
+        version++
+        prefs.edit().clear().putInt(KEY_VERSION, version).commit()
         Log.d(TAG, "已清除所有父子关系")
     }
 
@@ -154,12 +160,4 @@ class FenceTreeManager(private val context: Context) {
         return false // cur == fenceId，形成循环
     }
 
-    // ============================================================
-    // 内部
-    // ============================================================
-
-    private fun bumpVersion() {
-        version++
-        prefs.edit().putInt(KEY_VERSION, version).apply()
-    }
 }

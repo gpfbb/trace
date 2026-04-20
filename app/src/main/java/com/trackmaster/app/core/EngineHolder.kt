@@ -4,6 +4,9 @@ import android.util.Log
 import com.trackmaster.app.AppPreferences
 import com.trackmaster.app.utils.ThrottleConfig
 import com.trackmaster.app.storage.Repository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Engine 持有者
@@ -30,9 +33,18 @@ class EngineHolder(
     }
 
     fun refresh(fences: List<Geofence>) {
+        // 【P0修复】异步dispose旧Engine避免资源泄漏
+        // 旧Engine的scheduler、unflushed segments、active coroutines必须清理
+        val oldEngine = _engine
         _engine = Engine(fences, repository, throttleConfig).apply {
             onLocationProcessed = { shouldProcess, _ ->
                 appPreferences.incrementLocations(shouldProcess)
+            }
+        }
+        if (oldEngine != null) {
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching { oldEngine.dispose() }
+                    .onFailure { Log.e(TAG, "旧Engine dispose失败", it) }
             }
         }
         Log.d(TAG, "Engine refreshed with ${fences.size} fences")

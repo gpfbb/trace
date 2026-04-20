@@ -71,17 +71,9 @@ class FenceProcessingHolder(
             return false
         }
 
-        // 【关键修复】立即同步更新 currentMatchedFences 和通知 UI 变化
-        // 让 HomeViewModel 等组件能立即感知围栏状态变化，而不是等待异步处理完成
-        // 使用 checkFenceMatch(fix) 同步获取当前定位的围栏匹配结果
-        // 注意：engine.currentMatchedFenceIds 是上一次 onLocationUpdate 的结果，存在延迟
-        val allMatchedFenceIds = engine.checkFenceMatchWithDynamicBuffer(fix)
-        currentMatchedFences.clear()
-        for (fenceId in allMatchedFenceIds) {
-            val fence = geoFences.find { it.id == fenceId }
-            if (fence != null) currentMatchedFences.add(fence)
-        }
-        onNotifyFenceStateChanged()
+        // 【P0修复】不要在主线程同步写 currentMatchedFences
+        // checkGeoFences 中的 sync 写入和 handleAllMatchedFences 中的 async 写入存在竞态
+        // 统一由 handleAllMatchedFences 在 appScope.launch 中更新，onNotifyFenceStateChanged 触发 UI 刷新
 
         appScope.launch {
             val (closedSeg, _) = engine.onLocationUpdate(fix)
@@ -309,9 +301,16 @@ class FenceProcessingHolder(
             // activeSessions 在 loadActiveSessionsFromDatabase() 时已从 DB 恢复
             val fenceId = engineResult.fenceId ?: currentFenceState?.fenceId
             if (fenceId != null && stayDurationManager.activeSessions.containsKey(fenceId)) {
-                val session = stayDurationManager.activeSessions[fenceId]!!
-                Log.d(TAG, "恢复围栏计时（使用已有session）: ${session.fenceName}, 进入时间=${session.enterTime}, 累积时长=${session.accumulatedDuration}秒")
-                engine.setCurrentFenceForRecovery(fenceId, session.enterTime.time)
+                // 【P0修复】containsKey + get 不是原子操作，改为安全get
+                // 若key已被其他线程移除，get返回null → 走else创建新session（不会NPE）
+                val session = stayDurationManager.activeSessions[fenceId]
+                if (session != null) {
+                    Log.d(TAG, "恢复围栏计时（使用已有session）: ${session.fenceName}, 进入时间=${session.enterTime}, 累积时长=${session.accumulatedDuration}秒")
+                    engine.setCurrentFenceForRecovery(fenceId, session.enterTime.time)
+                } else {
+                    // session在检查后被移除，创建新记录
+                    startFenceTimingFromRestore(engineResult.fenceId ?: currentFenceState?.fenceId, fix.timestamp, location, matchedIds)
+                }
             } else {
                 // 没有已有session，走 startFenceTimingFromRestore 创建新session
                 Log.d(TAG, "Engine检测到未关闭Segment，但没有已有session，创建新记录")
