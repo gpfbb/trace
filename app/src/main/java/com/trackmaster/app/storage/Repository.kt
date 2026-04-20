@@ -26,9 +26,13 @@ class Repository(
 
     /** 追加 Segment 到写入缓冲区，达到 batchSize 自动 flush */
     suspend fun enqueueSegment(seg: StaySegment) {
-        writeBuffer.add(seg)
-        segmentCache.remove(formatDateKey(seg.startTs))
-        if (writeBuffer.size >= batchSize) {
+        val shouldFlush: Boolean
+        synchronized(flushLock) {
+            writeBuffer.add(seg)
+            segmentCache.remove(formatDateKey(seg.startTs))
+            shouldFlush = writeBuffer.size >= batchSize
+        }
+        if (shouldFlush) {
             flush()
         }
     }
