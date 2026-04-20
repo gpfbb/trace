@@ -10,6 +10,7 @@ import com.trackmaster.app.TrackMasterApplication
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -91,7 +92,7 @@ class HomeViewModel(
         // 监听围栏状态版本变化，立即刷新 UI
         viewModelScope.launch {
             try {
-                app.fenceStateVersion.collect {
+                app.fenceStateVersion.collectLatest {
                     refreshStats()
                 }
             } catch (e: Exception) {

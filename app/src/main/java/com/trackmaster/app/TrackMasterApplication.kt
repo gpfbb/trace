@@ -215,8 +215,12 @@ class TrackMasterApplication : Application() {
     fun refreshEngineFences() {
         val coreFences = fenceTreeManager.loadFenceTree(geoFences)
         engineHolder.refresh(coreFences)
-        aggregator = Aggregator(coreFences, repository)
-        appScope.launch { engine.init() }
+        // 【P0修复】必须等待 engine.init() 完成后再创建新 Aggregator
+        // 否则新 Aggregator 可能在 Engine 未完全初始化时就开始使用，导致数据不一致
+        appScope.launch {
+            engine.init()
+            aggregator = Aggregator(coreFences, repository)
+        }
         repositoryHolder.notifyFenceStateChanged()
     }
 

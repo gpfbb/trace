@@ -45,17 +45,24 @@ class RepositoryHolder(
      * 添加围栏事件，带自动清理
      * 当事件数超过 MAX_EVENTS_SIZE 时，删除最旧的 10% 事件
      * 防止 CopyOnWriteArrayList 无限增长导致 filter 等操作 O(n) 衰减
+     * 【P0修复】addEvent 和 cleanup 都在 synchronized 块内，避免并发竞态
      */
+    private val eventCleanupLock = Any()
+
     fun addEvent(event: GeoFenceEvent) {
         geoFenceEvents.add(event)
         if (geoFenceEvents.size > MAX_EVENTS_SIZE) {
-            // 按时间排序，删除最旧的 10%
-            val toRemove = (MAX_EVENTS_SIZE * 0.1).toInt().coerceAtLeast(1)
-            val sortedEvents = geoFenceEvents.sortedBy { it.time }
-            // 通过 ID 在原列表中删除（sortedEvents 是副本，不能直接删原列表）
-            for (i in 0 until toRemove) {
-                val idToRemove = sortedEvents[i].id
-                geoFenceEvents.removeIf { it.id == idToRemove }
+            // 【P0修复】check-then-cleanup 必须在锁内完成，避免多线程重复清理
+            synchronized(eventCleanupLock) {
+                // 再次检查（可能另一线程已清理）
+                if (geoFenceEvents.size > MAX_EVENTS_SIZE) {
+                    val toRemove = (MAX_EVENTS_SIZE * 0.1).toInt().coerceAtLeast(1)
+                    val sortedEvents = geoFenceEvents.sortedBy { it.time }
+                    for (i in 0 until toRemove) {
+                        val idToRemove = sortedEvents[i].id
+                        geoFenceEvents.removeIf { it.id == idToRemove }
+                    }
+                }
             }
         }
     }
