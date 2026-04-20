@@ -22,7 +22,7 @@ class EngineHolder(
 
     fun initialize(fences: List<Geofence>) {
         _engine = Engine(fences, repository, throttleConfig).apply {
-            onLocationProcessed = { shouldProcess ->
+            onLocationProcessed = { shouldProcess, _ ->
                 appPreferences.incrementLocations(shouldProcess)
             }
         }
@@ -31,7 +31,7 @@ class EngineHolder(
 
     fun refresh(fences: List<Geofence>) {
         _engine = Engine(fences, repository, throttleConfig).apply {
-            onLocationProcessed = { shouldProcess ->
+            onLocationProcessed = { shouldProcess, _ ->
                 appPreferences.incrementLocations(shouldProcess)
             }
         }

@@ -402,9 +402,11 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 locationProvider?.stop()
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     try {
+                        // 【Bug修复】Google provider 需要显式调用 setInterval 使 GPS 节流生效
+                        locationProvider?.setInterval(baseIntervalMs)
                         locationProvider?.start()
                         serviceState = serviceState.copy(isFirstLocation = false)
-                        Log.d(TAG, "切换到 Google 连续定位模式")
+                        Log.d(TAG, "切换到 Google 连续定位模式，间隔: ${baseIntervalMs}ms")
                     } catch (e: Exception) {
                         Log.e(TAG, "启动 Google 连续定位失败", e)
                     }
@@ -495,7 +497,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 val INSIDE_FENCE_THRESHOLD = 2
                 if (consecutiveNotProcessCount >= INSIDE_FENCE_THRESHOLD && serviceState.isInsideFence) {
                     Log.d(TAG, "省电: 围栏内连续${consecutiveNotProcessCount}次不处理，降频到60s/次继续监控")
-                    updateLocationOptionsForContinuous(60_000L)
+                    // 【Bug修复】Google provider 也需要 setInterval，否则降频不生效
+                    if (isUsingGoogleProvider) {
+                        locationProvider?.setInterval(60_000L)
+                    } else {
+                        updateLocationOptionsForContinuous(60_000L)
+                    }
                     if (!serviceState.isRunning) {
                         locationClient?.startLocation()
                         serviceState = serviceState.copy(isRunning = true)
@@ -722,6 +729,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             val matchedFences = app?.currentMatchedFences ?: emptyList()
             val isInFence = matchedFences.isNotEmpty()
             val shouldStopForPowerSave = isInFence.not()
+            // 【Bug修复】Google provider: throttled 回调时也需要更新 interval
+            // 否则 GPS 一直以 5s 运行，不受 SmartScheduler 节流控制
+            if (isUsingGoogleProvider) {
+                val nextInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
+                locationProvider?.setInterval(nextInterval)
+            }
             updatePowerSavingState(shouldStopForPowerSave)
         }
 

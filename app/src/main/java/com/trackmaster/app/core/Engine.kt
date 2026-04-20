@@ -39,11 +39,15 @@ class Engine(
     private val bufferManager: DynamicBufferManager?
     private val fencePreviousStates = mutableMapOf<String, FenceState>()
 
-    /** 位置处理统计回调 */
-    var onLocationProcessed: ((Boolean) -> Unit)? = null
+    /** 位置处理统计回调：参数1=是否应处理，参数2=下次定位间隔(ms) */
+    var onLocationProcessed: ((Boolean, Long) -> Unit)? = null
 
     /** 上一次评估的 shouldProcess 结果，供外部查询 */
     @Volatile var lastShouldProcess: Boolean = false
+        private set
+
+    /** 上一次评估的 nextIntervalMs，供外部（GeoFenceLocationService）查询用于 Google provider 节流 */
+    @Volatile var lastComputedIntervalMs: Long = 60_000L
         private set
 
     /** 当前命中的叶子围栏 ID */
@@ -136,8 +140,8 @@ class Engine(
         val decision = scheduler.evaluate(fix, accel)
         // 记录结果供外部查询
         lastShouldProcess = decision.shouldProcess
-        // 统计回调
-        onLocationProcessed?.invoke(decision.shouldProcess)
+        // 统计回调：传递是否应处理 + 下次定位间隔（用于Google provider节流）
+        onLocationProcessed?.invoke(decision.shouldProcess, decision.nextIntervalMs)
         if (!decision.shouldProcess) return Pair(null, false)
 
         // 2. 漂移过滤（与SmartScheduler保持一致）
@@ -181,6 +185,7 @@ class Engine(
     fun evaluateLocation(fix: LocationFix): Boolean {
         val decision = scheduler.evaluate(fix, null)
         lastShouldProcess = decision.shouldProcess
+        lastComputedIntervalMs = decision.nextIntervalMs
         return decision.shouldProcess
     }
 
