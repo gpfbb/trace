@@ -56,6 +56,7 @@ class GoogleMapPresenter(
     private val _isMapReady = MutableStateFlow(false)
     val isMapReady: StateFlow<Boolean> = _isMapReady
     private val mapInitLatch = CountDownLatch(1)
+    private var lifecycleObserver: LifecycleEventObserver? = null
 
     // 记录 configureMap 的参数，等地图就绪后应用
     private var pendingMapType: Int? = null
@@ -250,7 +251,7 @@ class GoogleMapPresenter(
     }
 
     private fun setupLifecycle() {
-        val observer = LifecycleEventObserver { _, e ->
+        lifecycleObserver = LifecycleEventObserver { _, e ->
             if (!isMapViewInitialized) {
                 Log.w(TAG, "lifecycle 事件 ${e.name}，但 isMapViewInitialized=false，丢弃")
                 return@LifecycleEventObserver
@@ -268,6 +269,7 @@ class GoogleMapPresenter(
                     Lifecycle.Event.ON_DESTROY -> {
                         Log.d(TAG, "lifecycle: ON_DESTROY")
                         cleanup()
+                        lifecycleObserver?.let { lifecycleOwner.removeObserver(it) }  // 【P1修复】移除observer，防止内存泄漏
                         mapView.onDestroy()
                     }
                     else -> {}
@@ -276,7 +278,7 @@ class GoogleMapPresenter(
                 Log.e(TAG, "生命周期错误: ${e.name}", ex)
             }
         }
-        lifecycleOwner.addObserver(observer)
+        lifecycleObserver?.let { lifecycleOwner.addObserver(it) }
     }
 
     override fun showLocation(location: MapLocation) {

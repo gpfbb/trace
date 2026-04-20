@@ -136,7 +136,7 @@ class FenceProcessingHolder(
         val fix = com.trackmaster.app.core.LocationFix(
             lat = lastLoc.latitude,
             lng = lastLoc.longitude,
-            accuracy = 50f,
+            accuracy = 30f,  // 恢复检查用保守容差，围栏通常比30米大,
             timestamp = lastLoc.time.time
         )
         val matchedIds = engine.checkFenceMatch(fix)
@@ -249,7 +249,7 @@ class FenceProcessingHolder(
         // case A→Q（完全无关）：previousId 不在 allMatchedFenceIds → 需要 exit A
         if (previousId in allMatchedFenceIds) {
             val prevParent = fenceTreeManager.getParent(previousId)
-            val currParent = fenceTreeManager.getParent(smallestFenceId ?: "")
+            val currParent = smallestFenceId?.let { fenceTreeManager.getParent(it) }
             // 同级切换：两者有相同的直接父级（prevParent == currParent）→ 用户还在同一父围栏内，不 exit
             // 子→父升级：prevParent != currParent → previousId 已在 allMatchedFenceIds，需要 exit
             if (prevParent != null && prevParent == currParent) {
@@ -288,9 +288,11 @@ class FenceProcessingHolder(
         // 避免 currentFenceState.enterTime（原始enter）和 accumulatedDuration 两条线分开走导致时长 x2
         val matchedIds = engine.checkFenceMatch(fix)
 
-        // 用户仍在原围栏内（Engine数据库有记录 或 PersistentStateManager有记录 或 matchedIds匹配）
-        val stillInOriginalFence = (engineResult.shouldRestore && engineResult.fenceId != null && matchedIds.contains(engineResult.fenceId)) ||
-                (currentFenceState != null && matchedIds.contains(currentFenceState.fenceId))
+        // 【P1修复】改OR为AND：Engine说不要恢复时，即使matchedIds匹配也不恢复
+        // 原OR逻辑：engineResult.shouldRestore=false 但 currentFenceState存在且matched时
+        // 会错误地进入恢复分支，导致不该恢复的围栏被恢复
+        val stillInOriginalFence = (engineResult.shouldRestore && engineResult.fenceId != null && matchedIds.contains(engineResult.fenceId)) &&
+                (currentFenceState == null || matchedIds.contains(currentFenceState.fenceId))
 
         if (stillInOriginalFence) {
             // 优先用 stayDurationManager 中已有 session 的 enterTime（保留了 accumulatedDuration）

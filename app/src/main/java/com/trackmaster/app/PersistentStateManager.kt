@@ -125,9 +125,13 @@ class PersistentStateManager(context: Context) {
      * 保存上次应用关闭时间
      */
     fun saveLastAppCloseTime(time: Date) {
-        prefs.edit()
+        // 【P2修复】使用commit()同步写入，避免apply()异步导致crash后数据丢失
+        val success = prefs.edit()
             .putLong(KEY_LAST_APP_CLOSE_TIME, time.time)
-            .apply()
+            .commit()
+        if (!success) {
+            Log.e(TAG, "saveLastAppCloseTime: commit() failed")
+        }
         Log.d(TAG, "保存上次应用关闭时间: $time")
     }
 

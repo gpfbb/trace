@@ -640,7 +640,7 @@ private fun FileItem(file: File, onDelete: () -> Unit, onImport: () -> Unit) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(text = file.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = Color(0xFFE0E0E0))
                 Text(
-                    text = "${dateFormat.format(Date(file.lastModified()))} · ${file.length() / 1024} KB",
+                    text = "${dateFormat.format(Date(file.lastModified()))} · %.1f KB".format(file.length() / 1024.0),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFFBDBDBD)
                 )

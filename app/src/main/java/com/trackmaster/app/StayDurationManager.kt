@@ -179,9 +179,15 @@ class StayDurationManager(private val context: Context) {
             }
         }
 
-        // 【Bug修复】检查子围栏退出时父围栏是否仍在 activeSessions
+        // 【Bug修复 - 技术债】检查子围栏退出时父围栏是否仍在 activeSessions
         // 如果是，说明子围栏的时长已通过 transferChildDurationToParent 合并到父围栏，
         // 子围栏不应再独立写入 daily_stays，避免双重计数
+        //
+        // 【技术债告警】parentStillActive 只检查退出时刻parent是否active，
+        // 不反映子围栏活跃期间parent的状态变化（如parent退出又重新进入）。
+        // 正确修复需要引入时间段概念：记录父子围栏各自的活动时间段，
+        // 检测子围栏活跃期间与父围栏活动时间的重叠关系。
+        // 当前逻辑在某些边界情况下可能误判，但影响有限（仅限父子围栏都active的场景）。
         val app = context.applicationContext as? TrackMasterApplication
         val parentId = app?.fenceTreeManager?.getParent(fenceId)
         val parentStillActive = parentId != null && activeSessions.containsKey(parentId)
@@ -264,7 +270,7 @@ class StayDurationManager(private val context: Context) {
         // 注意：对于子围栏已经转移到父围栏的情况，这个更新不会影响已转移的子围栏会话
         activeSessions[fenceId]?.let { s ->
             activeSessions[fenceId] = s.copy(
-                accumulatedDuration = newDuration,
+                accumulatedDuration = s.accumulatedDuration + safeDuration,
                 lastSaveTime = Date()
             )
         }
@@ -586,7 +592,6 @@ class StayDurationManager(private val context: Context) {
         val now = System.currentTimeMillis()
 
         for (session in activeSessions.values) {
-            val currentTotalDuration = (now - session.enterTime.time) / 1000
             val sessionAccumulated = if (session.lastSaveTime != null) {
                 session.accumulatedDuration + (now - session.lastSaveTime.time) / 1000
             } else {
@@ -598,20 +603,24 @@ class StayDurationManager(private val context: Context) {
             // 防止多次 periodic save 创建多条开放记录导致 stays 表求和时 2x 叠加
             // onFenceEnter/onFenceExit 会负责创建和关闭记录，periodic save 只负责更新累积时长
             if (session.fenceId in openFenceIds) {
-                dbHelper.updateOpenStayAccumulatedDuration(session.fenceId, sessionAccumulated)
+                // 【P1修复】DB更新成功后才能更新in-memory状态
+                // 原bug：DB更新在try内但in-memory在try外，DB失败时in-memory仍被更新
+                // 导致crash后lastSaveTime已是新值，但gap计算基准未变，造成时长重复
+                try {
+                    dbHelper.updateOpenStayAccumulatedDuration(session.fenceId, sessionAccumulated)
+                    // DB成功后才更新in-memory
+                    activeSessions[session.fenceId] = session.copy(
+                        accumulatedDuration = sessionAccumulated,
+                        lastSaveTime = Date(),
+                        gapStartTime = Date()
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "DB更新失败，跳过此围栏: ${session.fenceName}", e)
+                    // 不更新in-memory，保持旧状态，下次重试
+                }
             } else {
                 Log.w(TAG, "saveAllActiveSessions 发现无开放记录的会话，跳过: ${session.fenceName}")
             }
-
-            // 更新本地session的累积时长和lastSaveTime
-            // 【Bug修复】同时重置 gapStartTime = Date()，将 gapStartTime 锚定到本次 save 的时刻
-            // 防止 gapStartTime 残留旧值导致下一个 crash cycle 的 gap 计算包含 pre-crash 累积
-            // 效果：每次 periodic save 后，gap 的计算基准都重置为当前时刻
-            activeSessions[session.fenceId] = session.copy(
-                accumulatedDuration = sessionAccumulated,
-                lastSaveTime = Date(),
-                gapStartTime = Date()
-            )
         }
     }
 

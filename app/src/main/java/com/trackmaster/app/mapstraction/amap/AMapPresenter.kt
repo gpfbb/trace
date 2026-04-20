@@ -461,6 +461,7 @@ class AMapPresenter(
         clearAll()
         onMapClickListener = null
         onMarkerClickListener = null
+        onCameraCenterChangeListener = null  // 【P1修复】之前遗漏，导致内存泄漏
         onPolygonCompleteListener = null
         drawingPointsList.clear()
     }

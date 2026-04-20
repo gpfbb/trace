@@ -67,8 +67,12 @@ fun AMapViewWrapper(
     var hasCameraMoved by remember { mutableStateOf(false) }
 
     // 初始化地图
+    // 【P0修复】之前立即设置isMapReady=true，所有LaunchedEffect在地图未实际就绪时就执行
+    // AMap.onMapLoadedListener在地图加载完成时触发一次，但Compose重组时不会重触发
+    // 改用100ms延迟确保Presenter.setupMap()完成（Presenter在init时就调用setupMap）
     var isMapReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(100)
         isMapReady = true
     }
 

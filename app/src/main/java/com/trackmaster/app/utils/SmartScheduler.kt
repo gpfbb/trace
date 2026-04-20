@@ -54,7 +54,7 @@ data class ThrottleConfig(
     /** SLC 兜底位移阈值（米） */
     val slcDriftM: Double = 300.0,
     /** 基础定位间隔（ms） */
-    val baseIntervalMs: Long = 30_000L,
+    val baseIntervalMs: Long = 60_000L,
 )
 
 data class ThrottleStep(
@@ -69,10 +69,10 @@ data class ThrottleStep(
  * 适用于 BALANCED 模式，围栏外/非静止时
  */
 val BALANCED_THROTTLE_STEPS = listOf(
-    ThrottleStep(afterMin = 0, intervalMs = 30_000L),     // 0-1min: 30s/次
-    ThrottleStep(afterMin = 1, intervalMs = 60_000L),   // 1-2min: 1min/次
-    ThrottleStep(afterMin = 2, intervalMs = 120_000L),  // 2-5min: 2min/次
-    ThrottleStep(afterMin = 5, intervalMs = 180_000L),  // ≥5min: 3min/次
+    ThrottleStep(afterMin = 0, intervalMs = 60_000L),     // 0-1min: 1min/次（起步60s）
+    ThrottleStep(afterMin = 1, intervalMs = 120_000L),   // 1-3min: 2min/次
+    ThrottleStep(afterMin = 3, intervalMs = 180_000L),  // 3-5min: 3min/次
+    ThrottleStep(afterMin = 5, intervalMs = 300_000L),  // ≥5min: 5min/次
 )
 
 /**
@@ -81,9 +81,9 @@ val BALANCED_THROTTLE_STEPS = listOf(
  * 围栏内已确认安全，允许更激进降频，最长10min/次
  */
 val BALANCED_INSIDE_FENCE_THROTTLE_STEPS = listOf(
-    ThrottleStep(afterMin = 0, intervalMs = 30_000L),     // 0-1min: 30s/次
-    ThrottleStep(afterMin = 1, intervalMs = 60_000L),    // 1-2min: 1min/次
-    ThrottleStep(afterMin = 2, intervalMs = 120_000L),   // 2-5min: 2min/次
+    ThrottleStep(afterMin = 0, intervalMs = 60_000L),     // 0-1min: 1min/次（起步60s）
+    ThrottleStep(afterMin = 1, intervalMs = 120_000L),    // 1-3min: 2min/次
+    ThrottleStep(afterMin = 3, intervalMs = 180_000L),   // 3-5min: 3min/次
     ThrottleStep(afterMin = 5, intervalMs = 300_000L),   // 5-10min: 5min/次
     ThrottleStep(afterMin = 10, intervalMs = 600_000L),  // ≥10min: 10min/次
 )
@@ -102,6 +102,20 @@ val POWERSAVE_THROTTLE_STEPS = listOf(
     ThrottleStep(afterMin = 20, intervalMs = 900_000L),     // 20-40min: 15min/次
     ThrottleStep(afterMin = 40, intervalMs = 1200_000L),    // 40-60min: 20min/次
     ThrottleStep(afterMin = 60, intervalMs = 1800_000L),    // ≥60min: 30min/次
+)
+
+/**
+ * 省电模式降频阶梯（围栏内激进版）
+ * 围栏内静止时更激进降频，最长30min/次
+ */
+val POWERSAVE_INSIDE_FENCE_THROTTLE_STEPS = listOf(
+    ThrottleStep(afterMin = 0, intervalMs = 60_000L),       // 0-1min: 1min/次
+    ThrottleStep(afterMin = 1, intervalMs = 180_000L),      // 1-3min: 3min/次
+    ThrottleStep(afterMin = 3, intervalMs = 300_000L),       // 3-5min: 5min/次
+    ThrottleStep(afterMin = 5, intervalMs = 600_000L),       // 5-10min: 10min/次
+    ThrottleStep(afterMin = 10, intervalMs = 900_000L),      // 10-20min: 15min/次
+    ThrottleStep(afterMin = 20, intervalMs = 1200_000L),     // 20-30min: 20min/次
+    ThrottleStep(afterMin = 30, intervalMs = 1800_000L),     // ≥30min: 30min/次
 )
 
 /**
@@ -220,7 +234,10 @@ class SmartScheduler(
                 if (isInsideFence) BALANCED_INSIDE_FENCE_THROTTLE_STEPS
                 else BALANCED_THROTTLE_STEPS
             }
-            PowerMode.POWERSAVE -> POWERSAVE_THROTTLE_STEPS
+            PowerMode.POWERSAVE -> {
+                if (isInsideFence) POWERSAVE_INSIDE_FENCE_THROTTLE_STEPS
+                else POWERSAVE_THROTTLE_STEPS
+            }
         }
     }
 

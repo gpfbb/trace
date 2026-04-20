@@ -784,7 +784,7 @@ private fun FenceTreeItem(
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(percentage / 100f)
+                            .fillMaxWidth((percentage / 100f).coerceIn(0f, 1f))
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(2.dp))
                             .background(
@@ -933,7 +933,7 @@ fun DurationProgressSection(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(percentage / 100f)
+                                        .fillMaxWidth((percentage / 100f).coerceIn(0f, 1f))
                                         .fillMaxHeight()
                                         .clip(RoundedCornerShape(2.dp))
                                         .background(chartColors[index % chartColors.size])

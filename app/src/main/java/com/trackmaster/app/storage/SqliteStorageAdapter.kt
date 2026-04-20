@@ -186,9 +186,15 @@ class SqliteStorageAdapter(
     }
 
     override suspend fun commitTransaction() {
-        dbHelper.writableDatabase.setTransactionSuccessful()
-        dbHelper.writableDatabase.endTransaction()
-        inTransaction = false
+        // 【P1修复】使用try-finally确保endTransaction一定执行
+        // 原bug：setTransactionSuccessful()抛异常时，endTransaction()不执行，
+        // 导致inTransaction永远为true，下次beginTransaction会嵌套失败
+        try {
+            dbHelper.writableDatabase.setTransactionSuccessful()
+        } finally {
+            dbHelper.writableDatabase.endTransaction()
+            inTransaction = false
+        }
     }
 
     override suspend fun rollbackTransaction() {

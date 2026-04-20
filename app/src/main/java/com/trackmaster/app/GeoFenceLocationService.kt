@@ -229,7 +229,11 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                         this@GeoFenceLocationService.onLocationError(errorCode, errorInfo)
                     }
                 }
-                locationProvider?.setLocationCallback(appCallback!!)
+                val cb = appCallback
+                val provider = locationProvider
+                if (cb != null && provider != null) {
+                    provider.setLocationCallback(cb)
+                }
                 Log.d(TAG, "初始化 Google Fused Location Provider")
             } catch (e: Exception) {
                 Log.e(TAG, "初始化 Google 定位客户端失败，降级到 AMap", e)
