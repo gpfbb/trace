@@ -143,7 +143,16 @@ class FenceProcessingHolder(
             timestamp = lastLoc.time.time
         )
         val matchedIds = engine.checkFenceMatch(fix)
-        val smallestFenceId = matchedIds.firstOrNull() ?: return
+        val smallestFenceId = matchedIds.firstOrNull()
+
+        // 【P0修复】无论是否在围栏内，都要更新 currentMatchedFences 状态
+        // 若不在围栏内（matchedIds为空），需清除旧状态，否则UI显示stale数据
+        currentMatchedFences.clear()
+        if (smallestFenceId == null) {
+            // 用户已离开所有围栏，清除状态并通知UI刷新
+            onNotifyFenceStateChanged()
+            return
+        }
 
         val fence = geoFences.find { it.id == smallestFenceId }
         val fenceName = fence?.name ?: smallestFenceId
@@ -162,14 +171,11 @@ class FenceProcessingHolder(
         persistentStateManager.saveCurrentFenceState(smallestFenceId, fenceName, enterTime)
         engine.setCurrentFenceForRecovery(smallestFenceId, enterTs)
 
-        currentMatchedFences.clear()
         for (fenceId in matchedIds) {
             val f = geoFences.find { it.id == fenceId }
             if (f != null) currentMatchedFences.add(f)
         }
-        if (matchedIds.isNotEmpty()) {
-            onNotifyFenceStateChanged()
-        }
+        onNotifyFenceStateChanged()
     }
 
     // ============================================================

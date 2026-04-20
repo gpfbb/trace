@@ -65,11 +65,12 @@ class PersistentStateManager(context: Context) {
      * 保存当前所在围栏状态
      */
     fun saveCurrentFenceState(fenceId: String, fenceName: String, enterTime: Date) {
+        // 【P0修复】崩溃恢复数据必须同步写入，apply()异步可能导致crash后数据丢失
         prefs.edit()
             .putString(KEY_CURRENT_FENCE_ID, fenceId)
             .putString(KEY_CURRENT_FENCE_NAME, fenceName)
             .putLong(KEY_CURRENT_FENCE_ENTER_TIME, enterTime.time)
-            .apply()
+            .commit()
         Log.d(TAG, "保存当前围栏状态: $fenceName, 进入时间=$enterTime")
     }
 
@@ -89,11 +90,12 @@ class PersistentStateManager(context: Context) {
      * 清除当前所在围栏状态
      */
     fun clearCurrentFenceState() {
+        // 【P0修复】崩溃恢复数据必须同步写入
         prefs.edit()
             .remove(KEY_CURRENT_FENCE_ID)
             .remove(KEY_CURRENT_FENCE_NAME)
             .remove(KEY_CURRENT_FENCE_ENTER_TIME)
-            .apply()
+            .commit()
         Log.d(TAG, "清除当前围栏状态")
     }
 
@@ -101,11 +103,12 @@ class PersistentStateManager(context: Context) {
      * 保存上次离开围栏状态
      */
     fun saveLastExitState(fenceId: String, fenceName: String, exitTime: Date) {
+        // 【P0修复】崩溃恢复数据必须同步写入
         prefs.edit()
             .putString(KEY_LAST_EXIT_FENCE_ID, fenceId)
             .putString(KEY_LAST_EXIT_FENCE_NAME, fenceName)
             .putLong(KEY_LAST_EXIT_TIME, exitTime.time)
-            .apply()
+            .commit()
         Log.d(TAG, "保存上次离开围栏状态: $fenceName, 离开时间=$exitTime")
     }
 
@@ -147,12 +150,13 @@ class PersistentStateManager(context: Context) {
      * 保存上次位置信息
      */
     fun saveLastLocation(latitude: Double, longitude: Double, time: Date) {
-        // 【Bug修复】P7-C-BUG007：使用 doubleToRawLongBits 存储 double，避免 Float 精度丢失
+        // 【P0修复】崩溃恢复数据必须同步写入
+        // P7-C-BUG007：使用 doubleToRawLongBits 存储 double，避免 Float 精度丢失
         prefs.edit()
             .putLong(KEY_LAST_LOCATION_LAT, java.lang.Double.doubleToRawLongBits(latitude))
             .putLong(KEY_LAST_LOCATION_LNG, java.lang.Double.doubleToRawLongBits(longitude))
             .putLong(KEY_LAST_LOCATION_TIME, time.time)
-            .apply()
+            .commit()
         Log.d(TAG, "保存上次位置: ($latitude, $longitude), 时间=$time")
     }
 
