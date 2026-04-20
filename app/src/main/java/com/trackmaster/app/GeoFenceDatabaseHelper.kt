@@ -595,7 +595,9 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_ID = ?",
             arrayOf(fromCategoryId)
         )
+        // 【P0修复】移动多个围栏分类后必须同时失效分类缓存，否则getAllCategories()返回旧数据
         invalidateFenceCache()
+        invalidateCategoryCache()
         return result
     }
 
@@ -610,7 +612,9 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_ID = ?",
             arrayOf(fenceId)
         )
+        // 【P0修复】修改围栏分类后必须同时失效分类缓存，否则getAllCategories()返回旧数据
         invalidateFenceCache()
+        invalidateCategoryCache()
         return result
     }
 
