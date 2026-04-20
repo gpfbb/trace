@@ -121,7 +121,7 @@ class AMapLocationProvider(
         client.setLocationOption(option)
     }
 
-    fun setInterval(intervalMs: Long) {
+    override fun setInterval(intervalMs: Long) {
         val option = AMapLocationClientOption()
         option.interval = intervalMs
         option.httpTimeOut = maxOf(intervalMs * 3, DEFAULT_TIMEOUT_MS)

@@ -18,6 +18,7 @@ interface LocationProvider {
     fun setLocationCallback(callback: LocationCallback)
     fun removeLocationCallback()
     fun setLocationMode(mode: LocationMode)
+    fun setInterval(intervalMs: Long)
     fun getProviderName(): String
 }
 

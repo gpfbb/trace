@@ -32,6 +32,7 @@ class GoogleLocationProvider(
 
     private var appCallback: LocationCallback? = null
     private var currentMode: LocationMode = LocationMode.HIGH_ACCURACY
+    private var currentIntervalMs: Long = HIGH_ACCURACY_INTERVAL_MS
     private var _lastLocation: Location? = null
     private var isRequesting = false
 
@@ -93,23 +94,28 @@ class GoogleLocationProvider(
         Log.d(TAG, "Location mode changed to $mode")
     }
 
+    override fun setInterval(intervalMs: Long) {
+        if (currentIntervalMs == intervalMs) return
+        currentIntervalMs = intervalMs
+        if (isRequesting) {
+            stop()
+            start()
+        }
+        Log.d(TAG, "Location interval changed to ${intervalMs}ms")
+    }
+
     override fun getProviderName(): String = "Google"
 
     @SuppressLint("MissingPermission")
     private fun createGmsRequest(mode: LocationMode): GmsLocationRequest {
-        val interval = when (mode) {
-            LocationMode.HIGH_ACCURACY -> HIGH_ACCURACY_INTERVAL_MS
-            LocationMode.BATTERY_SAVING -> BATTERY_SAVING_INTERVAL_MS
-            LocationMode.DEVICE_ONLY -> HIGH_ACCURACY_INTERVAL_MS
-        }
         val priority = when (mode) {
             LocationMode.HIGH_ACCURACY -> Priority.PRIORITY_HIGH_ACCURACY
             LocationMode.BATTERY_SAVING -> Priority.PRIORITY_BALANCED_POWER_ACCURACY
             LocationMode.DEVICE_ONLY -> Priority.PRIORITY_HIGH_ACCURACY
         }
-        return GmsLocationRequest.Builder(interval)
+        return GmsLocationRequest.Builder(currentIntervalMs)
             .setPriority(priority)
-            .setMinUpdateIntervalMillis(interval / 2)
+            .setMinUpdateIntervalMillis(currentIntervalMs / 2)
             .setMaxUpdates(Int.MAX_VALUE)
             .build()
     }
