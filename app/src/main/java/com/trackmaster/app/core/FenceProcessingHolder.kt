@@ -85,8 +85,11 @@ class FenceProcessingHolder(
 
         appScope.launch {
             val (closedSeg, _) = engine.onLocationUpdate(fix)
+            // 【Bug修复】handleFenceExit 需要使用检测到exit时的matched fence状态，
+            // 而不是 onLocationUpdate 之后的最新状态（可能导致TOCTOU竞态）
+            val matchedAtDetection = engine.currentMatchedFenceIds.toList()
             if (closedSeg != null) {
-                handleFenceExit(closedSeg.leafGeofenceId, closedSeg.leafGeofenceId, location)
+                handleFenceExit(closedSeg.leafGeofenceId, matchedAtDetection, location)
             }
             handleAllMatchedFences(location, closedSeg?.leafGeofenceId, fix)
         }
@@ -173,16 +176,17 @@ class FenceProcessingHolder(
     // 内部方法
     // ============================================================
 
-    private fun handleFenceExit(fenceId: String, fenceName: String, location: Location) {
-        recordFenceEvent(fenceId, fenceName, GeoFenceAction.EXIT, location)
-        stayDurationManager.onFenceExit(fenceId, fenceName, Date(location.timestamp))
+    private fun handleFenceExit(fenceId: String, matchedFenceIdsSnapshot: List<String>, location: Location) {
+        recordFenceEvent(fenceId, fenceId, GeoFenceAction.EXIT, location)
+        stayDurationManager.onFenceExit(fenceId, fenceId, Date(location.timestamp))
         fenceEnterTimes.remove(fenceId)
 
         val parentId = fenceTreeManager.getParent(fenceId)
-        if (parentId != null && engine.currentMatchedFenceIds.contains(parentId)) {
+        // 【Bug修复】使用捕获时的matched fence状态快照，避免TOCTOU竞态
+        if (parentId != null && matchedFenceIdsSnapshot.contains(parentId)) {
             stayDurationManager.transferChildDurationToParent(fenceId, parentId, Date(location.timestamp))
         }
-        persistentStateManager.saveLastExitState(fenceId, fenceName, Date(location.timestamp))
+        persistentStateManager.saveLastExitState(fenceId, fenceId, Date(location.timestamp))
         persistentStateManager.clearCurrentFenceState()
     }
 
