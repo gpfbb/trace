@@ -312,9 +312,17 @@ class SmartScheduler(
                 accumulatedStationaryMs = ts - stationarySinceTs
                 updateThrottleLevel(isInsideFence)
             } else {
-                stationarySinceTs = 0L
-                accumulatedStationaryMs = 0L
-                level = 0
+                // 【P1修复】isStationary=false 且 distance >= resetDistanceM 时才重置
+                // 原因：GPS噪声或窗口数据不足时 isStationary 可能短暂为 false，
+                // 但如果 distance 很小（<30m），用户实际是静止的，不应清除累积时间
+                // 旧bug：isStationary=false 直接清零 → level 永远升不上去
+                if (distance > config.resetDistanceM) {
+                    stationarySinceTs = 0L
+                    accumulatedStationaryMs = 0L
+                    level = 0
+                }
+                // else: distance < resetDistanceM 但 isStationary=false
+                // 保守策略：保留累积时间，等待下一次检测确认
             }
         }
 
