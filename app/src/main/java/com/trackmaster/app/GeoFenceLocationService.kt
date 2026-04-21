@@ -536,13 +536,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 // 【Bug修复】围栏内阈值：先降频（2次），STOP_THRESHOLD=5 对所有场景生效（5次后停止GPS）
                 // 围栏内用户对定位精度要求低，2次throttled即可触发降频
                 // 但无论围栏内外，STOP_THRESHOLD=5 统一触发停止GPS（防止围栏内静止时GPS永不停止）
-                val INSIDE_FENCE_THRESHOLD = 2
-                if (consecutiveNotProcessCount >= INSIDE_FENCE_THRESHOLD && serviceState.isInsideFence) {
-                    // 【Bug修复】使用 engine.lastComputedIntervalMs 而非硬编码 60s
+                val THROTTLE_THRESHOLD = 2  // 围栏内外统一：2次throttled即降频
+                if (consecutiveNotProcessCount >= THROTTLE_THRESHOLD) {
+                    // 【P0修复】围栏外静止也要降频，不等5次
                     // engine 已根据 stationary 检测计算出合适的下次间隔，直接使用
                     val engineInterval = engineIntervalMs
-                    Log.d(TAG, "省电: 围栏内连续${consecutiveNotProcessCount}次不处理，降频到${engineInterval}ms/次继续监控")
-                    // 【Bug修复】Google provider 也需要 setInterval，否则降频不生效
+                    Log.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不处理，降频到${engineInterval}ms/次继续监控")
                     if (isUsingGoogleProvider) {
                         locationProvider?.setInterval(engineInterval)
                     } else {
@@ -796,6 +795,11 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             if (isUsingGoogleProvider) {
                 val nextInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
                 locationProvider?.setInterval(nextInterval)
+            } else {
+                // 【P1修复】AMap provider: throttled 回调时同样需要更新 interval
+                // AMap 使用 updateLocationOptionsForContinuous 设置间隔
+                val nextInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
+                updateLocationOptionsForContinuous(nextInterval)
             }
             val engineInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
             updatePowerSavingState(shouldStopForPowerSave, engineInterval)

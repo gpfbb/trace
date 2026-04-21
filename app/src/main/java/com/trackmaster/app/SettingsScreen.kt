@@ -550,10 +550,11 @@ fun SettingsPage(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    currentLanguage = lang
+                                    LanguageManager.applyLocale(context, lang, currentLanguage) {
+                                        currentLanguage = lang
+                                    }
                                     prefs.appLanguage = lang
                                     showLanguagePicker = false
-                                    LanguageManager.restartApp(context)
                                 }
                                 .padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically

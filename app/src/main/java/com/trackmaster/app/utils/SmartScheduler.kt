@@ -34,19 +34,19 @@ data class ThrottleConfig(
     /** 漂移过滤阈值（米），accuracy > 此值丢弃 */
     val driftThresholdM: Double = 30.0,
     /** 静止判定：距离阈值倍率（精度半径 × 此值），越大越容易判定静止 */
-    val stationaryAccuracyMultiplier: Double = 3.0,
+    val stationaryAccuracyMultiplier: Double = 4.0,
     /** 静止判定：最小距离阈值（米），越大越容易判定静止 */
     val stationaryMinDistanceM: Double = 30.0,
     /** 静止判定：加速度方差阈值，越大越容易判定静止 */
-    val stationaryAccelVariance: Double = 2.0,
+    val stationaryAccelVariance: Double = 3.0,
     /** 静止判定：速度阈值（米/秒），越大越容易判定静止
      *  【Bug修复】从 0.5 调整到 1.5：GPS 位置噪声（10-50m）在 60s 间隔下
      *  计算速度可达 0.17-0.83 m/s，原 0.5m/s 阈值导致静止时频繁误判为移动，阻止降频 */
     val stationarySpeedThreshold: Double = 1.5,
     /** 静止判定：时间窗口大小（定位点数），越小越容易判定静止 */
-    val stationaryWindowSize: Int = 3,
+    val stationaryWindowSize: Int = 5,
     /** 静止判定：需要在窗口内有多少个点满足条件才判定为静止，越小越容易 */
-    val stationaryMinPoints: Int = 2,
+    val stationaryMinPoints: Int = 3,
     /** 阶梯降频各阶段（静止分钟 → 间隔ms） */
     val throttleSteps: List<ThrottleStep> = DEFAULT_THROTTLE_STEPS,
     /** 立即重置距离阈值（米），位移超过此值立即重置降频 */
@@ -287,8 +287,8 @@ class SmartScheduler(
         val distance = lastPoint?.let { GeoMath.haversine(it, currentPoint) } ?: Double.MAX_VALUE
         val isStationary = checkStationary(distance, fix.accuracy, accel, currentPoint)
 
-        // ---- 边界 Buffer 检测（所有模式都启用，小围栏用户边界敏感） ----
-        val inBuffer = checkBoundaryBuffer(currentPoint)
+        // ---- 边界 Buffer 检测已禁用（用户要求删除边界算法，干扰围栏进入） ----
+        val inBuffer = false // 【P0修复】强制禁用，删除 checkBoundaryBuffer
 
         // ---- 立即重置条件检查 ----
         // 【核心修复】单次GPS跳点(>30m)不能判断为"真移动"

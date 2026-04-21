@@ -326,7 +326,7 @@ class Engine(
      * @return 命中的围栏 ID 列表（按深度降序排列，最深在前）
      */
     fun checkFenceMatch(fix: LocationFix): List<String> {
-        val matched = findAllMatchedFences(fix, bufferM = 10.0, considerBufferAsInside = true)
+        val matched = findAllMatchedFences(fix, bufferM = 3.0, considerBufferAsInside = true)
         return matched.map { it.id }
     }
 
