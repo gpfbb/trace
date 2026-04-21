@@ -28,6 +28,7 @@ import com.trackmaster.app.locationservice.LocationType
 import com.trackmaster.app.locationservice.LocationCallback
 import com.trackmaster.app.locationservice.LocationProvider
 import com.trackmaster.app.locationservice.google.GoogleLocationProvider
+import com.trackmaster.app.core.PowerMode
 import com.trackmaster.app.core.AccelerometerData
 import java.util.Date
 import java.util.concurrent.CopyOnWriteArrayList
@@ -364,9 +365,18 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         Log.d(TAG, "配置快速首次定位模式")
     }
 
-    private fun updateLocationOptionsForContinuous(intervalMs: Long) {
+    private fun updateLocationOptionsForContinuous(intervalMs: Long, forceGps: Boolean = false) {
+        // 【P0修复】围栏内静止时使用 Battery_Saving 模式，彻底关闭 GPS 硬件
+        // 原因：HIGH_ACCURACY 模式下 GPS 硬件持续自启动，不受 interval 控制
+        // Battery_Saving 纯网络定位（100-500m精度）对围栏内静止检测完全够用
+        // forceGps=true 时强制使用 GPS（用于临时检查、围栏边界切换等需要高精度的场景）
+        val mode = if (forceGps) {
+            AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
+        } else {
+            AMapLocationClientOption.AMapLocationMode.Battery_Saving
+        }
         locationOption = AMapLocationClientOption().apply {
-            locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
+            locationMode = mode
             isOnceLocation = false
             isNeedAddress = false
             isWifiScan = true
@@ -378,7 +388,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         // 【Bug修复】setOption后需要stop+start才能让新interval生效
         locationClient?.stopLocation()
         locationClient?.startLocation()
-        Log.d(TAG, "配置连续定位模式，间隔: ${intervalMs}ms, httpTimeOut: ${maxOf(intervalMs * 3, 10000L)}ms")
+        Log.d(TAG, "配置连续定位模式，模式=${if (forceGps) "GPS" else "网络"}, 间隔: ${intervalMs}ms")
     }
 
     private fun startLocationWithFastFirst() {
@@ -798,8 +808,10 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             } else {
                 // 【P1修复】AMap provider: throttled 回调时同样需要更新 interval
                 // AMap 使用 updateLocationOptionsForContinuous 设置间隔
+                // 围栏内：切换到 Battery_Saving 关闭 GPS 硬件
+                // 围栏外：保持 GPS 以检测进入
                 val nextInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
-                updateLocationOptionsForContinuous(nextInterval)
+                updateLocationOptionsForContinuous(nextInterval, forceGps = !isInFence)
             }
             val engineInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
             updatePowerSavingState(shouldStopForPowerSave, engineInterval)
