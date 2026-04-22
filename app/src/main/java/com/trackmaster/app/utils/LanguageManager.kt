@@ -1,10 +1,13 @@
 package com.trackmaster.app.utils
 
 import android.app.Activity
+import android.app.LocaleManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.os.Build
+import android.os.LocaleList
 import com.trackmaster.app.AppLanguage
 import java.util.Locale
 
@@ -79,10 +82,23 @@ object LanguageManager {
 
     /**
      * Directly patch the Activity's Resources with the new locale.
+     * Also persists to LocaleManager (Android 13+) so system doesn't override it.
      * No recreate() needed — Compose re-reads from the updated Resources on recomposition.
      */
     private fun setLocale(activity: Activity, locale: Locale) {
         Locale.setDefault(locale)
+
+        // 【Bug修复】同时使用 Android 13+ per-app language API 持久化语言设置
+        // 防止 App 在后台被系统 killed 后，语言设置被系统 LocaleManager 覆盖回马来语
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                val localeManager = activity.getSystemService(LocaleManager::class.java)
+                localeManager?.applicationLocales = LocaleList(locale)
+                android.util.Log.d("LanguageManager", "setLocale: persisted to LocaleManager API (Android 13+)")
+            } catch (e: Exception) {
+                android.util.Log.e("LanguageManager", "setLocale: LocaleManager API failed", e)
+            }
+        }
 
         val config = Configuration(activity.resources.configuration)
         config.setLocale(locale)

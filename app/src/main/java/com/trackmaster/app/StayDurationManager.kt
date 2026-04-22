@@ -480,24 +480,18 @@ class StayDurationManager(private val context: Context) {
 
     fun getCurrentDuration(fenceId: String): Long? {
         val session = activeSessions[fenceId] ?: return null
-        val now = System.currentTimeMillis()
 
-        // 【Bug修复】对于崩溃恢复的会话（gapStartTime != null && lastSaveTime == null）
-        // 正确计算: accumulatedDuration(纯活跃时长) + (now - gapStartTime)(gap期间，App未运行)
-        // 注意: gapStartTime 在 loadActiveSessionsFromDatabase 时被设为重启时刻，而非真实崩溃时刻
-        // 这是 Android 的固有限制，gapDuration 会在重启后略大于真实 gap（重启到崩溃之间的时长）
-        if (session.gapStartTime != null && session.lastSaveTime == null) {
-            val gapDuration = (now - session.gapStartTime.time) / 1000
-            return session.accumulatedDuration + gapDuration
-        }
-
+        // 【Bug修复】lastSaveTime == null 表示刚恢复的会话（gap 已通过第一次 saveAllActiveSessions 加入 accumulated）
+        // lastSaveTime != null 表示已 save 过的会话：accumulated + elapsed since last save
+        // gapStartTime 不再用于计算，因为 gap 只在第一次 save 时加一次，之后 lastSaveTime 就不为 null 了
         if (session.lastSaveTime != null) {
-            val timeSinceLastSave = (now - session.lastSaveTime.time) / 1000
+            val timeSinceLastSave = (System.currentTimeMillis() - session.lastSaveTime.time) / 1000
             return session.accumulatedDuration + timeSinceLastSave
         }
 
-        // 正常新会话：从未保存过，直接返回从 enterTime 到现在
-        return (now - session.enterTime.time) / 1000
+        // 刚恢复的会话（lastSaveTime == null）：accumulated 已包含 gap 时长，直接返回
+        // 正常新会话：从未保存过，返回从 enterTime 到现在
+        return (System.currentTimeMillis() - session.enterTime.time) / 1000
     }
 
     private fun saveDailyRecord(record: DailyStayRecord) {

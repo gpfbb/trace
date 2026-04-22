@@ -122,18 +122,18 @@ class StatisticsManager(private val context: Context) {
             }.setEnterCountValue(count)
         }
 
-        // 3. 添加当前活跃会话的实时时长（跨午夜的活跃会话只计算在时间范围内的部分）
+        // 3. 添加当前活跃会话的实时时长（使用 accumulatedDuration，而非 enterTime 的 raw 差值）
         val activeSessions = app.stayDurationManager.activeSessions
         android.util.Log.d("StatisticsManager", "Active sessions: ${activeSessions.size}")
-        val now = Date()
         for ((fenceId, session) in activeSessions) {
-            // 活跃会话都是未结束的，直接用 enterTime 判断是否与时间范围重叠
+            // 使用 getCurrentDuration 获取实时累积时长（含 App 重启的 gap）
+            val currentDuration = app.stayDurationManager.getCurrentDuration(fenceId) ?: 0L
+            // 活跃会话只要 enterTime 在 endTime 之前就计入（已在围栏内）
             if (session.enterTime <= timeRange.endTime) {
-                val effectiveStartTime = maxOf(session.enterTime, timeRange.startTime)
-                val effectiveEndTime = minOf(now, timeRange.endTime)
-                val effectiveDurationSeconds = maxOf(0L, (effectiveEndTime.time - effectiveStartTime.time) / 1000)
-
-                android.util.Log.d("StatisticsManager", "Active session $fenceId (${session.fenceName}): duration=${effectiveDurationSeconds}s, enterTime=${session.enterTime}, effectiveRange=${effectiveStartTime}-${effectiveEndTime}")
+                // 时长取 getCurrentDuration，但不超过时间范围跨度（防止单日超过24小时）
+                val maxRangeSeconds = maxOf(0L, (timeRange.endTime.time - maxOf(session.enterTime, timeRange.startTime).time) / 1000)
+                val effectiveDurationSeconds = minOf(currentDuration, maxRangeSeconds)
+                android.util.Log.d("StatisticsManager", "Active session $fenceId (${session.fenceName}): duration=${effectiveDurationSeconds}s")
                 val builder = statsMap.getOrPut(fenceId) {
                     FenceStatisticsBuilder(fenceId = fenceId, fenceName = session.fenceName)
                 }
