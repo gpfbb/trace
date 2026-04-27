@@ -429,9 +429,9 @@ object GeoMath {
                 val innerAllInside = innerToCheck.all { pointInPolygon(it.lat, it.lng, outerToCheck) }
                 if (innerAllInside) return true
 
-                // 如果外多边形所有顶点都在内多边形内，返回true（外包含内）
+                // 如果外多边形所有顶点都在内多边形内，说明内包含外，而非外包含内
                 val outerAllInside = outerToCheck.all { pointInPolygon(it.lat, it.lng, innerToCheck) }
-                if (outerAllInside) return true
+                if (outerAllInside) return false
 
                 // 边界不相交且无包含关系
                 return false
@@ -826,7 +826,7 @@ object GeoMath {
             FenceState.INSIDE -> {
                 when {
                     distance > config.innerExitM -> FenceState.OUTSIDE
-                    distance > 0.0 -> FenceState.INNER_BUFFER
+                    distance > 0.0 -> FenceState.OUTER_BUFFER
                     distance > -config.innerEnterM -> FenceState.INNER_BUFFER
                     else -> FenceState.INSIDE
                 }
@@ -841,8 +841,18 @@ object GeoMath {
      * @return core.Geofence (引擎层)
      */
     fun buildEngineGeofence(fence: GeoFence): Geofence {
+        val fenceType = fence.type ?: return Geofence(
+            id = fence.id,
+            name = fence.name,
+            type = GeoFenceType.POLYGON,
+            polygon = emptyList(),
+            bbox = null,
+            center = null,
+            radius = null,
+            createdAt = fence.createdAt,
+        )
         val geoFenceType = try {
-            GeoFenceType.valueOf(fence.type.name)
+            GeoFenceType.valueOf(fenceType.name)
         } catch (_: Exception) {
             return Geofence(
                 id = fence.id,

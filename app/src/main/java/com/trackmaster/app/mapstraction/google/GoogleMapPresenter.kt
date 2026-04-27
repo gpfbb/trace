@@ -39,9 +39,6 @@ import com.trackmaster.app.mapstraction.MarkerIcon
 import com.trackmaster.app.locationservice.Location
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import kotlin.concurrent.withLock
 
 class GoogleMapPresenter(
     private val mapView: MapView,
@@ -55,7 +52,6 @@ class GoogleMapPresenter(
     private var googleMap: GoogleMap? = null
     private val _isMapReady = MutableStateFlow(false)
     val isMapReady: StateFlow<Boolean> = _isMapReady
-    private val mapInitLatch = CountDownLatch(1)
     private var lifecycleObserver: LifecycleEventObserver? = null
 
     // 记录 configureMap 的参数，等地图就绪后应用
@@ -68,9 +64,6 @@ class GoogleMapPresenter(
     private var onMarkerClickListener: ((String) -> Boolean)? = null
     private var onCameraCenterChangeListener: ((Double, Double) -> Unit)? = null
 
-    // MapView 初始化标志：在构造时立即设为 true
-    private var isMapViewInitialized = true
-
     // getMapAsync 失败时标记
     private var isMapAsyncFailed = false
 
@@ -80,7 +73,7 @@ class GoogleMapPresenter(
     private var lastKnownLocation: Location? = null
 
     init {
-        AppLog.d(TAG, "GoogleMapPresenter 初始化，isMapViewInitialized=true")
+        AppLog.d(TAG, "GoogleMapPresenter 初始化")
         setupLifecycle()
     }
 
@@ -123,28 +116,11 @@ class GoogleMapPresenter(
         navigateCameraToLocation(location)
     }
 
-    private fun ensureMapReady(): GoogleMap? {
-        if (googleMap == null) {
-            try {
-                // 最多等 10 秒，超时则放弃（getMapAsync 可能因 Google Play Services 问题不回调）
-                mapInitLatch.await(10, TimeUnit.SECONDS)
-            } catch (e: InterruptedException) {
-                AppLog.e(TAG, "等待地图初始化被中断", e)
-                Thread.currentThread().interrupt()
-                return null
-            }
-            if (googleMap == null) {
-                AppLog.e(TAG, "地图初始化超时或失败，googleMap 为 null")
-                return null
-            }
-        }
-        return googleMap
-    }
+    private fun getMap(): GoogleMap? = googleMap
 
     override fun onMapReady(map: GoogleMap) {
         AppLog.d(TAG, "=== onMapReady() 被调用 ===")
         googleMap = map
-        mapInitLatch.countDown()
         _isMapReady.value = true
         AppLog.d(TAG, "onMapReady: googleMap 已赋值，isMapReady=true")
 
@@ -161,8 +137,6 @@ class GoogleMapPresenter(
     fun onMapAsyncError(errorMessage: String) {
         AppLog.e(TAG, "getMapAsync 失败: $errorMessage")
         isMapAsyncFailed = true
-        // 解开 latch，避免 ensureMapReady 永久阻塞
-        mapInitLatch.countDown()
     }
 
     private fun setupMapOnReady(map: GoogleMap) {
@@ -252,19 +226,19 @@ class GoogleMapPresenter(
 
     private fun setupLifecycle() {
         lifecycleObserver = LifecycleEventObserver { _, e ->
-            if (!isMapViewInitialized) {
-                AppLog.w(TAG, "lifecycle 事件 ${e.name}，但 isMapViewInitialized=false，丢弃")
-                return@LifecycleEventObserver
-            }
             try {
                 when (e) {
+                    Lifecycle.Event.ON_START -> {
+                        mapView.onStart()
+                    }
                     Lifecycle.Event.ON_RESUME -> {
-                        AppLog.d(TAG, "lifecycle: ON_RESUME")
                         mapView.onResume()
                     }
                     Lifecycle.Event.ON_PAUSE -> {
-                        AppLog.d(TAG, "lifecycle: ON_PAUSE")
                         mapView.onPause()
+                    }
+                    Lifecycle.Event.ON_STOP -> {
+                        mapView.onStop()
                     }
                     Lifecycle.Event.ON_DESTROY -> {
                         AppLog.d(TAG, "lifecycle: ON_DESTROY")
@@ -282,7 +256,7 @@ class GoogleMapPresenter(
     }
 
     override fun showLocation(location: MapLocation) {
-        ensureMapReady()?.animateCamera(
+        getMap()?.animateCamera(
             CameraUpdateFactory.newLatLngZoom(
                 LatLng(location.latitude, location.longitude),
                 16f
@@ -291,7 +265,7 @@ class GoogleMapPresenter(
     }
 
     override fun addCircle(circle: MapCircle) {
-        val map = ensureMapReady() ?: return
+        val map = getMap() ?: return
         try {
             val options = CircleOptions()
                 .center(LatLng(circle.center.latitude, circle.center.longitude))
@@ -310,7 +284,7 @@ class GoogleMapPresenter(
     }
 
     override fun addPolygon(polygon: MapPolygon) {
-        val map = ensureMapReady() ?: return
+        val map = getMap() ?: return
         try {
             val options = PolygonOptions()
                 .addAll(polygon.points.map { LatLng(it.latitude, it.longitude) })
@@ -328,7 +302,7 @@ class GoogleMapPresenter(
     }
 
     override fun addMarker(marker: MapMarker) {
-        val map = ensureMapReady() ?: return
+        val map = getMap() ?: return
         try {
             val options = MarkerOptions()
                 .position(LatLng(marker.position.latitude, marker.position.longitude))
@@ -389,13 +363,13 @@ class GoogleMapPresenter(
     }
 
     override fun moveCamera(lat: Double, lng: Double, zoom: Float) {
-        ensureMapReady()?.animateCamera(
+        getMap()?.animateCamera(
             CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), zoom)
         )
     }
 
     override fun moveCameraWithBounds(bounds: MapBounds, padding: Int) {
-        val map = ensureMapReady() ?: return
+        val map = getMap() ?: return
         try {
             val latLngBounds = LatLngBounds.builder()
                 .include(LatLng(bounds.northEast.latitude, bounds.northEast.longitude))

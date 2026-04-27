@@ -144,10 +144,7 @@ class Engine(
         onLocationProcessed?.invoke(decision.shouldProcess, decision.nextIntervalMs)
         if (!decision.shouldProcess) return Pair(null, false)
 
-        // 2. 漂移过滤（与SmartScheduler保持一致）
-        if (fix.accuracy.toDouble() > scheduler.config.driftThresholdM) return Pair(null, false)
-
-        // 3. 获取动态缓冲区大小
+        // 2. 获取动态缓冲区大小
         var currentBufferSize = 0.0
         if (bufferManager != null) {
             val speedMps = fix.speed?.toDouble()
@@ -160,18 +157,18 @@ class Engine(
             AppLog.d(TAG, "动态缓冲区: ${"%.1f".format(currentBufferSize)}m")
         }
 
-        // 4. 查找所有命中的围栏（包括嵌套的父级和子级）
+        // 3. 查找所有命中的围栏（包括嵌套的父级和子级）
         val allMatched = findAllMatchedFences(fix, currentBufferSize, true)
 
-        // 5. 更新当前命中的所有围栏列表（按深度降序排列）
+        // 4. 更新当前命中的所有围栏列表（按深度降序排列）
         currentMatchedFenceIds = allMatched
             .sortedByDescending { it.depth }
             .map { it.id }
 
-        // 6. 找出最深的叶子围栏用于计时
+        // 5. 找出最深的叶子围栏用于计时
         val deepest = allMatched.maxByOrNull { it.depth }
 
-        // 7. 状态转移
+        // 6. 状态转移
         if (deepest?.id != currentLeafId) {
             return Pair(transition(deepest?.id, fix.timestamp), true)
         }

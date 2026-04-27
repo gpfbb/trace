@@ -412,8 +412,12 @@ class DataManager(private val context: Context) {
     }
     
     // 导出的文件缓存在应用私有目录（用于列表展示）
+    // fallback to internal storage if external is not available
     private val exportCacheDir: File
-        get() = File(context.getExternalFilesDir(null), "exports").also { if (!it.exists()) it.mkdirs() }
+        get() {
+            val base = context.getExternalFilesDir(null) ?: context.filesDir
+            return File(base, "exports").also { if (!it.exists()) it.mkdirs() }
+        }
 
     /** 获取已导出文件列表（来自应用私有缓存） */
     fun getExportFiles(): List<File> {

@@ -2,6 +2,7 @@ package com.trackmaster.app
 
 import android.content.Context
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.data.FenceStayRecord
@@ -52,8 +53,9 @@ class StayDurationManager(private val context: Context) {
     public val activeSessions: ConcurrentHashMap<String, FenceActiveSession> = ConcurrentHashMap()
     private val dailyCache = ConcurrentHashMap<String, MutableMap<String, DailyStayRecord>>()
 
-    // Handler for periodic saving (leak prevention: use static inner class + WeakReference)
-    private val periodicSaveHandler = Handler(Looper.getMainLooper())
+    // Background thread for periodic saving to avoid main-thread DB writes
+    private val saveThread = HandlerThread("StayDurationSaver").apply { start() }
+    private val periodicSaveHandler = Handler(saveThread.looper)
     private var saveRunnable: PeriodicSaveRunnable? = null
 
     /**
@@ -87,63 +89,58 @@ class StayDurationManager(private val context: Context) {
         return formatDate(date)
     }
 
+    private val enterLock = Any()
+
     fun onFenceEnter(fenceId: String, fenceName: String, enterTime: Date) {
         val dateKey = getDateKey(enterTime)
 
-        // 【P0修复】使用 compute 原子操作替代 putIfAbsent + 后续操作
-        // 原问题：putIfAbsent 和 onFenceExit/重新插入之间存在竞态窗口
-        // 修复：compute 保证整个 check-then-act 是原子的
-        activeSessions.compute(fenceId) { _, existing ->
+        synchronized(enterLock) {
+            // 如果已在 activeSessions 中，先关闭旧会话
+            val existing = activeSessions[fenceId]
             if (existing != null) {
-                // 围栏已在 activeSessions 中，先关闭旧会话
                 AppLog.w(TAG, "围栏 $fenceName 已在 activeSessions 中，先关闭旧会话再启动新会话")
-                // 在 compute 内部不能调用 onFenceExit（会修改 map 导致 ConcurrentModificationException）
-                // 只返回新 session，让调用方在外部处理旧会话的关闭
-                // 这里我们直接返回新 session，旧会话的时长会被覆盖（可接受的 trade-off）
+                val now = System.currentTimeMillis()
+                val accumulated = if (existing.lastSaveTime != null) {
+                    existing.accumulatedDuration + (now - existing.lastSaveTime.time) / 1000
+                } else {
+                    existing.accumulatedDuration
+                }
+                if (accumulated > 0) {
+                    dbHelper.closeOpenStayRecord(fenceId, Date(), accumulated)
+                }
             }
-            FenceActiveSession(fenceId, fenceName, enterTime, getDateKey(enterTime))
-        }
 
-        // 【修复】检查是否已有该围栏的未关闭记录，若有则先关闭
-        // 防止App被杀死后重启时重复进入导致多条开放记录
-        val existingOpenStays = dbHelper.getOpenStayRecords().filter { it.fenceId == fenceId }
-        if (existingOpenStays.isNotEmpty()) {
+            // 关闭数据库中已有该围栏的未关闭记录
+            val existingOpenStays = dbHelper.getOpenStayRecords().filter { it.fenceId == fenceId }
             for (oldStay in existingOpenStays) {
-                // 将旧记录标记为异常关闭
-                // duration = 从旧进入时间到新进入时间（中间App可能在其他地方）
                 val totalDuration = (enterTime.time - oldStay.enterTime.time) / 1000
-                val closedRecord = FenceStayRecord(
+                dbHelper.insertStayRecord(FenceStayRecord(
                     fenceId = oldStay.fenceId,
                     fenceName = oldStay.fenceName,
                     enterTime = oldStay.enterTime,
-                    exitTime = enterTime,  // 新进入时间作为异常退出时间
+                    exitTime = enterTime,
                     durationSeconds = totalDuration
-                )
-                // 插入已关闭记录
-                dbHelper.insertStayRecord(closedRecord)
+                ))
                 AppLog.w(TAG, "关闭异常开放记录: $fenceName, 进入=${oldStay.enterTime}, 异常退出=$enterTime, 累积时长=${totalDuration}秒")
             }
+
+            val session = FenceActiveSession(
+                fenceId = fenceId,
+                fenceName = fenceName,
+                enterTime = enterTime,
+                dateKey = dateKey
+            )
+            activeSessions[fenceId] = session
+
+            // 立即创建开放记录
+            dbHelper.insertStayRecord(FenceStayRecord(
+                fenceId = fenceId,
+                fenceName = fenceName,
+                enterTime = enterTime,
+                exitTime = null,
+                durationSeconds = 0L
+            ))
         }
-
-        val session = FenceActiveSession(
-            fenceId = fenceId,
-            fenceName = fenceName,
-            enterTime = enterTime,
-            dateKey = dateKey
-        )
-        activeSessions[fenceId] = session
-
-        // 【修复】立即创建开放记录，不依赖5分钟定时保存
-        // 这样App被杀死后重启能正确恢复计时
-        val stayRecord = FenceStayRecord(
-            fenceId = fenceId,
-            fenceName = fenceName,
-            enterTime = enterTime,
-            exitTime = null,  // 开放记录
-            durationSeconds = 0L
-        )
-        dbHelper.insertStayRecord(stayRecord)
-        AppLog.d(TAG, "创建开放停留记录: $fenceName, 进入时间=$enterTime")
 
         AppLog.d(TAG, "开始计时: $fenceName, 日期=$dateKey, 时间=$enterTime")
     }
@@ -152,10 +149,8 @@ class StayDurationManager(private val context: Context) {
         val session = activeSessions.remove(fenceId)
 
         // 【关键防御】即使围栏不在 activeSessions 中，也要关闭 DB 中的开放记录
-        // 防止开放记录残留导致重启后重复计时
         if (session == null) {
             AppLog.w(TAG, "围栏 $fenceName 不在 activeSessions 中，尝试关闭 DB 开放记录")
-            // 【Bug修复】从 DB 查询实际累积时长，而非硬编码 0L
             val existingOpen = dbHelper.getOpenStayRecords().filter { it.fenceId == fenceId }.firstOrNull()
             val duration = existingOpen?.durationSeconds ?: 0L
             val updatedRows = dbHelper.closeOpenStayRecord(fenceId, exitTime, duration)
@@ -167,98 +162,82 @@ class StayDurationManager(private val context: Context) {
         val exitDateKey = getDateKey(exitTime)
         val now = System.currentTimeMillis()
 
-        // 【关键修复】使用 sessionAccumulated 而非 raw (exitTime - enterTime)
-        // sessionAccumulated 已经包含了 child transfer 等所有时间，
-        // 而 raw duration 对于有子围栏的场景会重复累加 child 时间导致统计错误
         val sessionAccumulated = if (session.lastSaveTime != null) {
             session.accumulatedDuration + (now - session.lastSaveTime.time) / 1000
         } else {
-            // 【Bug修复】恢复的会话: accumulatedDuration 已包含之前的累积，gap 应从 gapStartTime 算起（而非 enterTime）
-            // 错误原因: enterTime 是原始进入时间（如8天前），用它计算 gap 会导致 pre-gap 时长被重复累加
-            // 正确做法: gapStartTime 记录的是 App 关闭时刻（gap 开始），用 (now - gapStartTime) 计算 gap 时长
             val effectiveGapStart = session.gapStartTime ?: session.enterTime
             session.accumulatedDuration + (now - effectiveGapStart.time) / 1000
         }
 
-        // 关闭该围栏的开放记录，避免残留
-        if (sessionAccumulated > 0) {
-            val updatedRows = dbHelper.closeOpenStayRecord(fenceId, exitTime, sessionAccumulated)
-            if (updatedRows == 0) {
-                val stayRecord = FenceStayRecord(
-                    fenceId = fenceId,
-                    fenceName = fenceName,
-                    enterTime = session.enterTime,
-                    exitTime = exitTime,
-                    durationSeconds = sessionAccumulated
-                )
-                dbHelper.insertStayRecord(stayRecord)
-                AppLog.w(TAG, "未找到开放记录，创建新记录: $fenceName, 时长=${sessionAccumulated}秒")
-            } else {
-                AppLog.d(TAG, "关闭开放记录: $fenceName, 时长=${sessionAccumulated}秒")
-            }
-        }
-
-        // 【Bug修复 - 技术债】检查子围栏退出时父围栏是否仍在 activeSessions
-        // 如果是，说明子围栏的时长已通过 transferChildDurationToParent 合并到父围栏，
-        // 子围栏不应再独立写入 daily_stays，避免双重计数
-        //
-        // 【技术债告警】parentStillActive 只检查退出时刻parent是否active，
-        // 不反映子围栏活跃期间parent的状态变化（如parent退出又重新进入）。
-        // 正确修复需要引入时间段概念：记录父子围栏各自的活动时间段，
-        // 检测子围栏活跃期间与父围栏活动时间的重叠关系。
-        // 当前逻辑在某些边界情况下可能误判，但影响有限（仅限父子围栏都active的场景）。
+        // 先检查父围栏是否仍在 active，再决定是否关闭子围栏 DB 记录
         val app = context.applicationContext as? TrackMasterApplication
         val parentId = app?.fenceTreeManager?.getParent(fenceId)
         val parentStillActive = parentId != null && activeSessions.containsKey(parentId)
+
         if (parentStillActive) {
-            AppLog.d(TAG, "子围栏 $fenceName 的时长已合并到父围栏，跳过独立写入")
-        }
-
-        if (enterDateKey == exitDateKey) {
-            if (sessionAccumulated > 0 && !parentStillActive) {
-                addDailyDuration(enterDateKey, fenceId, fenceName, sessionAccumulated)
-                AppLog.d(TAG, "结束计时: $fenceName, 日期=$enterDateKey, 时长=${sessionAccumulated}秒")
-            }
+            AppLog.d(TAG, "子围栏 $fenceName 的时长已合并到父围栏，跳过 DB 关闭和 daily 写入")
         } else {
-            // 跨天情况：分别计算每天的停留时长（使用 sessionAccumulated 替代 raw duration）
-            val enterCalendar = Calendar.getInstance()
-            enterCalendar.time = session.enterTime
-            enterCalendar.add(Calendar.DAY_OF_MONTH, 1)
-            enterCalendar.set(Calendar.HOUR_OF_DAY, 0)
-            enterCalendar.set(Calendar.MINUTE, 0)
-            enterCalendar.set(Calendar.SECOND, 0)
-            enterCalendar.set(Calendar.MILLISECOND, 0)
-            val midnightOfNextDay = enterCalendar.time
-
-            val durationDay1 = (midnightOfNextDay.time - session.enterTime.time) / 1000
-            if (durationDay1 > 0 && !parentStillActive) {
-                addDailyDuration(enterDateKey, fenceId, fenceName, durationDay1)
-                AppLog.d(TAG, "跨天计时(首日): $fenceName, 日期=$enterDateKey, 时长=${durationDay1}秒")
+            // 关闭该围栏的开放记录
+            if (sessionAccumulated > 0) {
+                val updatedRows = dbHelper.closeOpenStayRecord(fenceId, exitTime, sessionAccumulated)
+                if (updatedRows == 0) {
+                    dbHelper.insertStayRecord(FenceStayRecord(
+                        fenceId = fenceId,
+                        fenceName = fenceName,
+                        enterTime = session.enterTime,
+                        exitTime = exitTime,
+                        durationSeconds = sessionAccumulated
+                    ))
+                    AppLog.w(TAG, "未找到开放记录，创建新记录: $fenceName, 时长=${sessionAccumulated}秒")
+                } else {
+                    AppLog.d(TAG, "关闭开放记录: $fenceName, 时长=${sessionAccumulated}秒")
+                }
             }
 
-            val dayCalendar = Calendar.getInstance()
-            dayCalendar.time = midnightOfNextDay
+            if (enterDateKey == exitDateKey) {
+                if (sessionAccumulated > 0) {
+                    addDailyDuration(enterDateKey, fenceId, fenceName, sessionAccumulated)
+                    AppLog.d(TAG, "结束计时: $fenceName, 日期=$enterDateKey, 时长=${sessionAccumulated}秒")
+                }
+            } else {
+                // 跨天情况
+                val enterCalendar = Calendar.getInstance()
+                enterCalendar.time = session.enterTime
+                enterCalendar.add(Calendar.DAY_OF_MONTH, 1)
+                enterCalendar.set(Calendar.HOUR_OF_DAY, 0)
+                enterCalendar.set(Calendar.MINUTE, 0)
+                enterCalendar.set(Calendar.SECOND, 0)
+                enterCalendar.set(Calendar.MILLISECOND, 0)
+                val midnightOfNextDay = enterCalendar.time
 
-            val exitCalendar = Calendar.getInstance()
-            exitCalendar.time = exitTime
-            exitCalendar.set(Calendar.HOUR_OF_DAY, 0)
-            exitCalendar.set(Calendar.MINUTE, 0)
-            exitCalendar.set(Calendar.SECOND, 0)
-            exitCalendar.set(Calendar.MILLISECOND, 0)
+                val durationDay1 = (midnightOfNextDay.time - session.enterTime.time) / 1000
+                if (durationDay1 > 0) {
+                    addDailyDuration(enterDateKey, fenceId, fenceName, durationDay1)
+                    AppLog.d(TAG, "跨天计时(首日): $fenceName, 日期=$enterDateKey, 时长=${durationDay1}秒")
+                }
 
-            while (dayCalendar.before(exitCalendar)) {
-                if (!parentStillActive) {
+                val dayCalendar = Calendar.getInstance()
+                dayCalendar.time = midnightOfNextDay
+
+                val exitCalendar = Calendar.getInstance()
+                exitCalendar.time = exitTime
+                exitCalendar.set(Calendar.HOUR_OF_DAY, 0)
+                exitCalendar.set(Calendar.MINUTE, 0)
+                exitCalendar.set(Calendar.SECOND, 0)
+                exitCalendar.set(Calendar.MILLISECOND, 0)
+
+                while (dayCalendar.before(exitCalendar)) {
                     val fullDayKey = getDateKey(dayCalendar.time)
                     addDailyDuration(fullDayKey, fenceId, fenceName, 86400L)
                     AppLog.d(TAG, "跨天计时(整天): $fenceName, 日期=$fullDayKey, 时长=86400秒")
+                    dayCalendar.add(Calendar.DAY_OF_MONTH, 1)
                 }
-                dayCalendar.add(Calendar.DAY_OF_MONTH, 1)
-            }
 
-            val durationLastDay = (exitTime.time - exitCalendar.time.time) / 1000
-            if (durationLastDay > 0 && !parentStillActive) {
-                addDailyDuration(exitDateKey, fenceId, fenceName, durationLastDay)
-                AppLog.d(TAG, "跨天计时(末日): $fenceName, 日期=$exitDateKey, 时长=${durationLastDay}秒")
+                val durationLastDay = (exitTime.time - exitCalendar.time.time) / 1000
+                if (durationLastDay > 0) {
+                    addDailyDuration(exitDateKey, fenceId, fenceName, durationLastDay)
+                    AppLog.d(TAG, "跨天计时(末日): $fenceName, 日期=$exitDateKey, 时长=${durationLastDay}秒")
+                }
             }
         }
     }
@@ -625,8 +604,7 @@ class StayDurationManager(private val context: Context) {
                     // DB成功后才更新in-memory
                     activeSessions[session.fenceId] = session.copy(
                         accumulatedDuration = sessionAccumulated,
-                        lastSaveTime = Date(),
-                        gapStartTime = Date()
+                        lastSaveTime = Date()
                     )
                 } catch (e: Exception) {
                     AppLog.e(TAG, "DB更新失败，跳过此围栏: ${session.fenceName}", e)
@@ -646,5 +624,6 @@ class StayDurationManager(private val context: Context) {
         AppLog.d(TAG, "停留时长管理器销毁，清理 Handler")
         saveRunnable?.let { periodicSaveHandler.removeCallbacks(it) }
         saveRunnable = null
+        saveThread.quitSafely()
     }
 }

@@ -357,10 +357,10 @@ fun SettingsPage(
                         }
                     },
                     confirmButton = {
-                        // Pre-compute composable string values in composable scope (before onClick lambda)
-                        val intersectionWarningTemplate = stringResource(R.string.intersection_warning, 0)
-                        val successTemplate = stringResource(R.string.recalculate_success, 0)
-                        val errorTemplate = stringResource(R.string.recalculate_error, "")
+                        val ctx = LocalContext.current
+                        // Get raw format strings without placeholder substitution
+                        val intersectionWarningTemplate = ctx.getString(R.string.intersection_warning)
+                        val successTemplate = ctx.getString(R.string.recalculate_success)
                         val okLabel = stringResource(R.string.ok)
                         val confirmLabel = stringResource(R.string.confirm)
                         TextButton(

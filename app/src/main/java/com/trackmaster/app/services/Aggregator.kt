@@ -79,9 +79,6 @@ class Aggregator(
         val dayStart = parseDateKey(dateKey)
         val dayEnd = dayStart + 86_400_000L
 
-        // 跨 Segment 去重集合
-        val dedupeSet = mutableSetOf<String>()
-
         for (seg in segments) {
             if (seg.endTs == null) continue // 跳过未关闭的
             if (seg.leafGeofenceId !in leafSet) continue // 仅处理叶子
@@ -92,23 +89,13 @@ class Aggregator(
 
             if (effectiveStart >= effectiveEnd) continue
 
-            // 计算覆盖的分钟集合（去重）
-            val startMin = effectiveStart / 60_000L
-            val endMin = effectiveEnd / 60_000L
-            if (startMin > endMin) continue
-
-            var addedMinutes = 0
-            for (m in startMin..endMin) {
-                val minuteKey = "${seg.leafGeofenceId}:$m"
-                if (dedupeSet.add(minuteKey)) {
-                    addedMinutes++
-                }
-            }
+            // 基于实际时长计算分钟数（向上取整到整分钟）
+            val durationSec = (effectiveEnd - effectiveStart) / 1000
+            val addedMinutes = maxOf(1, ((durationSec + 59) / 60).toInt())
 
             val fenceId = seg.leafGeofenceId
             leafMinutes[fenceId] = (leafMinutes[fenceId] ?: 0) + addedMinutes
 
-            // 分类映射
             val fence = fenceMap[fenceId]
             if (fence?.category != null) {
                 val catMap = leafCategoryMinutes.getOrPut(fenceId) { mutableMapOf() }

@@ -123,12 +123,18 @@ class SqliteStorageAdapter(
 
     override suspend fun updateSegments(segments: List<StaySegment>) {
         val db = dbHelper.writableDatabase
-        for (seg in segments) {
-            val values = ContentValues().apply {
-                put(COL_EXIT_TIME, seg.endTs)
-                put(COL_DURATION, seg.endTs?.let { (it - seg.startTs) / 1000 })
+        db.beginTransaction()
+        try {
+            for (seg in segments) {
+                val values = ContentValues().apply {
+                    put(COL_EXIT_TIME, seg.endTs)
+                    put(COL_DURATION, seg.endTs?.let { (it - seg.startTs) / 1000 })
+                }
+                db.update(TABLE_STAYS, values, "$COL_STAY_ID = ?", arrayOf(seg.id))
             }
-            db.update(TABLE_STAYS, values, "$COL_STAY_ID = ?", arrayOf(seg.id))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
     }
 

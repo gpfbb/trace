@@ -58,6 +58,9 @@ class MainViewModel(
     private val _isLocationPermissionGranted = MutableStateFlow(false)
     val isLocationPermissionGranted: StateFlow<Boolean> = _isLocationPermissionGranted
 
+    // Store listener reference for cleanup
+    private var locationStateListener: ((com.trackmaster.app.LocationServiceState) -> Unit)? = null
+
     // ============================================================
     // 初始化
     // ============================================================
@@ -66,6 +69,12 @@ class MainViewModel(
         loadFences()
         observeFenceState()
         observeLocationService()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        locationStateListener?.let { app.getLocationService()?.removeStateListener(it) }
+        locationStateListener = null
     }
 
     /**
@@ -92,7 +101,7 @@ class MainViewModel(
     private fun observeLocationService() {
         val service = app.getLocationService()
         if (service != null) {
-            val listener = { state: com.trackmaster.app.LocationServiceState ->
+            locationStateListener = { state: com.trackmaster.app.LocationServiceState ->
                 _currentLocation.value = state.lastLocation
                 _locationStatus.value = when {
                     state.isFirstLocation -> "首次定位中..."
@@ -103,7 +112,7 @@ class MainViewModel(
                     _locationStatus.value = "定位服务已停止"
                 }
             }
-            service.addStateListener(listener)
+            service.addStateListener(locationStateListener!!)
         }
     }
 

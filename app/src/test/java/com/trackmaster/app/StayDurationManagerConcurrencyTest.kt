@@ -28,6 +28,7 @@ class StayDurationManagerConcurrencyTest {
     class TestableStayDurationManager {
         val activeSessions = java.util.concurrent.ConcurrentHashMap<String, FenceActiveSessionData>()
         val dailyRecords = java.util.concurrent.ConcurrentHashMap<String, MutableMap<String, DailyStayRecordData>>()
+        private val enterLock = Any()
 
         fun getDateKey(date: java.util.Date): String {
             val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
@@ -36,11 +37,18 @@ class StayDurationManagerConcurrencyTest {
 
         fun onFenceEnter(fenceId: String, fenceName: String, enterTime: java.util.Date) {
             val dateKey = getDateKey(enterTime)
-
-            val existing = activeSessions.putIfAbsent(fenceId, FenceActiveSessionData(fenceId, fenceName, enterTime, dateKey))
-            if (existing != null) {
-                onFenceExit(fenceId, fenceName, enterTime)
-                activeSessions[fenceId] = FenceActiveSessionData(fenceId, fenceName, enterTime, getDateKey(enterTime))
+            synchronized(enterLock) {
+                val existing = activeSessions[fenceId]
+                if (existing != null) {
+                    // Close old session before starting new one
+                    val duration = (enterTime.time - existing.enterTime.time) / 1000
+                    val oldDateKey = existing.dateKey
+                    if (duration > 0) {
+                        addDailyDuration(oldDateKey, fenceId, fenceName, duration)
+                    }
+                    activeSessions.remove(fenceId)
+                }
+                activeSessions[fenceId] = FenceActiveSessionData(fenceId, fenceName, enterTime, dateKey)
             }
         }
 
@@ -150,7 +158,12 @@ class StayDurationManagerConcurrencyTest {
 
     @Test
     fun concurrentEnterSameFence() {
-        val enterTime = java.util.Date()
+        val calendar = java.util.Calendar.getInstance()
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 12)
+        calendar.set(java.util.Calendar.MINUTE, 0)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+        val enterTime = calendar.time
         val threadCount = 10
         val latch = CountDownLatch(threadCount)
 
@@ -169,7 +182,12 @@ class StayDurationManagerConcurrencyTest {
 
     @Test
     fun concurrentEnterDifferentFences() {
-        val enterTime = java.util.Date()
+        val calendar = java.util.Calendar.getInstance()
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 12)
+        calendar.set(java.util.Calendar.MINUTE, 0)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+        val enterTime = calendar.time
         val threadCount = 10
         val latch = CountDownLatch(threadCount)
 
@@ -284,7 +302,12 @@ class StayDurationManagerConcurrencyTest {
 
     @Test
     fun concurrentEnterAndExit() {
-        val enterTime = java.util.Date()
+        val calendar = java.util.Calendar.getInstance()
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 12)
+        calendar.set(java.util.Calendar.MINUTE, 0)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+        val enterTime = calendar.time
         val exitTime = java.util.Date(enterTime.time + 3600 * 1000)
 
         val threadCount = 5
@@ -322,7 +345,14 @@ class StayDurationManagerConcurrencyTest {
 
     @Test
     fun totalDailyDurationAggregation() {
-        val enterTime = java.util.Date()
+        // Use fixed noon time to avoid day-boundary issues
+        val calendar = java.util.Calendar.getInstance()
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 12)
+        calendar.set(java.util.Calendar.MINUTE, 0)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+        val enterTime = calendar.time
+
         stayManager.onFenceEnter("fence_1", "Home", enterTime)
         stayManager.onFenceEnter("fence_2", "Office", enterTime)
 
