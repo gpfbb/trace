@@ -1,7 +1,7 @@
 package com.trackmaster.app.core
 
 import com.trackmaster.app.utils.AppLog
-import com.trackmaster.app.GeoFenceDatabaseHelper
+import com.trackmaster.app.data.database.DatabaseFacade
 import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.FenceActiveSession
 import com.trackmaster.app.data.GeoFenceAction
@@ -26,7 +26,7 @@ class FenceProcessingHolder(
     private val repositoryHolder: RepositoryHolder,
     private val managersHolder: ManagersHolder,
     private val fenceTreeManager: FenceTreeManager,
-    private val dbHelper: GeoFenceDatabaseHelper,
+    private val dbHelper: DatabaseFacade,
     private val appScope: CoroutineScope,
     private val onNotifyFenceStateChanged: () -> Unit
 ) {

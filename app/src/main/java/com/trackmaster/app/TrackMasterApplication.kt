@@ -47,7 +47,7 @@ class TrackMasterApplication : Application() {
     // 数据库
     // ============================================================
 
-    val dbHelper: GeoFenceDatabaseHelper by lazy { getKoin().get<GeoFenceDatabaseHelper>() }
+    val dbHelper: com.trackmaster.app.data.database.DatabaseFacade by lazy { getKoin().get<com.trackmaster.app.data.database.DatabaseFacade>() }
 
     // ============================================================
     // Holder 层

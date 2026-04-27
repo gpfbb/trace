@@ -1,12 +1,18 @@
 package com.trackmaster.app.di
 
-import android.database.sqlite.SQLiteOpenHelper
 import com.trackmaster.app.AppPreferences
-import com.trackmaster.app.GeoFenceDatabaseHelper
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.core.EngineHolder
 import com.trackmaster.app.core.FenceTreeManager
 import com.trackmaster.app.core.RepositoryHolder
+import com.trackmaster.app.data.dao.CategoryDao
+import com.trackmaster.app.data.dao.DailyStayDao
+import com.trackmaster.app.data.dao.EventDao
+import com.trackmaster.app.data.dao.FenceDao
+import com.trackmaster.app.data.dao.StayDao
+import com.trackmaster.app.data.database.DatabaseFacade
+import com.trackmaster.app.data.database.DatabaseManager
+import com.trackmaster.app.data.database.FenceExporter
 import com.trackmaster.app.storage.SqliteStorageAdapter
 import com.trackmaster.app.storage.StorageAdapter
 import com.trackmaster.app.utils.ThrottleConfig
@@ -34,10 +40,6 @@ val appModule = module {
     // Application (单例)
     // ============================================================
 
-    /**
-     * Application 实例
-     * 用于访问全局状态和服务
-     */
     single<TrackMasterApplication> {
         TrackMasterApplication.instance
     }
@@ -46,12 +48,26 @@ val appModule = module {
     // 数据库层 (单例)
     // ============================================================
 
-    /**
-     * SQLite 存储适配器
-     * 负责将 StorageAdapter 接口实现委托给 GeoFenceDatabaseHelper
-     */
-    single<SQLiteOpenHelper> { GeoFenceDatabaseHelper(get()) }
-    single<GeoFenceDatabaseHelper> { get<SQLiteOpenHelper>() as GeoFenceDatabaseHelper }
+    /** 数据库管理器 — 持有 SQLiteOpenHelper，管理 schema 和迁移 */
+    single { DatabaseManager(get()) }
+
+    /** DAO 层 — 每个表一个 DAO，各自维护缓存 */
+    single { FenceDao(get()) }
+    single { CategoryDao(get()) }
+    single { EventDao(get()) }
+    single { StayDao(get()) }
+    single { DailyStayDao(get()) }
+
+    /** 导出工具 */
+    single { FenceExporter(get()) }
+
+    /** 数据库门面 — 兼容旧代码的统一入口，Phase 6 后逐步移除 */
+    single { DatabaseFacade(get(), get(), get(), get(), get(), get(), get()) }
+
+    /** SQLiteOpenHelper 引用 — 供 SqliteStorageAdapter 使用 */
+    single<android.database.sqlite.SQLiteOpenHelper> { get<DatabaseManager>() }
+
+    /** StorageAdapter — 引擎层存储适配器 */
     single<StorageAdapter> {
         SqliteStorageAdapter(get())
     }
@@ -88,9 +104,6 @@ val appModule = module {
     // ViewModel (每次请求创建新实例)
     // ============================================================
 
-    /**
-     * 主 ViewModel - 协调位置、围栏和跨屏幕状态
-     */
     viewModel {
         MainViewModel(
             application = get(),
@@ -98,36 +111,24 @@ val appModule = module {
         )
     }
 
-    /**
-     * 地图 ViewModel - 管理地图绘制模式、覆盖物和编辑状态
-     */
     viewModel {
         MapViewModel(
             application = get()
         )
     }
 
-    /**
-     * 首页 ViewModel - 管理仪表盘数据聚合
-     */
     viewModel {
         HomeViewModel(
             application = get()
         )
     }
 
-    /**
-     * 设置 ViewModel - 管理设置状态
-     */
     viewModel {
         SettingsViewModel(
             application = get()
         )
     }
 
-    /**
-     * 统计 ViewModel - 管理统计数据
-     */
     viewModel {
         StatisticsViewModel(
             application = get()

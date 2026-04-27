@@ -55,7 +55,7 @@ enum class TimeDimension {
  */
 class StatisticsManager(private val context: Context) {
 
-    private val dbHelper: GeoFenceDatabaseHelper
+    private val dbHelper: com.trackmaster.app.data.database.DatabaseFacade
         get() = TrackMasterApplication.instance.dbHelper
 
     private val app: TrackMasterApplication
