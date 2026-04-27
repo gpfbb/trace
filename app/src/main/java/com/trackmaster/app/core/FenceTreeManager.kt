@@ -3,9 +3,10 @@ package com.trackmaster.app.core
 import android.content.Context
 import android.content.SharedPreferences
 import com.trackmaster.app.utils.AppLog
-import com.trackmaster.app.utils.GeoMath
-import com.trackmaster.app.utils.buildFenceTree
-import com.trackmaster.app.utils.FenceTreeResult
+import com.trackmaster.app.core.buildEngineGeofence
+import com.trackmaster.app.core.populateDepth
+import com.trackmaster.app.core.buildFenceTree
+import com.trackmaster.app.core.FenceTreeResult
 
 /**
  * 围栏层级关系管理器
@@ -109,7 +110,7 @@ class FenceTreeManager(private val context: Context) {
      * @return 带 parentId 和 depth 的核心 Geofence 列表
      */
     fun loadFenceTree(oldFences: List<com.trackmaster.app.data.GeoFence>): List<Geofence> {
-        val coreFences = oldFences.map { GeoMath.buildEngineGeofence(it) }
+        val coreFences = oldFences.map { buildEngineGeofence(it) }
         return applyParentMap(coreFences)
     }
 
@@ -119,7 +120,7 @@ class FenceTreeManager(private val context: Context) {
     fun applyParentMap(fences: List<Geofence>): List<Geofence> {
         val parentMap = getParentMap()
         if (parentMap.isEmpty()) {
-            return GeoMath.populateDepth(fences)
+            return populateDepth(fences)
         }
 
         // 应用 parent map
@@ -132,7 +133,7 @@ class FenceTreeManager(private val context: Context) {
             }
         }
 
-        return GeoMath.populateDepth(mapped)
+        return populateDepth(mapped)
     }
 
     /**

@@ -17,7 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.model.Category
 import com.trackmaster.app.data.GeoFence
-import com.trackmaster.app.utils.FenceTreeResult
+import com.trackmaster.app.core.FenceTreeResult
 import com.trackmaster.app.core.FenceTreeManager
 import com.trackmaster.app.R
 import com.trackmaster.app.core.Geofence

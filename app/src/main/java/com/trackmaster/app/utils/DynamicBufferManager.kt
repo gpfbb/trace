@@ -1,7 +1,7 @@
 package com.trackmaster.app.utils
 
 import com.trackmaster.app.utils.AppLog
-import com.trackmaster.app.utils.GeoMath.HysteresisConfig
+import com.trackmaster.app.utils.geometry.HysteresisConfig
 import com.trackmaster.app.core.PowerMode
 import kotlin.math.max
 import kotlin.math.min

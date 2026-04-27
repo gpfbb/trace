@@ -4,10 +4,11 @@ import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.storage.Repository
 import com.trackmaster.app.utils.SmartScheduler
 import com.trackmaster.app.utils.ThrottleConfig
-import com.trackmaster.app.utils.GeoMath.FenceState
 import com.trackmaster.app.utils.DynamicBufferManager
-import com.trackmaster.app.utils.GeoMath
-import com.trackmaster.app.utils.buildFenceTree
+import com.trackmaster.app.utils.geometry.FenceState
+import com.trackmaster.app.utils.geometry.pointInBBox
+import com.trackmaster.app.utils.geometry.pointInFence
+import com.trackmaster.app.core.buildFenceTree
 import com.trackmaster.app.core.GeoPoint
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -280,8 +281,8 @@ class Engine(
             for (fenceId in candidateIds) {
                 val fence = fenceMap[fenceId] ?: continue
                 val bbox = fence.bbox ?: continue
-                if (!GeoMath.pointInBBox(fix.lat, fix.lng, bbox)) continue
-                if (GeoMath.pointInFence(point, fence, bufferM, considerBufferAsInside)) {
+                if (!pointInBBox(fix.lat, fix.lng, bbox)) continue
+                if (pointInFence(point, fence, bufferM, considerBufferAsInside)) {
                     matched.add(fence)
                 }
             }
@@ -291,8 +292,8 @@ class Engine(
 
             for (fence in allFences) {
                 val bbox = fence.bbox ?: continue
-                if (!GeoMath.pointInBBox(fix.lat, fix.lng, bbox)) continue
-                if (GeoMath.pointInFence(point, fence, bufferM, considerBufferAsInside)) {
+                if (!pointInBBox(fix.lat, fix.lng, bbox)) continue
+                if (pointInFence(point, fence, bufferM, considerBufferAsInside)) {
                     matched.add(fence)
                 }
             }
@@ -356,8 +357,8 @@ class Engine(
 
         for (leaf in leafFences) {
             val bbox = leaf.bbox ?: continue
-            if (!GeoMath.pointInBBox(fix.lat, fix.lng, bbox)) continue
-            if (GeoMath.pointInFence(GeoPoint(fix.lat, fix.lng), leaf)) {
+            if (!pointInBBox(fix.lat, fix.lng, bbox)) continue
+            if (pointInFence(GeoPoint(fix.lat, fix.lng), leaf)) {
                 if (leaf.depth > maxDepth) {
                     maxDepth = leaf.depth
                     deepest = leaf

@@ -7,7 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.trackmaster.app.core.PowerMode
-import com.trackmaster.app.utils.GeoMath
+import com.trackmaster.app.utils.geometry.detectFenceIntersections
+import com.trackmaster.app.utils.geometry.isFenceContainedByFence
 import com.trackmaster.app.utils.LanguageManager
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -412,7 +413,7 @@ fun SettingsPage(
                                     }
 
                                     // 第一步：检测围栏相交
-                                    val intersections = GeoMath.detectFenceIntersections(coreFences)
+                                    val intersections = detectFenceIntersections(coreFences)
                                     AppLog.d("SettingsPage", "相交检测完成，发现 ${intersections.size} 对相交")
                                     if (intersections.isNotEmpty()) {
                                         recalculateMessage = intersectionWarningTemplate.replace("%d", intersections.size.toString())
@@ -427,8 +428,8 @@ fun SettingsPage(
                                     for (fenceA in coreFences) {
                                         for (fenceB in coreFences) {
                                             if (fenceA.id == fenceB.id) continue
-                                            val bInA = GeoMath.isFenceContainedByFence(fenceB, fenceA)
-                                            val aInB = GeoMath.isFenceContainedByFence(fenceA, fenceB)
+                                            val bInA = isFenceContainedByFence(fenceB, fenceA)
+                                            val aInB = isFenceContainedByFence(fenceA, fenceB)
                                             AppLog.d("SettingsPage", "检查 ${fenceB.name} in ${fenceA.name}: $bInA, 反向: $aInB")
                                             if (bInA) {
                                                 if (!aInB) {

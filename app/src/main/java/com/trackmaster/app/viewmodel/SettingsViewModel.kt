@@ -7,7 +7,10 @@ import com.trackmaster.app.AppPreferences
 import com.trackmaster.app.PermissionManager
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.core.GeoFenceType
-import com.trackmaster.app.utils.GeoMath
+import com.trackmaster.app.core.buildEngineGeofence
+import com.trackmaster.app.utils.geometry.haversine
+import com.trackmaster.app.utils.geometry.pointInPolygon
+import com.trackmaster.app.utils.geometry.pointInCircle
 import com.trackmaster.app.core.Geofence
 import com.trackmaster.app.core.PowerMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -96,7 +99,7 @@ class SettingsViewModel(
         try {
             app.fenceTreeManager.clearAll()
 
-            val coreFences = fences.map { GeoMath.buildEngineGeofence(it) }
+            val coreFences = fences.map { buildEngineGeofence(it) }
             if (coreFences.isEmpty()) {
                 _recalculateMessage.value = "围栏转换失败"
                 return
@@ -133,29 +136,29 @@ class SettingsViewModel(
                 val innerRadius = inner.radius ?: return false
                 val outerCenter = outer.center ?: return false
                 val outerRadius = outer.radius ?: return false
-                val dist = GeoMath.haversine(innerCenter, outerCenter)
+                val dist = haversine(innerCenter, outerCenter)
                 dist + innerRadius <= outerRadius
             }
             inner.type == GeoFenceType.POLYGON && outer.type == GeoFenceType.POLYGON -> {
                 val innerPoly = inner.polygon
                 val outerPoly = outer.polygon
                 if (innerPoly.size < 3 || outerPoly.size < 3) return false
-                innerPoly.all { GeoMath.pointInPolygon(it.lat, it.lng, outerPoly) }
+                innerPoly.all { pointInPolygon(it.lat, it.lng, outerPoly) }
             }
             inner.type == GeoFenceType.CIRCLE && outer.type == GeoFenceType.POLYGON -> {
                 val innerCenter = inner.center ?: return false
                 val innerRadius = inner.radius ?: return false
                 val outerPoly = outer.polygon
                 if (outerPoly.size < 3) return false
-                GeoMath.pointInPolygon(innerCenter.lat, innerCenter.lng, outerPoly) &&
-                        outerPoly.all { GeoMath.pointInCircle(it, innerCenter, innerRadius) }
+                pointInPolygon(innerCenter.lat, innerCenter.lng, outerPoly) &&
+                        outerPoly.all { pointInCircle(it, innerCenter, innerRadius) }
             }
             inner.type == GeoFenceType.POLYGON && outer.type == GeoFenceType.CIRCLE -> {
                 val innerPoly = inner.polygon
                 val outerCenter = outer.center ?: return false
                 val outerRadius = outer.radius ?: return false
                 if (innerPoly.isEmpty()) return false
-                innerPoly.all { GeoMath.pointInCircle(it, outerCenter, outerRadius) }
+                innerPoly.all { pointInCircle(it, outerCenter, outerRadius) }
             }
             else -> false
         }

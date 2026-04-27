@@ -5,7 +5,7 @@ import com.trackmaster.app.core.Geofence
 import com.trackmaster.app.core.SegmentStatus
 import com.trackmaster.app.core.StaySegment
 import com.trackmaster.app.core.VizNode
-import com.trackmaster.app.utils.buildFenceTree
+import com.trackmaster.app.core.buildFenceTree
 import com.trackmaster.app.storage.Repository
 
 /**

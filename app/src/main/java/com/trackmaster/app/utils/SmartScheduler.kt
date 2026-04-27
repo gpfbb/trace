@@ -4,12 +4,14 @@ import com.trackmaster.app.core.AccelerometerData
 import com.trackmaster.app.core.ActivityResult
 import com.trackmaster.app.core.ActivityType
 import com.trackmaster.app.core.BBox
-import com.trackmaster.app.utils.GeoMath
 import com.trackmaster.app.core.GeoPoint
 import com.trackmaster.app.core.Geofence
 import com.trackmaster.app.core.LocationFix
 import com.trackmaster.app.core.PowerMode
-import com.trackmaster.app.utils.buildFenceTree
+import com.trackmaster.app.utils.geometry.haversine
+import com.trackmaster.app.utils.geometry.pointInBBox
+import com.trackmaster.app.utils.geometry.pointInPolygon
+import com.trackmaster.app.core.buildFenceTree
 import kotlin.math.cos
 import kotlin.math.PI
 import kotlin.math.sqrt
@@ -286,7 +288,7 @@ class SmartScheduler(
         }
 
         // ---- 多源静止判定 ----
-        val distance = lastPoint?.let { GeoMath.haversine(it, currentPoint) } ?: Double.MAX_VALUE
+        val distance = lastPoint?.let { haversine(it, currentPoint) } ?: Double.MAX_VALUE
         val isStationary = checkStationary(distance, fix.accuracy, accel, currentPoint)
 
         // ---- 边界 Buffer 检测已禁用（用户要求删除边界算法，干扰围栏进入） ----
@@ -418,7 +420,7 @@ class SmartScheduler(
         // BUG-005 FIX: windowOk 基于当前点到窗口中心的距离，而非窗口内各点到中心的距离
         val windowOk = if (locationHistory.size >= config.stationaryMinPoints) {
             val centerPoint = computeWindowCenter(locationHistory.toList())
-            val distToCenter = GeoMath.haversine(centerPoint, currentPoint)
+            val distToCenter = haversine(centerPoint, currentPoint)
             distToCenter < distThreshold
         } else {
             true
@@ -473,7 +475,7 @@ class SmartScheduler(
             val timeDiff = (curr.timestamp - prev.timestamp)
 
             if (timeDiff > 0) {
-                val distance = GeoMath.haversine(prev.point, curr.point)
+                val distance = haversine(prev.point, curr.point)
                 val speed = distance / (timeDiff / 1000.0)
                 totalSpeed += speed
                 count++
@@ -538,7 +540,7 @@ class SmartScheduler(
         var okCount = 0
 
         for (record in recentRecords) {
-            val distance = GeoMath.haversine(centerPoint, record.point)
+            val distance = haversine(centerPoint, record.point)
             val adjustedThreshold = maxOf(
                 distThreshold, record.accuracy * config.stationaryAccuracyMultiplier)
             if (distance < adjustedThreshold) {
@@ -625,7 +627,7 @@ class SmartScheduler(
     private fun checkBoundaryBuffer(point: GeoPoint): Boolean {
         // 如果点距离上次检查的点很近，直接复用上次结果
         lastBoundaryCheckPoint?.let { lastPoint ->
-            if (GeoMath.haversine(point, lastPoint) < 5.0) {
+            if (haversine(point, lastPoint) < 5.0) {
                 return lastBoundaryCheckResult
             }
         }
@@ -643,8 +645,8 @@ class SmartScheduler(
 
             // BUG-002 FIX: pointInBBox 命中后，再用 pointInPolygon 精确判断（排除已在围栏内的情况）
             // 围栏内不算 Buffer，只有在扩展 BBox 内但不在多边形内才算 Buffer
-            if (GeoMath.pointInBBox(point.lat, point.lng, expanded)) {
-                if (!GeoMath.pointInPolygon(point.lat, point.lng, leaf.polygon)) {
+            if (pointInBBox(point.lat, point.lng, expanded)) {
+                if (!pointInPolygon(point.lat, point.lng, leaf.polygon)) {
                     lastBoundaryCheckPoint = point
                     lastBoundaryCheckResult = true
                     return true
@@ -670,7 +672,7 @@ class SmartScheduler(
                 val centerLat = fence.polygon.map { it.lat }.average()
                 val centerLng = fence.polygon.map { it.lng }.average()
                 val center = GeoPoint(centerLat, centerLng)
-                fence.polygon.maxOf { GeoMath.haversine(center, it) }.coerceAtLeast(5.0)
+                fence.polygon.maxOf { haversine(center, it) }.coerceAtLeast(5.0)
             }
         }
     }
@@ -682,8 +684,8 @@ class SmartScheduler(
     private fun checkFenceInside(point: GeoPoint): Boolean {
         for (leaf in leavesByDepth) {
             val bbox = bboxCache[leaf.id] ?: continue
-            if (!GeoMath.pointInBBox(point.lat, point.lng, bbox)) continue
-            if (GeoMath.pointInPolygon(point.lat, point.lng, leaf.polygon)) {
+            if (!pointInBBox(point.lat, point.lng, bbox)) continue
+            if (pointInPolygon(point.lat, point.lng, leaf.polygon)) {
                 return true
             }
         }
