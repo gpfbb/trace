@@ -17,6 +17,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import com.trackmaster.app.utils.AppLog
 
 /**
  * 首页 ViewModel - 管理仪表盘数据聚合
@@ -96,7 +97,7 @@ class HomeViewModel(
                     refreshStats()
                 }
             } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "fenceStateVersion collect error", e)
+                AppLog.e("HomeViewModel", "fenceStateVersion collect error", e)
             }
         }
     }
@@ -216,7 +217,7 @@ class HomeViewModel(
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "autoRefresh error", e)
+                AppLog.e("HomeViewModel", "autoRefresh error", e)
             }
         }
     }

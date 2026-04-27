@@ -6,7 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.core.EngineHolder
 import com.trackmaster.app.core.FenceProcessingHolder
@@ -106,12 +106,12 @@ class TrackMasterApplication : Application() {
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            Log.d(TAG, "定位服务已连接")
+            AppLog.d(TAG, "定位服务已连接")
             locationService = (service as? GeoFenceLocationService.LocalBinder)?.service
             serviceBound = true
         }
         override fun onServiceDisconnected(name: ComponentName?) {
-            Log.d(TAG, "定位服务已断开")
+            AppLog.d(TAG, "定位服务已断开")
             locationService = null
             serviceBound = false
         }
@@ -126,24 +126,24 @@ class TrackMasterApplication : Application() {
         instance = this
 
         ThemeManager.init(this)
-        Log.d(TAG, "主题初始化完成: ${ThemeManager.getCurrentTheme()}")
+        AppLog.d(TAG, "主题初始化完成: ${ThemeManager.getCurrentTheme()}")
 
         startKoin {
             androidLogger()
             androidContext(this@TrackMasterApplication)
             modules(appModule)
         }
-        Log.d(TAG, "Koin 依赖注入初始化完成")
+        AppLog.d(TAG, "Koin 依赖注入初始化完成")
 
         managersHolder.init(this)
-        Log.d(TAG, "应用创建，初始化数据库")
+        AppLog.d(TAG, "应用创建，初始化数据库")
 
         loadDataFromDatabase()
 
         val coreFences = fenceTreeManager.loadFenceTree(geoFences)
         engineHolder.initialize(coreFences)
         aggregator = Aggregator(coreFences, repository)
-        Log.d(TAG, "引擎初始化完成: ${coreFences.size} 个核心围栏")
+        AppLog.d(TAG, "引擎初始化完成: ${coreFences.size} 个核心围栏")
 
         fenceProcessingHolder = FenceProcessingHolder(
             engineHolder = engineHolder,
@@ -170,7 +170,7 @@ class TrackMasterApplication : Application() {
             fenceStayRecords.clear()
             fenceStayRecords.addAll(dbHelper.getAllStayRecords())
         } catch (e: Exception) {
-            Log.e(TAG, "加载数据失败", e)
+            AppLog.e(TAG, "加载数据失败", e)
         }
     }
 
@@ -183,7 +183,7 @@ class TrackMasterApplication : Application() {
                 startService(intent)
             }
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-            Log.d(TAG, "启动定位服务")
+            AppLog.d(TAG, "启动定位服务")
         }
     }
 
@@ -193,7 +193,7 @@ class TrackMasterApplication : Application() {
             serviceBound = false
         }
         stopService(Intent(this, GeoFenceLocationService::class.java))
-        Log.d(TAG, "停止定位服务")
+        AppLog.d(TAG, "停止定位服务")
     }
 
     fun getLocationService(): GeoFenceLocationService? = locationService
@@ -245,19 +245,19 @@ class TrackMasterApplication : Application() {
         val lastExitState = persistentStateManager.getLastExitState()
         val lastLocation = persistentStateManager.getLastLocation()
 
-        Log.d(TAG, "恢复持久化状态:")
-        Log.d(TAG, "  上次应用关闭时间: $lastAppCloseTime")
-        Log.d(TAG, "  当前围栏状态: $currentFenceState")
-        Log.d(TAG, "  上次离开状态: $lastExitState")
-        Log.d(TAG, "  上次位置: $lastLocation")
+        AppLog.d(TAG, "恢复持久化状态:")
+        AppLog.d(TAG, "  上次应用关闭时间: $lastAppCloseTime")
+        AppLog.d(TAG, "  当前围栏状态: $currentFenceState")
+        AppLog.d(TAG, "  上次离开状态: $lastExitState")
+        AppLog.d(TAG, "  上次位置: $lastLocation")
 
         if (currentFenceState == null && lastExitState == null) {
-            Log.d(TAG, "没有持久化状态需要恢复")
+            AppLog.d(TAG, "没有持久化状态需要恢复")
             return
         }
         stayDurationManager.loadActiveSessionsFromDatabase()
         if (currentFenceState != null) {
-            Log.d(TAG, "等待首次定位以恢复围栏状态: ${currentFenceState.fenceName}")
+            AppLog.d(TAG, "等待首次定位以恢复围栏状态: ${currentFenceState.fenceName}")
         }
     }
 

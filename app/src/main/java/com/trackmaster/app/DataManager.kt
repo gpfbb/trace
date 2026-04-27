@@ -48,8 +48,8 @@ data class DataImportResult(
 class DataManager(private val context: Context) {
 
     private val dbHelper = (context.applicationContext as TrackMasterApplication).dbHelper
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    private val dateFormat = ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+    private val dateTimeFormat = ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
     // 使用公共 Downloads 目录，卸载 App 后文件仍可访问
     // Android 10+ 直接写到公共 Downloads（通过 MediaStore）
     // Android 9 及以下写到公共 Downloads 目录
@@ -90,7 +90,7 @@ class DataManager(private val context: Context) {
 
             val json = JSONObject()
             json.put("version", "1.0")
-            json.put("exportTime", dateTimeFormat.format(Date()))
+            json.put("exportTime", dateTimeFormat.get().format(Date()))
 
             val fencesArray = JSONArray()
             allFences.forEach { fence ->
@@ -99,7 +99,7 @@ class DataManager(private val context: Context) {
                 fenceJson.put("name", fence.name)
                 fenceJson.put("type", fence.type.name)
                 fenceJson.put("categoryId", fence.categoryId)
-                fenceJson.put("createdAt", dateTimeFormat.format(fence.createdAt))
+                fenceJson.put("createdAt", dateTimeFormat.get().format(fence.createdAt))
 
                 if (fence.type == GeoFenceType.CIRCLE) {
                     fenceJson.put("centerLat", fence.center?.latitude)
@@ -129,7 +129,7 @@ class DataManager(private val context: Context) {
                 eventJson.put("fenceId", event.fenceId)
                 eventJson.put("fenceName", event.fenceName)
                 eventJson.put("action", event.action.name)
-                eventJson.put("time", dateTimeFormat.format(event.time))
+                eventJson.put("time", dateTimeFormat.get().format(event.time))
                 eventJson.put("latitude", event.latitude)
                 eventJson.put("longitude", event.longitude)
                 eventJson.put("accuracy", event.accuracy)
@@ -145,8 +145,8 @@ class DataManager(private val context: Context) {
                 val stayJson = JSONObject()
                 stayJson.put("fenceId", stay.fenceId)
                 stayJson.put("fenceName", stay.fenceName)
-                stayJson.put("enterTime", dateTimeFormat.format(stay.enterTime))
-                stayJson.put("exitTime", stay.exitTime?.let { dateTimeFormat.format(it) })
+                stayJson.put("enterTime", dateTimeFormat.get().format(stay.enterTime))
+                stayJson.put("exitTime", stay.exitTime?.let { dateTimeFormat.get().format(it) })
                 stayJson.put("durationSeconds", stay.durationSeconds)
                 staysArray.put(stayJson)
             }
@@ -270,7 +270,7 @@ class DataManager(private val context: Context) {
                 if (name == null || type == null) continue
                 val categoryId = fenceJson.optString("categoryId", Category.UNASSIGNED_ID)
                 val createdAt = try {
-                    dateTimeFormat.parse(fenceJson.getString("createdAt"))
+                    dateTimeFormat.get().parse(fenceJson.getString("createdAt"))
                 } catch (e: Exception) {
                     Date()
                 }
@@ -318,7 +318,7 @@ class DataManager(private val context: Context) {
             val eventsArray = json.optJSONArray("events") ?: JSONArray()
             for (i in 0 until eventsArray.length()) {
                 val eventJson = eventsArray.optJSONObject(i) ?: continue
-                val time = dateTimeFormat.parse(eventJson.getString("time")) ?: Date()
+                val time = dateTimeFormat.get().parse(eventJson.getString("time")) ?: Date()
                 val actionStr = eventJson.optString("action", "")
                 val action = try {
                     GeoFenceAction.valueOf(actionStr)
@@ -347,13 +347,13 @@ class DataManager(private val context: Context) {
             val staysArray = json.optJSONArray("stays") ?: JSONArray()
             for (i in 0 until staysArray.length()) {
                 val stayJson = staysArray.getJSONObject(i)
-                val enterTime = dateTimeFormat.parse(stayJson.getString("enterTime")) ?: Date()
+                val enterTime = dateTimeFormat.get().parse(stayJson.getString("enterTime")) ?: Date()
                 val stay = FenceStayRecord(
                     fenceId = stayJson.getString("fenceId"),
                     fenceName = stayJson.getString("fenceName"),
                     enterTime = enterTime,
                     exitTime = stayJson.optString("exitTime").takeIf { it.isNotEmpty() }?.let { 
-                        dateTimeFormat.parse(it) 
+                        dateTimeFormat.get().parse(it) 
                     },
                     durationSeconds = stayJson.optLong("durationSeconds").takeIf { it > 0 }
                 )
@@ -611,7 +611,7 @@ class DataManager(private val context: Context) {
             val json = JSONObject()
             json.put("version", 1)
             json.put("appVersion", "1.0.0")
-            json.put("exportTime", dateTimeFormat.format(Date()))
+            json.put("exportTime", dateTimeFormat.get().format(Date()))
             json.put("dataType", "trackmaster-stats")
 
             // stays 数组
@@ -621,8 +621,8 @@ class DataManager(private val context: Context) {
                 obj.put("id", stay.id ?: "")
                 obj.put("fenceId", stay.fenceId)
                 obj.put("fenceName", stay.fenceName)
-                obj.put("enterTime", dateTimeFormat.format(stay.enterTime))
-                obj.put("exitTime", stay.exitTime?.let { dateTimeFormat.format(it) } ?: "")
+                obj.put("enterTime", dateTimeFormat.get().format(stay.enterTime))
+                obj.put("exitTime", stay.exitTime?.let { dateTimeFormat.get().format(it) } ?: "")
                 obj.put("duration", stay.durationSeconds ?: 0L)
                 staysArray.put(obj)
             }
@@ -648,7 +648,7 @@ class DataManager(private val context: Context) {
                 obj.put("fenceId", event.fenceId)
                 obj.put("fenceName", event.fenceName)
                 obj.put("action", event.action.name)
-                obj.put("timestamp", dateTimeFormat.format(event.time))
+                obj.put("timestamp", dateTimeFormat.get().format(event.time))
                 obj.put("latitude", event.latitude)
                 obj.put("longitude", event.longitude)
                 obj.put("accuracy", event.accuracy)
@@ -735,13 +735,13 @@ class DataManager(private val context: Context) {
                 val obj = staysArray.getJSONObject(i)
                 val id: String? = obj.optString("id", "").takeIf { it.isNotEmpty() }
                 val enterTime = try {
-                    dateTimeFormat.parse(obj.getString("enterTime")) ?: Date()
+                    dateTimeFormat.get().parse(obj.getString("enterTime")) ?: Date()
                 } catch (e: Exception) {
                     Date()
                 }
                 val exitTime = try {
                     obj.optString("exitTime", "").takeIf { it.isNotEmpty() }
-                        ?.let { dateTimeFormat.parse(it) }
+                        ?.let { dateTimeFormat.get().parse(it) }
                 } catch (e: Exception) { null }
                 val duration = obj.optLong("duration", 0L).takeIf { it > 0 }
                 val fenceId = obj.optString("fenceId", "").takeIf { it.isNotBlank() }
@@ -800,7 +800,7 @@ class DataManager(private val context: Context) {
             for (i in 0 until eventsArray.length()) {
                 val obj = eventsArray.getJSONObject(i)
                 val timestamp = try {
-                    dateTimeFormat.parse(obj.getString("timestamp")) ?: Date()
+                    dateTimeFormat.get().parse(obj.getString("timestamp")) ?: Date()
                 } catch (e: Exception) {
                     Date()
                 }

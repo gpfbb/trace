@@ -30,6 +30,7 @@ import kotlinx.coroutines.isActive
 import java.text.SimpleDateFormat
 import java.util.*
 import com.trackmaster.app.ui.theme.*
+import com.trackmaster.app.utils.AppLog
 
 val chartColors = listOf(
     Color(0xFF6366F1),
@@ -148,7 +149,7 @@ fun StatisticsScreen(
                 val newStatistics = statisticsManager.getStatistics(selectedTimeDimension, currentTimeRange)
                 if (newStatistics.map { it.fenceId to it.totalDurationSeconds } !=
                     statistics.map { it.fenceId to it.totalDurationSeconds }) {
-                    android.util.Log.d("StatisticsScreen", "实时更新统计数据: ${newStatistics.size} 项")
+                    AppLog.d("StatisticsScreen", "实时更新统计数据: ${newStatistics.size} 项")
                     statistics = newStatistics
                     statisticsTree = statisticsManager.buildFenceStatisticTree(selectedTimeDimension, currentTimeRange)
                 }

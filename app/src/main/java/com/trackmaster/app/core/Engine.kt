@@ -1,6 +1,6 @@
 package com.trackmaster.app.core
 
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.storage.Repository
 import com.trackmaster.app.utils.SmartScheduler
 import com.trackmaster.app.utils.ThrottleConfig
@@ -83,20 +83,20 @@ class Engine(
         spatialIndex = if (useSpatialIndex && fences.isNotEmpty()) {
             val index = GridSpatialIndex()
             index.build(fences)
-            Log.d(TAG, "空间索引已构建: ${fences.size} 个围栏")
+            AppLog.d(TAG, "空间索引已构建: ${fences.size} 个围栏")
             index
         } else {
-            Log.d(TAG, "空间索引未启用或围栏为空")
+            AppLog.d(TAG, "空间索引未启用或围栏为空")
             null
         }
 
         // 初始化动态缓冲区管理器（如果启用）
         bufferManager = if (useDynamicBuffer) {
             val manager = DynamicBufferManager()
-            Log.d(TAG, "动态缓冲区管理器已初始化")
+            AppLog.d(TAG, "动态缓冲区管理器已初始化")
             manager
         } else {
-            Log.d(TAG, "动态缓冲区管理器未启用")
+            AppLog.d(TAG, "动态缓冲区管理器未启用")
             null
         }
     }
@@ -112,7 +112,7 @@ class Engine(
             val latest = open.last()
             currentLeafId = latest.leafGeofenceId
             currentEnterTs = latest.startTs
-            Log.d(TAG, "恢复未关闭 Segment: ${latest.leafGeofenceId}")
+            AppLog.d(TAG, "恢复未关闭 Segment: ${latest.leafGeofenceId}")
         }
     }
 
@@ -157,7 +157,7 @@ class Engine(
                 powerMode = currentPowerMode
             )
             currentBufferSize = bufferState.bufferSizeM
-            Log.d(TAG, "动态缓冲区: ${"%.1f".format(currentBufferSize)}m")
+            AppLog.d(TAG, "动态缓冲区: ${"%.1f".format(currentBufferSize)}m")
         }
 
         // 4. 查找所有命中的围栏（包括嵌套的父级和子级）
@@ -213,7 +213,7 @@ class Engine(
     fun setPowerMode(mode: PowerMode) {
         scheduler.setMode(mode)
         currentPowerMode = mode
-        Log.d(TAG, "电源模式已设置为: $mode")
+        AppLog.d(TAG, "电源模式已设置为: $mode")
     }
 
     fun shouldRegisterSLC(): Boolean = scheduler.shouldRegisterSLC()
@@ -231,7 +231,7 @@ class Engine(
     fun setCurrentFenceForRecovery(fenceId: String?, enterTs: Long) {
         currentLeafId = fenceId
         currentEnterTs = enterTs
-        Log.d(TAG, "Engine恢复状态: currentLeafId=$fenceId, enterTs=$enterTs")
+        AppLog.d(TAG, "Engine恢复状态: currentLeafId=$fenceId, enterTs=$enterTs")
     }
 
     /** 资源释放 */
@@ -306,7 +306,7 @@ class Engine(
         // 每100次查询记录一次性能统计
         if (queryCount % 100 == 0) {
             val hitCount = matched.size
-            Log.d(TAG, "空间查询统计: 候选数=$candidateCount, 命中数=$hitCount, 耗时=${queryTime}ms, " +
+            AppLog.d(TAG, "空间查询统计: 候选数=$candidateCount, 命中数=$hitCount, 耗时=${queryTime}ms, " +
                     "索引=${if (spatialIndex != null) "启用" else "禁用"}")
         }
         queryCount++
@@ -391,13 +391,27 @@ class Engine(
                 status = if (enterDateKey != exitDateKey) SegmentStatus.CROSSED_DAY else SegmentStatus.COMPLETED,
             )
 
+            // 【P0修复】只有写入成功后才更新状态
+            // 原问题：repo.enqueueSegment() 失败后 currentLeafId/currentEnterTs 已被更新
+            // 导致下次 transition 时旧 Segment 数据丢失
+            // 修复：先尝试写入，成功后才更新状态
             runCatching { repo.enqueueSegment(closedSeg) }
-                .onFailure { Log.e(TAG, "Segment 写入错误", it) }
+                .onSuccess {
+                    // 写入成功，更新状态
+                    currentLeafId = newLeafId
+                    currentEnterTs = if (newLeafId != null) ts else 0L
+                    AppLog.d(TAG, "Segment 写入成功，状态已更新: oldLeafId=$oldLeafId -> newLeafId=$newLeafId")
+                }
+                .onFailure { 
+                    AppLog.e(TAG, "Segment 写入失败，状态未更新，保留旧状态: currentLeafId=$currentLeafId", it)
+                    // 写入失败，不更新状态，返回 null 表示转移失败
+                    return null
+                }
+        } else {
+            // 没有旧的 Segment，直接打开新的
+            currentLeafId = newLeafId
+            currentEnterTs = if (newLeafId != null) ts else 0L
         }
-
-        // 打开新的
-        currentLeafId = newLeafId
-        currentEnterTs = if (newLeafId != null) ts else 0L
 
         return closedSeg
     }
@@ -433,12 +447,12 @@ class Engine(
     suspend fun initWithLocation(fix: LocationFix, vacuumStartTs: Long? = null): RestoreResult {
         val open = repo.getOpenSegments()
         if (open.isEmpty()) {
-            Log.d(TAG, "没有未关闭的Segment需要恢复")
+            AppLog.d(TAG, "没有未关闭的Segment需要恢复")
             return RestoreResult(shouldRestore = false)
         }
 
         val latest = open.last()
-        Log.d(TAG, "恢复未关闭Segment: ${latest.leafGeofenceId}, 进入时间=${latest.startTs}")
+        AppLog.d(TAG, "恢复未关闭Segment: ${latest.leafGeofenceId}, 进入时间=${latest.startTs}")
 
         // 检查当前位置是否还在该围栏内
         val matchedFenceIds = checkFenceMatch(fix)
@@ -451,11 +465,11 @@ class Engine(
             // 用户仍在围栏内，继续计时
             currentLeafId = latest.leafGeofenceId
             currentEnterTs = latest.startTs
-            Log.d(TAG, "用户仍在围栏 ${latest.leafGeofenceId} 内，继续计时")
+            AppLog.d(TAG, "用户仍在围栏 ${latest.leafGeofenceId} 内，继续计时")
 
             // 如果有真空期，记录日志但不调整时间
             if (vacuumDuration > 0) {
-                Log.d(TAG, "真空期时长: ${vacuumDuration}ms (不计算)")
+                AppLog.d(TAG, "真空期时长: ${vacuumDuration}ms (不计算)")
             }
 
             return RestoreResult(
@@ -467,7 +481,7 @@ class Engine(
             )
         } else {
             // 用户已经离开围栏，关闭Segment
-            Log.d(TAG, "用户已离开围栏 ${latest.leafGeofenceId}，关闭Segment")
+            AppLog.d(TAG, "用户已离开围栏 ${latest.leafGeofenceId}，关闭Segment")
 
             // 使用真空期开始时间或当前位置时间作为离开时间
             val exitTs = vacuumStartTs ?: fix.timestamp
@@ -481,8 +495,8 @@ class Engine(
             )
 
             runCatching { repo.enqueueSegment(closedSeg) }
-                .onFailure { Log.e(TAG, "真空期Segment关闭错误", it) }
-            Log.d(TAG, "真空期关闭Segment: ${latest.leafGeofenceId}, 离开时间=$exitTs")
+                .onFailure { AppLog.e(TAG, "真空期Segment关闭错误", it) }
+            AppLog.d(TAG, "真空期关闭Segment: ${latest.leafGeofenceId}, 离开时间=$exitTs")
 
             // 清除当前状态
             currentLeafId = null

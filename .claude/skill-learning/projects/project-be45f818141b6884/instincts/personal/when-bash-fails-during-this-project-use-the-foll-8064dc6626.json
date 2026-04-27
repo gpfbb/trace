@@ -1,0 +1,23 @@
+{
+  "id": "when-bash-fails-during-this-project-use-the-foll-8064dc6626",
+  "scope": "project",
+  "projectId": "project-be45f818141b6884",
+  "projectName": "trae_project",
+  "source": "session-observation",
+  "evidence": [
+    "{\"stdout\":\"\",\"stderr\":\"/usr/bin/bash: eval: line 1: unexpected EOF while looking for matching `\\\"'\\n\",\"code\":2,\"interrupted\":false,\"name\":\"ShellError\"}",
+    "{\"data\":{\"stdout\":\"total 41\\ndrwxr-xr-x 1 14708 197611    0  4月 27 00:24 .\\ndrwxr-xr-x 1 14708 197611    0  4月 27 00:24 ..\\n-rw-r--r-- 1 14708 197611    5  4月 27 00:24 .consolidate-lock\\n-rw-r--r-- 1 14708 197611 1409  4月 20 12:17 feedback_audit_scope.md\\n-rw-r--r-- 1 14708 197611 5210  4月 22 00:46 feedback_iterate_until_clean.md\\n-rw-r--r-- 1 14708 197611 1767  4月 21 18:25 feedback_pua_frustration.md\\n-rw-r--r-- 1 14708 197611 4866  4月 21 18:25 project_gps_frequency_fix.md\\n-rw-r--r-- 1 14708 197611 6446  4月 22 00:46 project_p9_verification_cron.md\",\"stderr\":\"\",\"interrupted\":false,\"isImage\":false,\"noOutputExpected\":false}}"
+  ],
+  "observationIds": [
+    "8c2553e0-2742-41b3-8394-5f2b86e29972",
+    "45806cd4-8a38-4c9e-93d0-080f2431466f"
+  ],
+  "trigger": "When Bash fails during this project",
+  "action": "Use the follow-up successful Bash invocation as the resolution pattern before retrying blindly.",
+  "confidence": 0.5,
+  "domain": "debugging",
+  "evidenceOutcome": "success",
+  "createdAt": "2026-04-26T16:28:13.649Z",
+  "updatedAt": "2026-04-26T16:28:13.649Z",
+  "status": "pending"
+}

@@ -1,6 +1,6 @@
 package com.trackmaster.app.utils
 
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.utils.GeoMath.HysteresisConfig
 import com.trackmaster.app.core.PowerMode
 import kotlin.math.max
@@ -108,7 +108,7 @@ class DynamicBufferManager {
 
         // 记录统计（每50次更新记录一次）
         if (updateCount % 50 == 0) {
-            Log.d(TAG, "缓冲区统计: 更新次数=$updateCount, 当前缓冲区=${"%.1f".format(finalBuffer)}m, " +
+            AppLog.d(TAG, "缓冲区统计: 更新次数=$updateCount, 当前缓冲区=${"%.1f".format(finalBuffer)}m, " +
                     "精度因子=${"%.2f".format(accuracyFactor)}, 速度因子=${"%.2f".format(speedFactor)}, " +
                     "电量因子=${"%.2f".format(powerModeFactor)}")
         }
@@ -231,7 +231,7 @@ class DynamicBufferManager {
         currentHysteresisConfig = HysteresisConfig()
         bufferHistory.clear()
         updateCount = 0
-        Log.d(TAG, "缓冲区管理器已重置")
+        AppLog.d(TAG, "缓冲区管理器已重置")
     }
 
     /**

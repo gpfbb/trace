@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location as AndroidLocation
 import android.os.SystemClock
 import android.os.Bundle
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -80,7 +80,7 @@ class GoogleMapPresenter(
     private var lastKnownLocation: Location? = null
 
     init {
-        Log.d(TAG, "GoogleMapPresenter 初始化，isMapViewInitialized=true")
+        AppLog.d(TAG, "GoogleMapPresenter 初始化，isMapViewInitialized=true")
         setupLifecycle()
     }
 
@@ -88,12 +88,12 @@ class GoogleMapPresenter(
     // LocationSource 实现 — 接收外部位置（来自 AMap）并传给 Google Maps 渲染蓝点
     // ============================================================
     override fun activate(listener: LocationSource.OnLocationChangedListener) {
-        Log.d(TAG, "LocationSource.activate() 被 Google Maps SDK 调用")
+        AppLog.d(TAG, "LocationSource.activate() 被 Google Maps SDK 调用")
         locationSourceListener = listener
     }
 
     override fun deactivate() {
-        Log.d(TAG, "LocationSource.deactivate() 被 Google Maps SDK 调用")
+        AppLog.d(TAG, "LocationSource.deactivate() 被 Google Maps SDK 调用")
         locationSourceListener = null
     }
 
@@ -105,7 +105,7 @@ class GoogleMapPresenter(
         lastKnownLocation = location
         val listener = locationSourceListener
         if (listener == null) {
-            Log.w(TAG, "setExternalLocation: listener 还未注册（LocationSource 未激活），跳过")
+            AppLog.w(TAG, "setExternalLocation: listener 还未注册（LocationSource 未激活），跳过")
             return
         }
         val googleLoc = AndroidLocation(location.locationType.name).apply {
@@ -117,7 +117,7 @@ class GoogleMapPresenter(
             time = location.timestamp
             elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
         }
-        Log.d(TAG, "setExternalLocation: 喂入位置 lat=${location.latitude} lng=${location.longitude} accuracy=${location.accuracy} bearing=${location.bearing} speed=${location.speed}")
+        AppLog.d(TAG, "setExternalLocation: 喂入位置 lat=${location.latitude} lng=${location.longitude} accuracy=${location.accuracy} bearing=${location.bearing} speed=${location.speed}")
         listener.onLocationChanged(googleLoc)
         // 相机跳转（只在首次 LocationSource 激活时触发一次）
         navigateCameraToLocation(location)
@@ -129,12 +129,12 @@ class GoogleMapPresenter(
                 // 最多等 10 秒，超时则放弃（getMapAsync 可能因 Google Play Services 问题不回调）
                 mapInitLatch.await(10, TimeUnit.SECONDS)
             } catch (e: InterruptedException) {
-                Log.e(TAG, "等待地图初始化被中断", e)
+                AppLog.e(TAG, "等待地图初始化被中断", e)
                 Thread.currentThread().interrupt()
                 return null
             }
             if (googleMap == null) {
-                Log.e(TAG, "地图初始化超时或失败，googleMap 为 null")
+                AppLog.e(TAG, "地图初始化超时或失败，googleMap 为 null")
                 return null
             }
         }
@@ -142,24 +142,24 @@ class GoogleMapPresenter(
     }
 
     override fun onMapReady(map: GoogleMap) {
-        Log.d(TAG, "=== onMapReady() 被调用 ===")
+        AppLog.d(TAG, "=== onMapReady() 被调用 ===")
         googleMap = map
         mapInitLatch.countDown()
         _isMapReady.value = true
-        Log.d(TAG, "onMapReady: googleMap 已赋值，isMapReady=true")
+        AppLog.d(TAG, "onMapReady: googleMap 已赋值，isMapReady=true")
 
         // 应用之前积压的 mapType 配置
         pendingMapType?.let { type ->
-            Log.d(TAG, "onMapReady: 应用积压的 mapType=$type")
+            AppLog.d(TAG, "onMapReady: 应用积压的 mapType=$type")
             map.mapType = type
             pendingMapType = null
-        } ?: Log.d(TAG, "onMapReady: 无积压 mapType")
+        } ?: AppLog.d(TAG, "onMapReady: 无积压 mapType")
 
         setupMapOnReady(map)
     }
 
     fun onMapAsyncError(errorMessage: String) {
-        Log.e(TAG, "getMapAsync 失败: $errorMessage")
+        AppLog.e(TAG, "getMapAsync 失败: $errorMessage")
         isMapAsyncFailed = true
         // 解开 latch，避免 ensureMapReady 永久阻塞
         mapInitLatch.countDown()
@@ -206,24 +206,24 @@ class GoogleMapPresenter(
 
         // 点击"我的位置"按钮时，SDK 使用 setExternalLocation 喂入的位置执行相机动画
         map.setOnMyLocationButtonClickListener {
-            Log.d(TAG, "用户点击了我的位置按钮")
+            AppLog.d(TAG, "用户点击了我的位置按钮")
             false
         }
     }
 
     private fun tryEnableMyLocation(map: GoogleMap, context: Context) {
-        Log.d(TAG, "tryEnableMyLocation: 开始检查")
+        AppLog.d(TAG, "tryEnableMyLocation: 开始检查")
 
         // 1. 检查 Google Play Services 是否可用
         val gmsResult = GoogleApiAvailability.getInstance()
         val gmsStatus = gmsResult.isGooglePlayServicesAvailable(context)
         val gmsSuccess = gmsStatus == com.google.android.gms.common.ConnectionResult.SUCCESS
-        Log.d(TAG, "tryEnableMyLocation: GMS状态码=$gmsStatus (SUCCESS=0, 含义=${gmsResult.getErrorString(gmsStatus)})")
+        AppLog.d(TAG, "tryEnableMyLocation: GMS状态码=$gmsStatus (SUCCESS=0, 含义=${gmsResult.getErrorString(gmsStatus)})")
         if (!gmsSuccess) {
-            Log.e(TAG, "tryEnableMyLocation: Google Play Services 不可用($gmsStatus)，MyLocation 无法启用")
+            AppLog.e(TAG, "tryEnableMyLocation: Google Play Services 不可用($gmsStatus)，MyLocation 无法启用")
             return
         }
-        Log.d(TAG, "tryEnableMyLocation: Google Play Services 可用")
+        AppLog.d(TAG, "tryEnableMyLocation: Google Play Services 可用")
 
         // 2. 检查位置权限
         val hasFineLocation = ContextCompat.checkSelfPermission(
@@ -232,42 +232,42 @@ class GoogleMapPresenter(
         val hasCoarseLocation = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-        Log.d(TAG, "tryEnableMyLocation: ACCESS_FINE_LOCATION=$hasFineLocation, ACCESS_COARSE_LOCATION=$hasCoarseLocation")
+        AppLog.d(TAG, "tryEnableMyLocation: ACCESS_FINE_LOCATION=$hasFineLocation, ACCESS_COARSE_LOCATION=$hasCoarseLocation")
 
         if (!hasFineLocation && !hasCoarseLocation) {
-            Log.w(TAG, "tryEnableMyLocation: 位置权限均未授予，MyLocation 无法启用")
+            AppLog.w(TAG, "tryEnableMyLocation: 位置权限均未授予，MyLocation 无法启用")
             return
         }
-        Log.d(TAG, "tryEnableMyLocation: 权限检查通过，尝试启用蓝点")
+        AppLog.d(TAG, "tryEnableMyLocation: 权限检查通过，尝试启用蓝点")
 
         // 3. 启用蓝点和定位按钮
         try {
             map.isMyLocationEnabled = true
             map.uiSettings.isMyLocationButtonEnabled = true
-            Log.d(TAG, "✅ tryEnableMyLocation: 蓝点+定位按钮已启用（Fine=$hasFineLocation, Coarse=$hasCoarseLocation）")
+            AppLog.d(TAG, "✅ tryEnableMyLocation: 蓝点+定位按钮已启用（Fine=$hasFineLocation, Coarse=$hasCoarseLocation）")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ tryEnableMyLocation: 蓝点启用失败: ${e.message}", e)
+            AppLog.e(TAG, "❌ tryEnableMyLocation: 蓝点启用失败: ${e.message}", e)
         }
     }
 
     private fun setupLifecycle() {
         lifecycleObserver = LifecycleEventObserver { _, e ->
             if (!isMapViewInitialized) {
-                Log.w(TAG, "lifecycle 事件 ${e.name}，但 isMapViewInitialized=false，丢弃")
+                AppLog.w(TAG, "lifecycle 事件 ${e.name}，但 isMapViewInitialized=false，丢弃")
                 return@LifecycleEventObserver
             }
             try {
                 when (e) {
                     Lifecycle.Event.ON_RESUME -> {
-                        Log.d(TAG, "lifecycle: ON_RESUME")
+                        AppLog.d(TAG, "lifecycle: ON_RESUME")
                         mapView.onResume()
                     }
                     Lifecycle.Event.ON_PAUSE -> {
-                        Log.d(TAG, "lifecycle: ON_PAUSE")
+                        AppLog.d(TAG, "lifecycle: ON_PAUSE")
                         mapView.onPause()
                     }
                     Lifecycle.Event.ON_DESTROY -> {
-                        Log.d(TAG, "lifecycle: ON_DESTROY")
+                        AppLog.d(TAG, "lifecycle: ON_DESTROY")
                         cleanup()
                         lifecycleObserver?.let { lifecycleOwner.removeObserver(it) }  // 【P1修复】移除observer，防止内存泄漏
                         mapView.onDestroy()
@@ -275,7 +275,7 @@ class GoogleMapPresenter(
                     else -> {}
                 }
             } catch (ex: Exception) {
-                Log.e(TAG, "生命周期错误: ${e.name}", ex)
+                AppLog.e(TAG, "生命周期错误: ${e.name}", ex)
             }
         }
         lifecycleObserver?.let { lifecycleOwner.addObserver(it) }
@@ -305,7 +305,7 @@ class GoogleMapPresenter(
                 circleOverlays[circle.id] = gmsCircle
             }
         } catch (e: Exception) {
-            Log.e(TAG, "添加圆形失败: ${circle.id}", e)
+            AppLog.e(TAG, "添加圆形失败: ${circle.id}", e)
         }
     }
 
@@ -323,7 +323,7 @@ class GoogleMapPresenter(
                 polygonOverlays[polygon.id] = gmsPolygon
             }
         } catch (e: Exception) {
-            Log.e(TAG, "添加多边形失败: ${polygon.id}", e)
+            AppLog.e(TAG, "添加多边形失败: ${polygon.id}", e)
         }
     }
 
@@ -348,7 +348,7 @@ class GoogleMapPresenter(
                 markerOverlays[marker.id] = gmsMarker
             }
         } catch (e: Exception) {
-            Log.e(TAG, "添加标注失败: ${marker.id}", e)
+            AppLog.e(TAG, "添加标注失败: ${marker.id}", e)
         }
     }
 
@@ -405,7 +405,7 @@ class GoogleMapPresenter(
                 CameraUpdateFactory.newLatLngBounds(latLngBounds, padding)
             )
         } catch (e: Exception) {
-            Log.e(TAG, "移动相机到边界失败", e)
+            AppLog.e(TAG, "移动相机到边界失败", e)
         }
     }
 
@@ -426,9 +426,9 @@ class GoogleMapPresenter(
     override fun refresh() {}
 
     fun showMyLocation() {
-        Log.d(TAG, "=== showMyLocation() 被调用 ===")
+        AppLog.d(TAG, "=== showMyLocation() 被调用 ===")
         val map = googleMap ?: run {
-            Log.w(TAG, "showMyLocation: googleMap 未就绪，跳过")
+            AppLog.w(TAG, "showMyLocation: googleMap 未就绪，跳过")
             return
         }
         val ctx = mapView.context
@@ -436,13 +436,13 @@ class GoogleMapPresenter(
         // 自动跳转到用户最后已知位置
         // 如果 lastKnownLocation 为空（权限刚批/地图刚就绪），等待 setExternalLocation 触发跳转
         lastKnownLocation?.let { loc ->
-            Log.d(TAG, "showMyLocation: 自动跳转至用户位置 lat=${loc.latitude} lng=${loc.longitude}")
+            AppLog.d(TAG, "showMyLocation: 自动跳转至用户位置 lat=${loc.latitude} lng=${loc.longitude}")
             map.animateCamera(
                 CameraUpdateFactory.newLatLngZoom(
                     LatLng(loc.latitude, loc.longitude), 17f
                 )
             )
-        } ?: Log.d(TAG, "showMyLocation: lastKnownLocation 为空，等待 setExternalLocation 触发跳转")
+        } ?: AppLog.d(TAG, "showMyLocation: lastKnownLocation 为空，等待 setExternalLocation 触发跳转")
     }
 
     /**
@@ -462,7 +462,7 @@ class GoogleMapPresenter(
         val map = googleMap ?: return
         if (!hasCameraLockedToUser) {
             hasCameraLockedToUser = true
-            Log.d(TAG, "setExternalLocation: 首次跳转相机至用户 lat=${location.latitude} lng=${location.longitude}")
+            AppLog.d(TAG, "setExternalLocation: 首次跳转相机至用户 lat=${location.latitude} lng=${location.longitude}")
             map.animateCamera(
                 CameraUpdateFactory.newLatLngZoom(
                     LatLng(location.latitude, location.longitude), 17f
@@ -476,15 +476,15 @@ class GoogleMapPresenter(
      * 由 GoogleMapWrapper 在权限授予后的回调里调用
      */
     fun onLocationPermissionGranted() {
-        Log.d(TAG, "=== onLocationPermissionGranted() 被调用 ===")
+        AppLog.d(TAG, "=== onLocationPermissionGranted() 被调用 ===")
         val map = googleMap ?: run {
-            Log.w(TAG, "onLocationPermissionGranted: googleMap 还未就续，跳过")
+            AppLog.w(TAG, "onLocationPermissionGranted: googleMap 还未就续，跳过")
             return
         }
         val ctx = mapView.context
         tryEnableMyLocation(map, ctx)
         lastKnownLocation?.let { loc ->
-            Log.d(TAG, "onLocationPermissionGranted: 自动跳转至用户位置 lat=${loc.latitude} lng=${loc.longitude}")
+            AppLog.d(TAG, "onLocationPermissionGranted: 自动跳转至用户位置 lat=${loc.latitude} lng=${loc.longitude}")
             map.animateCamera(
                 CameraUpdateFactory.newLatLngZoom(
                     LatLng(loc.latitude, loc.longitude), 17f
@@ -509,12 +509,12 @@ class GoogleMapPresenter(
             1 -> {
                 map.mapType = GoogleMap.MAP_TYPE_NORMAL
                 map.setMapStyle(null)  // 清除夜景样式
-                Log.d(TAG, "configureMap: mapType=1 → NORMAL")
+                AppLog.d(TAG, "configureMap: mapType=1 → NORMAL")
             }
             2 -> {
                 map.mapType = GoogleMap.MAP_TYPE_SATELLITE
                 map.setMapStyle(null)
-                Log.d(TAG, "configureMap: mapType=2 → SATELLITE")
+                AppLog.d(TAG, "configureMap: mapType=2 → SATELLITE")
             }
             3 -> {
                 // 夜景模式：使用深色 JSON style
@@ -526,12 +526,12 @@ class GoogleMapPresenter(
                         .use { it.readText() }
                     val success = map.setMapStyle(MapStyleOptions(styleJson))
                     if (success) {
-                        Log.d(TAG, "configureMap: 夜景样式应用成功")
+                        AppLog.d(TAG, "configureMap: 夜景样式应用成功")
                     } else {
-                        Log.e(TAG, "configureMap: 夜景样式应用失败（未知错误）")
+                        AppLog.e(TAG, "configureMap: 夜景样式应用失败（未知错误）")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "configureMap: 夜景样式加载异常: ${e.message}")
+                    AppLog.e(TAG, "configureMap: 夜景样式加载异常: ${e.message}")
                 }
             }
             else -> {
@@ -545,14 +545,14 @@ class GoogleMapPresenter(
     // ============================================================
 
     fun onCreate(savedInstanceState: Bundle?) {
-        Log.d(TAG, "=== onCreate() 被调用 ===")
+        AppLog.d(TAG, "=== onCreate() 被调用 ===")
         mapView.onCreate(savedInstanceState)
-        Log.d(TAG, "onCreate: MapView.onCreate 完成，调用 getMapAsync")
+        AppLog.d(TAG, "onCreate: MapView.onCreate 完成，调用 getMapAsync")
         try {
             mapView.getMapAsync(this)
-            Log.d(TAG, "onCreate: getMapAsync 已调用，等待 onMapReady 回调")
+            AppLog.d(TAG, "onCreate: getMapAsync 已调用，等待 onMapReady 回调")
         } catch (e: Exception) {
-            Log.e(TAG, "onCreate: getMapAsync 调用失败: ${e.message}", e)
+            AppLog.e(TAG, "onCreate: getMapAsync 调用失败: ${e.message}", e)
             onMapAsyncError(e.message ?: "未知错误")
         }
     }

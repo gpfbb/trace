@@ -3,6 +3,7 @@ package com.trackmaster.app
 import android.content.Context
 import android.graphics.Color
 import com.trackmaster.app.data.GeoFenceAction
+import com.trackmaster.app.utils.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -67,7 +68,7 @@ class StatisticsManager(private val context: Context) {
      * 而非 stays 表（会导致跨天停留的全部时长错误归入进入日）。
      */
     fun getStatistics(timeDimension: TimeDimension, timeRange: TimeRange): List<FenceStatistics> {
-        android.util.Log.d("StatisticsManager", "getStatistics called: dimension=$timeDimension, range=${timeRange.startTime}-${timeRange.endTime}")
+        AppLog.d("StatisticsManager", "getStatistics called: dimension=$timeDimension, range=${timeRange.startTime}-${timeRange.endTime}")
 
         // 1. 从 daily_stays 表获取已完成的分天时长数据
         val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -92,7 +93,7 @@ class StatisticsManager(private val context: Context) {
                 allRecords
             }
         }
-        android.util.Log.d("StatisticsManager", "Daily records: ${allDailyRecords.size}")
+        AppLog.d("StatisticsManager", "Daily records: ${allDailyRecords.size}")
 
         val statsMap = mutableMapOf<String, FenceStatisticsBuilder>()
 
@@ -124,7 +125,7 @@ class StatisticsManager(private val context: Context) {
 
         // 3. 添加当前活跃会话的实时时长（使用 accumulatedDuration，而非 enterTime 的 raw 差值）
         val activeSessions = app.stayDurationManager.activeSessions
-        android.util.Log.d("StatisticsManager", "Active sessions: ${activeSessions.size}")
+        AppLog.d("StatisticsManager", "Active sessions: ${activeSessions.size}")
         for ((fenceId, session) in activeSessions) {
             // 使用 getCurrentDuration 获取实时累积时长（含 App 重启的 gap）
             val currentDuration = app.stayDurationManager.getCurrentDuration(fenceId) ?: 0L
@@ -133,7 +134,7 @@ class StatisticsManager(private val context: Context) {
                 // 时长取 getCurrentDuration，但不超过时间范围跨度（防止单日超过24小时）
                 val maxRangeSeconds = maxOf(0L, (timeRange.endTime.time - maxOf(session.enterTime, timeRange.startTime).time) / 1000)
                 val effectiveDurationSeconds = minOf(currentDuration, maxRangeSeconds)
-                android.util.Log.d("StatisticsManager", "Active session $fenceId (${session.fenceName}): duration=${effectiveDurationSeconds}s")
+                AppLog.d("StatisticsManager", "Active session $fenceId (${session.fenceName}): duration=${effectiveDurationSeconds}s")
                 val builder = statsMap.getOrPut(fenceId) {
                     FenceStatisticsBuilder(fenceId = fenceId, fenceName = session.fenceName)
                 }
@@ -151,7 +152,7 @@ class StatisticsManager(private val context: Context) {
         val result = statsMap.values
             .map { it.build() }
             .sortedByDescending { it.totalDurationSeconds }
-        android.util.Log.d("StatisticsManager", "getStatistics result: ${result.size} items")
+        AppLog.d("StatisticsManager", "getStatistics result: ${result.size} items")
         return result
     }
 

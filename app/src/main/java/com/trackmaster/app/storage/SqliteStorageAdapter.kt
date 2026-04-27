@@ -3,7 +3,7 @@ package com.trackmaster.app.storage
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.core.DailySummary
 import com.trackmaster.app.core.SegmentStatus
 import com.trackmaster.app.core.StaySegment

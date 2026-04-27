@@ -1,6 +1,6 @@
 package com.trackmaster.app.core
 
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.AppPreferences
 import com.trackmaster.app.utils.ThrottleConfig
 import com.trackmaster.app.storage.Repository
@@ -29,7 +29,7 @@ class EngineHolder(
                 appPreferences.incrementLocations(shouldProcess)
             }
         }
-        Log.d(TAG, "Engine initialized with ${fences.size} fences")
+        AppLog.d(TAG, "Engine initialized with ${fences.size} fences")
     }
 
     fun refresh(fences: List<Geofence>) {
@@ -44,10 +44,10 @@ class EngineHolder(
         if (oldEngine != null) {
             CoroutineScope(Dispatchers.IO).launch {
                 runCatching { oldEngine.dispose() }
-                    .onFailure { Log.e(TAG, "旧Engine dispose失败", it) }
+                    .onFailure { AppLog.e(TAG, "旧Engine dispose失败", it) }
             }
         }
-        Log.d(TAG, "Engine refreshed with ${fences.size} fences")
+        AppLog.d(TAG, "Engine refreshed with ${fences.size} fences")
     }
 
     companion object {

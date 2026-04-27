@@ -5,7 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -42,11 +42,11 @@ class MainActivity : ComponentActivity() {
 
         // Apply locale from preferences on every cold start
         val appPrefs = (application as TrackMasterApplication).appPreferences
-        android.util.Log.d("MainActivity", "onCreate: appPrefs.appLanguage=${appPrefs.appLanguage}")
+        AppLog.d("MainActivity", "onCreate: appPrefs.appLanguage=${appPrefs.appLanguage}")
         LanguageManager.ensureLocale(this)
 
         if (appPrefs.mapProvider == MapProvider.AMAP) {
-            Log.d("TrackMaster", "初始化高德 SDK")
+            AppLog.d("TrackMaster", "初始化高德 SDK")
             AMapLocationClient.updatePrivacyShow(this, true, true)
             AMapLocationClient.updatePrivacyAgree(this, true)
         }
@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } catch (e: Exception) {
-                Log.w("TrackMaster", "无法设置帧率限制: ${e.message}")
+                AppLog.w("TrackMaster", "无法设置帧率限制: ${e.message}")
             }
         }
 
@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
 
     private fun requestLocationPermission() {
         if (androidx.core.content.ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            Log.d("TrackMaster", "请求定位权限")
+            AppLog.d("TrackMaster", "请求定位权限")
             locationPermissionLauncher.launch(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
                 )
             )
         } else {
-            Log.d("TrackMaster", "已有定位权限，直接启动定位")
+            AppLog.d("TrackMaster", "已有定位权限，直接启动定位")
             startLocation()
         }
     }
@@ -103,12 +103,12 @@ class MainActivity : ComponentActivity() {
 
     private fun startLocation() {
         try {
-            Log.d("TrackMaster", "启动定位服务")
+            AppLog.d("TrackMaster", "启动定位服务")
             val app = application as TrackMasterApplication
             app.startLocationService()
             locationSetupHandler.postDelayed(locationSetupRetryRunnable, 500)
         } catch (e: Exception) {
-            Log.e("TrackMaster", "启动定位失败", e)
+            AppLog.e("TrackMaster", "启动定位失败", e)
         }
     }
 
@@ -120,13 +120,13 @@ class MainActivity : ComponentActivity() {
             locationServiceListener?.let { service.removeStateListener(it) }
             locationServiceListener = { state ->
                 runOnUiThread {
-                    Log.d("TrackMaster", "位置更新: ${state.locationCount}次, isRunning=${state.isRunning}")
+                    AppLog.d("TrackMaster", "位置更新: ${state.locationCount}次, isRunning=${state.isRunning}")
                 }
             }
             locationServiceListener?.let { service.addStateListener(it) }
-            Log.d("TrackMaster", "已设置定位服务状态监听")
+            AppLog.d("TrackMaster", "已设置定位服务状态监听")
         } else {
-            Log.w("TrackMaster", "定位服务尚未绑定，稍后重试")
+            AppLog.w("TrackMaster", "定位服务尚未绑定，稍后重试")
             locationSetupHandler.postDelayed(locationSetupRetryRunnable, 1000)
         }
     }

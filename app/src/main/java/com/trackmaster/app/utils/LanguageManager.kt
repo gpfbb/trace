@@ -61,10 +61,10 @@ object LanguageManager {
         val currentSaved = savedLanguage(context)
         val actuallyChanged = previousLanguage?.let { it != newLanguage } ?: (currentSaved != newLanguage)
 
-        android.util.Log.d("LanguageManager", "applyLocale: new=$newLanguage, saved=$currentSaved, prev=$previousLanguage, changed=$actuallyChanged")
+        AppLog.d("LanguageManager", "applyLocale: new=$newLanguage, saved=$currentSaved, prev=$previousLanguage, changed=$actuallyChanged")
 
         if (!actuallyChanged) {
-            android.util.Log.d("LanguageManager", "applyLocale: skip (same)")
+            AppLog.d("LanguageManager", "applyLocale: skip (same)")
             return
         }
 
@@ -73,10 +73,10 @@ object LanguageManager {
         if (context is Activity) {
             val locale = getLocale(newLanguage)
             setLocale(context, locale)
-            android.util.Log.d("LanguageManager", "applyLocale: locale set to $locale, triggering recompose")
+            AppLog.d("LanguageManager", "applyLocale: locale set to $locale, triggering recompose")
             onRecompose?.invoke()
         } else {
-            android.util.Log.w("LanguageManager", "applyLocale: non-Activity context")
+            AppLog.w("LanguageManager", "applyLocale: non-Activity context")
         }
     }
 
@@ -94,9 +94,9 @@ object LanguageManager {
             try {
                 val localeManager = activity.getSystemService(LocaleManager::class.java)
                 localeManager?.applicationLocales = LocaleList(locale)
-                android.util.Log.d("LanguageManager", "setLocale: persisted to LocaleManager API (Android 13+)")
+                AppLog.d("LanguageManager", "setLocale: persisted to LocaleManager API (Android 13+)")
             } catch (e: Exception) {
-                android.util.Log.e("LanguageManager", "setLocale: LocaleManager API failed", e)
+                AppLog.e("LanguageManager", "setLocale: LocaleManager API failed", e)
             }
         }
 
@@ -119,10 +119,10 @@ object LanguageManager {
         val currentLocale = activity.resources.configuration.locales[0]
 
         if (currentLocale != locale) {
-            android.util.Log.d("LanguageManager", "ensureLocale: setting ${locale} (current=$currentLocale)")
+            AppLog.d("LanguageManager", "ensureLocale: setting ${locale} (current=$currentLocale)")
             setLocale(activity, locale)
         } else {
-            android.util.Log.d("LanguageManager", "ensureLocale: already $locale")
+            AppLog.d("LanguageManager", "ensureLocale: already $locale")
         }
     }
 

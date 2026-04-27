@@ -2,7 +2,7 @@ package com.trackmaster.app.core
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.utils.GeoMath
 import com.trackmaster.app.utils.buildFenceTree
 import com.trackmaster.app.utils.FenceTreeResult
@@ -47,7 +47,7 @@ class FenceTreeManager(private val context: Context) {
     fun setParent(fenceId: String, parentId: String?) {
         // 防止循环引用：不能设自己为父级
         if (fenceId == parentId) {
-            Log.w(TAG, "不能设置围栏自身为父级: $fenceId")
+            AppLog.w(TAG, "不能设置围栏自身为父级: $fenceId")
             return
         }
         // 【P0修复】将父子关系写入和版本号递增合并为单次原子commit
@@ -61,7 +61,7 @@ class FenceTreeManager(private val context: Context) {
         version++
         edit.putInt(KEY_VERSION, version)
         edit.commit()
-        Log.d(TAG, "设置父级: $fenceId → ${parentId ?: "顶级"}")
+        AppLog.d(TAG, "设置父级: $fenceId → ${parentId ?: "顶级"}")
     }
 
     /** 获取围栏的父级 ID */
@@ -91,7 +91,7 @@ class FenceTreeManager(private val context: Context) {
         // 【P0修复】合并为单次原子commit，避免clear和version bump之间的crash导致不一致
         version++
         prefs.edit().clear().putInt(KEY_VERSION, version).commit()
-        Log.d(TAG, "已清除所有父子关系")
+        AppLog.d(TAG, "已清除所有父子关系")
     }
 
     // ============================================================

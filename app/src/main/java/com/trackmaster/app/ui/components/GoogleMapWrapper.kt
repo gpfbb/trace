@@ -3,7 +3,7 @@ package com.trackmaster.app.ui.components
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -87,7 +87,7 @@ fun GoogleMapWrapper(
                     appPrefs.cameraZoom = mapPresenter.getZoom() ?: 17f
                     appPrefs.hasCameraPosition = true
                 }
-            } catch (e: Exception) { Log.e(TAG, "保存相机位置失败", e) }
+            } catch (e: Exception) { AppLog.e(TAG, "保存相机位置失败", e) }
         }
     }
 
@@ -111,7 +111,7 @@ fun GoogleMapWrapper(
                 appPrefs.cameraLongitude = lng
                 appPrefs.cameraZoom = mapPresenter.getZoom() ?: 17f
                 appPrefs.hasCameraPosition = true
-            } catch (e: Exception) { Log.e(TAG, "保存相机位置失败", e) }
+            } catch (e: Exception) { AppLog.e(TAG, "保存相机位置失败", e) }
             // precision模式下同步更新相机中心点坐标
             if (isPrecisionMode) {
                 cameraCenterLat = lat
@@ -129,15 +129,15 @@ fun GoogleMapWrapper(
         val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
         val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         hasLocationPermission = fineGranted || coarseGranted
-        Log.d("GoogleMapWrapper", "=== 权限回调: FINE=$fineGranted, COARSE=$coarseGranted ===")
+        AppLog.d("GoogleMapWrapper", "=== 权限回调: FINE=$fineGranted, COARSE=$coarseGranted ===")
         if (hasLocationPermission) {
-            Log.d("GoogleMapWrapper", "权限授予，调用 mapPresenter.onLocationPermissionGranted() + service.onLocationPermissionGranted()")
+            AppLog.d("GoogleMapWrapper", "权限授予，调用 mapPresenter.onLocationPermissionGranted() + service.onLocationPermissionGranted()")
             mapPresenter.onLocationPermissionGranted()
             // 通知 GeoFenceLocationService 权限已授予，Google provider 可以重新启动
             (context.applicationContext as? com.trackmaster.app.TrackMasterApplication)
                 ?.getLocationService()?.onLocationPermissionGranted()
         } else {
-            Log.w("GoogleMapWrapper", "权限仍被拒绝")
+            AppLog.w("GoogleMapWrapper", "权限仍被拒绝")
         }
     }
 
@@ -161,16 +161,16 @@ fun GoogleMapWrapper(
     // 蓝点定位（Google Maps SDK 原生显示蓝色点/移动 chevron，方向由 SDK 根据 bearing 自动显示）
 
     LaunchedEffect(isMapReady, hasLocationPermission) {
-        Log.d("GoogleMapWrapper", "LaunchedEffect(isMapReady,hasLocationPermission): isMapReady=$isMapReady, hasLocationPermission=$hasLocationPermission")
+        AppLog.d("GoogleMapWrapper", "LaunchedEffect(isMapReady,hasLocationPermission): isMapReady=$isMapReady, hasLocationPermission=$hasLocationPermission")
         if (!isMapReady) {
-            Log.d("GoogleMapWrapper", "LaunchedEffect: 地图未就绪，跳过 showMyLocation")
+            AppLog.d("GoogleMapWrapper", "LaunchedEffect: 地图未就绪，跳过 showMyLocation")
             return@LaunchedEffect
         }
         if (hasLocationPermission) {
-            Log.d("GoogleMapWrapper", "LaunchedEffect: 地图已就绪+有权限，调用 showMyLocation()")
+            AppLog.d("GoogleMapWrapper", "LaunchedEffect: 地图已就绪+有权限，调用 showMyLocation()")
             mapPresenter.showMyLocation()
         } else {
-            Log.d("GoogleMapWrapper", "LaunchedEffect: 地图已就绪但无权限，不调用 showMyLocation")
+            AppLog.d("GoogleMapWrapper", "LaunchedEffect: 地图已就绪但无权限，不调用 showMyLocation")
         }
     }
 
@@ -192,7 +192,7 @@ fun GoogleMapWrapper(
                     timestamp = loc.time,
                     locationType = com.trackmaster.app.locationservice.LocationType.GPS
                 )
-                Log.d("GoogleMapWrapper", "GPS位置: lat=${gpsLoc.latitude}, acc=${loc.accuracy}m")
+                AppLog.d("GoogleMapWrapper", "GPS位置: lat=${gpsLoc.latitude}, acc=${loc.accuracy}m")
                 mapPresenter.setExternalLocation(gpsLoc)
                 mapPresenter.showMyLocation()
             }
@@ -203,11 +203,11 @@ fun GoogleMapWrapper(
         ).setMinUpdateIntervalMillis(1000L).build()
 
         fusedClient.requestLocationUpdates(request, callback, android.os.Looper.getMainLooper())
-        Log.d("GoogleMapWrapper", "Google GPS 连续监听已启动")
+        AppLog.d("GoogleMapWrapper", "Google GPS 连续监听已启动")
 
         onDispose {
             fusedClient.removeLocationUpdates(callback)
-            Log.d("GoogleMapWrapper", "Google GPS 监听已停止")
+            AppLog.d("GoogleMapWrapper", "Google GPS 监听已停止")
         }
     }
 
@@ -441,10 +441,10 @@ fun GoogleMapWrapper(
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
-                Log.d("GoogleMapWrapper", "=== AndroidView factory 被调用 ===")
-                Log.d("GoogleMapWrapper", "AndroidView factory: 调用 mapPresenter.onCreate()")
+                AppLog.d("GoogleMapWrapper", "=== AndroidView factory 被调用 ===")
+                AppLog.d("GoogleMapWrapper", "AndroidView factory: 调用 mapPresenter.onCreate()")
                 mapPresenter.onCreate(null)
-                Log.d("GoogleMapWrapper", "AndroidView factory: mapPresenter.onCreate() 返回，MapView 实例=$mapView")
+                AppLog.d("GoogleMapWrapper", "AndroidView factory: mapPresenter.onCreate() 返回，MapView 实例=$mapView")
                 mapView
             },
             modifier = Modifier.fillMaxSize()

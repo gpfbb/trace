@@ -1,7 +1,7 @@
 package com.trackmaster.app.viewmodel
 
 import android.app.Application
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import androidx.lifecycle.ViewModel
 import com.trackmaster.app.AppPreferences
 import com.trackmaster.app.PermissionManager
@@ -119,7 +119,7 @@ class SettingsViewModel(
 
             _recalculateMessage.value = "重新计算完成，建立了 $relationshipCount 对父子关系"
         } catch (e: Exception) {
-            Log.e(TAG, "重新计算父子关系失败", e)
+            AppLog.e(TAG, "重新计算父子关系失败", e)
             _recalculateMessage.value = "重新计算失败: ${e.message}"
         } finally {
             _isRecalculating.value = false

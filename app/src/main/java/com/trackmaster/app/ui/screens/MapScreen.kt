@@ -454,10 +454,11 @@ fun MapScreen(app: TrackMasterApplication) {
         )
     }
 
-    if (showEditDialog && selectedFence != null) {
-        EditFenceDialog(
-            fence = selectedFence!!,
-            fenceColors = fenceColors,
+    selectedFence?.let { fence ->
+        if (showEditDialog) {
+            EditFenceDialog(
+                fence = fence,
+                fenceColors = fenceColors,
             onDismiss = {
                 showEditDialog = false
                 selectedFence = null
@@ -468,29 +469,29 @@ fun MapScreen(app: TrackMasterApplication) {
                 isEditingFence = true
                 showEditDialog = false
             },
-            onDelete = {
-                showEditDialog = false
-                showDeleteConfirm = selectedFence
-                selectedFence = null
-            }
-        )
+                onDelete = {
+                    showEditDialog = false
+                    showDeleteConfirm = selectedFence
+                    selectedFence = null
+                }
+            )
+        }
     }
 
-    if (showDeleteConfirm != null) {
+    showDeleteConfirm?.let { fenceToDelete ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
             title = { Text(stringResource(R.string.confirm_delete)) },
-            text = { Text(stringResource(R.string.fence_delete_confirm, showDeleteConfirm!!.name)) },
+            text = { Text(stringResource(R.string.fence_delete_confirm, fenceToDelete.name)) },
             confirmButton = {
                 Button(
                     onClick = {
-                        val fence = showDeleteConfirm!!
-                        app.geoFences.removeIf { it.id == fence.id }
-                        app.dbHelper.deleteFence(fence.id)
+                        app.geoFences.removeIf { it.id == fenceToDelete.id }
+                        app.dbHelper.deleteFence(fenceToDelete.id)
                         app.refreshEngineFences()
                         app.checkAndUpdateFenceState()
                         showDeleteConfirm = null
-                        if (selectedFence?.id == fence.id) selectedFence = null
+                        if (selectedFence?.id == fenceToDelete.id) selectedFence = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Danger)
                 ) {

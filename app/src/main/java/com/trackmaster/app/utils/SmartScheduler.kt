@@ -57,6 +57,8 @@ data class ThrottleConfig(
     val slcDriftM: Double = 300.0,
     /** 基础定位间隔（ms） */
     val baseIntervalMs: Long = 60_000L,
+    /** 连续移动确认次数：连续N次移动信号才确认用户真的在移动（排除GPS噪声） */
+    val consecutiveMovementThreshold: Int = 3,
 )
 
 data class ThrottleStep(
@@ -297,8 +299,8 @@ class SmartScheduler(
         val hasMovementSignal = distance > config.resetDistanceM && !isStationary
         if (hasMovementSignal) {
             consecutiveMovementCount++
-            if (consecutiveMovementCount >= 3) {
-                // 连续3次移动信号 → 确认用户真的在移动，reset
+            if (consecutiveMovementCount >= config.consecutiveMovementThreshold) {
+                // 连续 ${config.consecutiveMovementThreshold} 次移动信号 → 确认用户真的在移动，reset
                 resetThrottle()
             }
             // 不满3次：暂时不清除静止状态，等待后续确认
@@ -700,6 +702,15 @@ class SmartScheduler(
         lastProcessedTs = 0L
         // 【新增】重置连续移动计数器
         consecutiveMovementCount = 0
+        // 【问题6修复】清空所有历史数据缓冲区，避免数据残留影响静止判定
+        accelBuffer.clear()
+        accelXBuffer.clear()
+        accelYBuffer.clear()
+        accelZBuffer.clear()
+        locationHistory.clear()
+        lastPoint = null
+        lastBoundaryCheckPoint = null
+        lastBoundaryCheckResult = false
     }
 
     /** 构造调度决策 */

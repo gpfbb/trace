@@ -45,17 +45,19 @@ class Repository(
         synchronized(flushLock) {
             if (writeBuffer.isEmpty()) return
             batch = ArrayList(writeBuffer)
-            writeBuffer.clear()
+            // 【P0修复】事务成功后再清空 buffer，失败则保留数据重试
+            // 原问题：writeBuffer.clear() 在事务前执行，事务失败后数据丢失
+            // 修复：事务成功后才清空 buffer
         }
         // 在临界区外执行数据库操作
         try {
             adapter.beginTransaction()
             adapter.insertSegments(batch)
             adapter.commitTransaction()
-            // 【P0修复】事务成功后才能清缓存
-            // 若在transaction成功后、clear之前crash：
-            // DB有新数据，下次getSegmentsByDate()会从DB读取最新数据（正确）
-            // 若在transaction成功前crash（rollback）：缓存未被清，下次回读旧缓存（也是正确）
+            // 【P0修复】事务成功后才清空 buffer 和缓存
+            synchronized(flushLock) {
+                writeBuffer.removeAll(batch)
+            }
             batch.forEach { seg ->
                 // 【Bug修复】跨天 segment：需清除 startTs 和 endTs 所在日期的缓存
                 segmentCache.remove(formatDateKey(seg.startTs))
@@ -63,9 +65,7 @@ class Repository(
             }
         } catch (e: Exception) {
             adapter.rollbackTransaction()
-            synchronized(flushLock) {
-                writeBuffer.addAll(0, batch) // 放回重试
-            }
+            // buffer 未被清空，无需放回，直接抛出异常让调用方重试
             throw e
         }
     }

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.trackmaster.app.ui.components.CompactThemeSelector
 import com.trackmaster.app.ui.components.ThemePickerDialog
 import com.trackmaster.app.ui.theme.*
+import com.trackmaster.app.utils.AppLog
 
 // 独立的设置页面内容组件
 @Composable
@@ -345,10 +346,10 @@ fun SettingsPage(
                     text = {
                         Column {
                             Text(stringResource(R.string.recalculate_confirm))
-                            if (recalculateMessage != null) {
+                            recalculateMessage?.let { msg ->
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    recalculateMessage!!,
+                                    msg,
                                     color = if (recalculateIsSuccess) Success else Danger,
                                     fontSize = 14.sp
                                 )
@@ -412,7 +413,7 @@ fun SettingsPage(
 
                                     // 第一步：检测围栏相交
                                     val intersections = GeoMath.detectFenceIntersections(coreFences)
-                                    android.util.Log.d("SettingsPage", "相交检测完成，发现 ${intersections.size} 对相交")
+                                    AppLog.d("SettingsPage", "相交检测完成，发现 ${intersections.size} 对相交")
                                     if (intersections.isNotEmpty()) {
                                         recalculateMessage = intersectionWarningTemplate.replace("%d", intersections.size.toString())
                                         recalculateIsSuccess = false
@@ -422,23 +423,23 @@ fun SettingsPage(
                                     // 第二步：检测通过，执行父子关系计算
                                     app.fenceTreeManager.clearAll()
                                     var relationshipCount = 0
-                                    android.util.Log.d("SettingsPage", "开始计算父子关系，coreFences数量: ${coreFences.size}")
+                                    AppLog.d("SettingsPage", "开始计算父子关系，coreFences数量: ${coreFences.size}")
                                     for (fenceA in coreFences) {
                                         for (fenceB in coreFences) {
                                             if (fenceA.id == fenceB.id) continue
                                             val bInA = GeoMath.isFenceContainedByFence(fenceB, fenceA)
                                             val aInB = GeoMath.isFenceContainedByFence(fenceA, fenceB)
-                                            android.util.Log.d("SettingsPage", "检查 ${fenceB.name} in ${fenceA.name}: $bInA, 反向: $aInB")
+                                            AppLog.d("SettingsPage", "检查 ${fenceB.name} in ${fenceA.name}: $bInA, 反向: $aInB")
                                             if (bInA) {
                                                 if (!aInB) {
                                                     app.fenceTreeManager.setParent(fenceB.id, fenceA.id)
                                                     relationshipCount++
-                                                    android.util.Log.d("SettingsPage", "设置父子关系: ${fenceB.name} -> ${fenceA.name}")
+                                                    AppLog.d("SettingsPage", "设置父子关系: ${fenceB.name} -> ${fenceA.name}")
                                                 }
                                             }
                                         }
                                     }
-                                    android.util.Log.d("SettingsPage", "重新计算完成，建立了 $relationshipCount 对父子关系")
+                                    AppLog.d("SettingsPage", "重新计算完成，建立了 $relationshipCount 对父子关系")
                                     recalculateMessage = successTemplate.replace("%d", relationshipCount.toString())
                                     recalculateIsSuccess = true
                                 }

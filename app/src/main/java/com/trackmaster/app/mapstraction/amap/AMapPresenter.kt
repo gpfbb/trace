@@ -2,7 +2,7 @@ package com.trackmaster.app.mapstraction.amap
 
 import android.graphics.Color
 import android.os.Bundle
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.amap.api.location.AMapLocation as AMapLoc
 import com.amap.api.location.AMapLocationListener
 import com.amap.api.maps.AMap
@@ -69,7 +69,7 @@ class AMapPresenter(
             aMap.myLocationStyle = style
             aMap.isMyLocationEnabled = true
         } catch (e: Exception) {
-            Log.e(TAG, "定位样式设置失败", e)
+            AppLog.e(TAG, "定位样式设置失败", e)
         }
 
         aMap.setOnMapClickListener { latLng ->
@@ -111,7 +111,7 @@ class AMapPresenter(
                     else -> {}
                 }
             } catch (ex: Exception) {
-                Log.e(TAG, "生命周期错误: ${e.name}", ex)
+                AppLog.e(TAG, "生命周期错误: ${e.name}", ex)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -126,7 +126,7 @@ class AMapPresenter(
                 )
             )
         } catch (e: Exception) {
-            Log.e(TAG, "显示位置失败", e)
+            AppLog.e(TAG, "显示位置失败", e)
         }
     }
 
@@ -142,7 +142,7 @@ class AMapPresenter(
             val amapCircle = aMap.addCircle(circleOptions)
             circleOverlays[circle.id] = amapCircle
         } catch (e: Exception) {
-            Log.e(TAG, "添加圆形失败: ${circle.id}", e)
+            AppLog.e(TAG, "添加圆形失败: ${circle.id}", e)
         }
     }
 
@@ -158,7 +158,7 @@ class AMapPresenter(
             val amapPolygon = aMap.addPolygon(polygonOptions)
             polygonOverlays[polygon.id] = amapPolygon
         } catch (e: Exception) {
-            Log.e(TAG, "添加多边形失败: ${polygon.id}", e)
+            AppLog.e(TAG, "添加多边形失败: ${polygon.id}", e)
         }
     }
 
@@ -182,7 +182,7 @@ class AMapPresenter(
                 markerOverlays[marker.id] = amapMarker
             }
         } catch (e: Exception) {
-            Log.e(TAG, "添加标注失败: ${marker.id}", e)
+            AppLog.e(TAG, "添加标注失败: ${marker.id}", e)
         }
     }
 
@@ -224,7 +224,7 @@ class AMapPresenter(
         try {
             aMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), zoom))
         } catch (e: Exception) {
-            Log.e(TAG, "移动相机失败", e)
+            AppLog.e(TAG, "移动相机失败", e)
         }
     }
 
@@ -249,7 +249,7 @@ class AMapPresenter(
                 .build()
             aMap.animateCamera(CameraUpdateFactory.newLatLngBounds(rect, padding))
         } catch (e: Exception) {
-            Log.e(TAG, "移动相机到边界失败", e)
+            AppLog.e(TAG, "移动相机到边界失败", e)
         }
     }
 
@@ -314,7 +314,7 @@ class AMapPresenter(
                 tempMarkerOverlays[marker.id] = amapMarker
             }
         } catch (e: Exception) {
-            Log.e(TAG, "添加临时标注失败: ${marker.id}", e)
+            AppLog.e(TAG, "添加临时标注失败: ${marker.id}", e)
         }
     }
 
@@ -340,7 +340,7 @@ class AMapPresenter(
                 markerOverlays[marker.id] = amapMarker
             }
         } catch (e: Exception) {
-            Log.e(TAG, "添加编辑标注失败: ${marker.id}", e)
+            AppLog.e(TAG, "添加编辑标注失败: ${marker.id}", e)
         }
     }
 
@@ -356,7 +356,7 @@ class AMapPresenter(
             val amapCircle = aMap.addCircle(circleOptions)
             circleOverlays[circle.id] = amapCircle
         } catch (e: Exception) {
-            Log.e(TAG, "添加编辑圆形失败: ${circle.id}", e)
+            AppLog.e(TAG, "添加编辑圆形失败: ${circle.id}", e)
         }
     }
 
@@ -372,7 +372,7 @@ class AMapPresenter(
             val amapPolygon = aMap.addPolygon(polygonOptions)
             polygonOverlays[polygon.id] = amapPolygon
         } catch (e: Exception) {
-            Log.e(TAG, "添加编辑多边形失败: ${polygon.id}", e)
+            AppLog.e(TAG, "添加编辑多边形失败: ${polygon.id}", e)
         }
     }
 

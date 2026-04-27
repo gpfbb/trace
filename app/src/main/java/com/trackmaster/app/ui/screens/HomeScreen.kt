@@ -125,13 +125,14 @@ fun HomeScreen(
                     Text(stringResource(R.string.current_status), fontSize = 14.sp, color = primaryColor())
                     Spacer(Modifier.height(8.dp))
                     if (isInsideFence && currentFenceName != null) {
-                        val fenceName = currentFenceName
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Success, modifier = Modifier.size(24.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Column {
-                                Text(stringResource(R.string.currently_inside, fenceName!!), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                Text(stringResource(R.string.monitoring_active), fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f))
+                        currentFenceName?.let { fenceName ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Success, modifier = Modifier.size(24.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(stringResource(R.string.currently_inside, fenceName), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(stringResource(R.string.monitoring_active), fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f))
+                                }
                             }
                         }
                     } else {

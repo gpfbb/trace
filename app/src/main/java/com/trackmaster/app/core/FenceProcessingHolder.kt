@@ -1,6 +1,6 @@
 package com.trackmaster.app.core
 
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.GeoFenceDatabaseHelper
 import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.FenceActiveSession
@@ -38,7 +38,6 @@ class FenceProcessingHolder(
     private val geoFences get() = repositoryHolder.geoFences
     private val geoFenceEvents get() = repositoryHolder.geoFenceEvents
     private val fenceEnterTimes get() = repositoryHolder.fenceEnterTimes
-    private val currentMatchedFences get() = repositoryHolder.currentMatchedFences
     private val stayDurationManager get() = managersHolder.stayDurationManager
     private val persistentStateManager get() = managersHolder.persistentStateManager
 
@@ -73,6 +72,12 @@ class FenceProcessingHolder(
             return false
         }
 
+        // 【P0修复】在 evaluateLocation 时捕获围栏状态快照，避免 TOCTOU 竞态
+        // 原问题：evaluateLocation 和 onLocationUpdate 之间存在时间窗口，
+        // 另一线程可能修改 currentMatchedFenceIds
+        // 修复：在 checkGeoFences 入口处捕获快照，后续操作使用快照值
+        val matchedFenceIdsSnapshot = engine.currentMatchedFenceIds.toList()
+
         // 【P0修复】不要在主线程同步写 currentMatchedFences
         // checkGeoFences 中的 sync 写入和 handleAllMatchedFences 中的 async 写入存在竞态
         // 统一由 handleAllMatchedFences 在 appScope.launch 中更新，onNotifyFenceStateChanged 触发 UI 刷新
@@ -81,9 +86,9 @@ class FenceProcessingHolder(
             val (closedSeg, _) = engine.onLocationUpdate(fix)
             // 【Bug修复】handleFenceExit 需要使用检测到exit时的matched fence状态，
             // 而不是 onLocationUpdate 之后的最新状态（可能导致TOCTOU竞态）
-            val matchedAtDetection = engine.currentMatchedFenceIds.toList()
+            // 使用上面捕获的快照
             if (closedSeg != null) {
-                handleFenceExit(closedSeg.leafGeofenceId, matchedAtDetection, location)
+                handleFenceExit(closedSeg.leafGeofenceId, matchedFenceIdsSnapshot, location)
             }
             handleAllMatchedFences(location, closedSeg?.leafGeofenceId, fix)
         }
@@ -107,7 +112,7 @@ class FenceProcessingHolder(
         val currentTime = Date()
         persistentStateManager.saveLastAppCloseTime(currentTime)
         stayDurationManager.saveAllActiveSessions()
-        Log.d(TAG, "保存应用关闭状态: $currentTime")
+        AppLog.d(TAG, "保存应用关闭状态: $currentTime")
     }
 
     fun getVacuumDuration(): Long? {
@@ -123,7 +128,7 @@ class FenceProcessingHolder(
 
     fun refreshEngineFences() {
         val coreFences = fenceTreeManager.loadFenceTree(geoFences)
-        Log.d(TAG, "刷新Engine: 核心围栏数=${coreFences.size}")
+        AppLog.d(TAG, "刷新Engine: 核心围栏数=${coreFences.size}")
         engineHolder.refresh(coreFences)
         onNotifyFenceStateChanged()
     }
@@ -141,7 +146,7 @@ class FenceProcessingHolder(
 
         // 【P0修复】无论是否在围栏内，都要更新 currentMatchedFences 状态
         // 若不在围栏内（matchedIds为空），需清除旧状态，否则UI显示stale数据
-        currentMatchedFences.clear()
+        repositoryHolder.currentMatchedFences = emptyList()
         if (smallestFenceId == null) {
             // 用户已离开所有围栏，清除状态并通知UI刷新
             onNotifyFenceStateChanged()
@@ -170,10 +175,7 @@ class FenceProcessingHolder(
         persistentStateManager.saveCurrentFenceState(smallestFenceId, fenceName, enterTime)
         engine.setCurrentFenceForRecovery(smallestFenceId, enterTs)
 
-        for (fenceId in matchedIds) {
-            val f = geoFences.find { it.id == fenceId }
-            if (f != null) currentMatchedFences.add(f)
-        }
+        repositoryHolder.currentMatchedFences = matchedIds.mapNotNull { fenceId -> geoFences.find { it.id == fenceId } }
         onNotifyFenceStateChanged()
     }
 
@@ -204,18 +206,14 @@ class FenceProcessingHolder(
                 // 【Bug修复】清除所有围栏的进入时间，防止 stale 状态
                 // fenceEnterTimes 记录各围栏的进入时间，围栏为空时必须全量清空
                 fenceEnterTimes.keys.toList().forEach { fenceEnterTimes.remove(it) }
-                currentMatchedFences.clear()
+                repositoryHolder.currentMatchedFences = emptyList()
                 onNotifyFenceStateChanged()
             }
             return
         }
 
         if (!isRestoringFirstLocation) {
-            currentMatchedFences.clear()
-            for (fenceId in allMatchedFenceIds) {
-                val fence = geoFences.find { it.id == fenceId }
-                if (fence != null) currentMatchedFences.add(fence)
-            }
+            repositoryHolder.currentMatchedFences = allMatchedFenceIds.mapNotNull { fenceId -> geoFences.find { it.id == fenceId } }
             onNotifyFenceStateChanged()
         }
 
@@ -232,7 +230,7 @@ class FenceProcessingHolder(
 
             val fence = geoFences.find { it.id == fenceId }
             val fenceName = fence?.name ?: fenceId
-            Log.d(TAG, "进入围栏: $fenceName")
+            AppLog.d(TAG, "进入围栏: $fenceName")
 
             recordFenceEvent(fenceId, fenceName, GeoFenceAction.ENTER, location)
 
@@ -274,7 +272,7 @@ class FenceProcessingHolder(
         val oldFenceName = geoFences.find { it.id == previousId }?.name ?: previousId ?: ""
         if (oldFenceName.isEmpty() || !stayDurationManager.isFenceActive(previousId)) return
 
-        Log.d(TAG, "强制退出旧围栏(围栏转换检测): $oldFenceName")
+        AppLog.d(TAG, "强制退出旧围栏(围栏转换检测): $oldFenceName")
         stayDurationManager.onFenceExit(previousId, oldFenceName, Date(location.timestamp))
         fenceEnterTimes.remove(previousId)
         val oldParentId = fenceTreeManager.getParent(previousId)
@@ -283,6 +281,9 @@ class FenceProcessingHolder(
         }
     }
 
+    /**
+     * 【问题9修复】拆分为多个小函数，每个处理一种场景
+     */
     private suspend fun handleFirstLocationInternal(location: Location) {
         val currentFenceState = persistentStateManager.getCurrentFenceState()
         val lastAppCloseTime = persistentStateManager.getLastAppCloseTime()
@@ -291,60 +292,89 @@ class FenceProcessingHolder(
             accuracy = location.accuracy, timestamp = location.timestamp,
         )
 
-        Log.d(TAG, "首次定位处理: 位置=(${fix.lat}, ${fix.lng}), 围栏数=${geoFences.size}")
+        AppLog.d(TAG, "首次定位处理: 位置=(${fix.lat}, ${fix.lng}), 围栏数=${geoFences.size}")
 
         val vacuumStartTs = lastAppCloseTime?.time
         val engineResult = engine.initWithLocation(fix, vacuumStartTs)
-
-        // 【关键修复】统一用 stayDurationManager 的 accumulatedDuration 主导恢复逻辑
-        // 避免 currentFenceState.enterTime（原始enter）和 accumulatedDuration 两条线分开走导致时长 x2
         val matchedIds = engine.checkFenceMatch(fix)
 
-        // 【P1修复】改OR为AND：Engine说不要恢复时，即使matchedIds匹配也不恢复
-        // 原OR逻辑：engineResult.shouldRestore=false 但 currentFenceState存在且matched时
-        // 会错误地进入恢复分支，导致不该恢复的围栏被恢复
-        val stillInOriginalFence = (engineResult.shouldRestore && engineResult.fenceId != null && matchedIds.contains(engineResult.fenceId)) &&
-                (currentFenceState == null || matchedIds.contains(currentFenceState.fenceId))
-
-        if (stillInOriginalFence) {
-            // 优先用 stayDurationManager 中已有 session 的 enterTime（保留了 accumulatedDuration）
-            // activeSessions 在 loadActiveSessionsFromDatabase() 时已从 DB 恢复
-            val fenceId = engineResult.fenceId ?: currentFenceState?.fenceId
-            if (fenceId != null && stayDurationManager.activeSessions.containsKey(fenceId)) {
-                // 【P0修复】containsKey + get 不是原子操作，改为安全get
-                // 若key已被其他线程移除，get返回null → 走else创建新session（不会NPE）
-                val session = stayDurationManager.activeSessions[fenceId]
-                if (session != null) {
-                    Log.d(TAG, "恢复围栏计时（使用已有session）: ${session.fenceName}, 进入时间=${session.enterTime}, 累积时长=${session.accumulatedDuration}秒")
-                    engine.setCurrentFenceForRecovery(fenceId, session.enterTime.time)
-                } else {
-                    // session在检查后被移除，创建新记录
-                    startFenceTimingFromRestore(engineResult.fenceId ?: currentFenceState?.fenceId, fix.timestamp, location, matchedIds)
-                }
-            } else {
-                // 没有已有session，走 startFenceTimingFromRestore 创建新session
-                Log.d(TAG, "Engine检测到未关闭Segment，但没有已有session，创建新记录")
-                startFenceTimingFromRestore(engineResult.fenceId ?: currentFenceState?.fenceId, fix.timestamp, location, matchedIds)
-            }
+        // 场景1：用户仍在原围栏内，恢复计时
+        if (shouldRestoreOriginalFence(engineResult, currentFenceState, matchedIds)) {
+            restoreFenceTiming(engineResult.fenceId ?: currentFenceState?.fenceId, fix.timestamp, location, matchedIds)
             return
         }
 
-        // 用户不在原围栏内 → 关闭旧围栏，开始新计时
+        // 场景2：用户已离开原围栏，关闭旧计时
         if (currentFenceState != null) {
-            val exitTime = lastAppCloseTime ?: Date(location.timestamp)
-            stayDurationManager.onFenceExit(currentFenceState.fenceId, currentFenceState.fenceName, exitTime)
-            fenceEnterTimes.remove(currentFenceState.fenceId)
-            persistentStateManager.saveLastExitState(currentFenceState.fenceId, currentFenceState.fenceName, exitTime)
-            persistentStateManager.clearCurrentFenceState()
-            Log.d(TAG, "已关闭旧围栏 ${currentFenceState.fenceName} 的计时")
+            closeOldFenceTiming(currentFenceState, lastAppCloseTime, location)
         }
 
+        // 场景3：用户在新围栏内，开始新计时
         if (matchedIds.isNotEmpty()) {
-            Log.d(TAG, "用户在围栏 ${matchedIds.first()} 内，开始新计时")
+            AppLog.d(TAG, "用户在围栏 ${matchedIds.first()} 内，开始新计时")
             startFenceTimingFromRestore(matchedIds.first(), fix.timestamp, location, matchedIds)
         } else {
             engine.setCurrentFenceForRecovery(null, fix.timestamp)
         }
+    }
+
+    /**
+     * 判断是否应该恢复原围栏计时
+     */
+    private fun shouldRestoreOriginalFence(
+        engineResult: com.trackmaster.app.core.Engine.RestoreResult,
+        currentFenceState: com.trackmaster.app.PersistentStateManager.CurrentFenceState?,
+        matchedIds: List<String>
+    ): Boolean {
+        // 【P1修复】改OR为AND：Engine说不要恢复时，即使matchedIds匹配也不恢复
+        val stillInOriginalFence = (engineResult.shouldRestore && engineResult.fenceId != null && matchedIds.contains(engineResult.fenceId)) &&
+                (currentFenceState == null || matchedIds.contains(currentFenceState.fenceId))
+        return stillInOriginalFence
+    }
+
+    /**
+     * 恢复原围栏计时
+     */
+    private suspend fun restoreFenceTiming(
+        fenceId: String?,
+        enterTs: Long,
+        location: Location,
+        matchedIds: List<String>
+    ) {
+        if (fenceId == null) {
+            engine.setCurrentFenceForRecovery(null, location.timestamp)
+            return
+        }
+
+        // 优先用 stayDurationManager 中已有 session 的 enterTime（保留了 accumulatedDuration）
+        if (stayDurationManager.activeSessions.containsKey(fenceId)) {
+            val session = stayDurationManager.activeSessions[fenceId]
+            if (session != null) {
+                AppLog.d(TAG, "恢复围栏计时（使用已有session）: ${session.fenceName}, 进入时间=${session.enterTime}, 累积时长=${session.accumulatedDuration}秒")
+                engine.setCurrentFenceForRecovery(fenceId, session.enterTime.time)
+                return
+            }
+        }
+
+        // 没有已有session，创建新session
+        AppLog.d(TAG, "Engine检测到未关闭Segment，但没有已有session，创建新记录")
+        startFenceTimingFromRestore(fenceId, enterTs, location, matchedIds)
+    }
+
+    /**
+     * 关闭旧围栏计时
+     */
+    private fun closeOldFenceTiming(
+        currentFenceState: com.trackmaster.app.PersistentStateManager.CurrentFenceState,
+        lastAppCloseTime: Date?,
+        location: Location
+    ) {
+        val exitTime = lastAppCloseTime ?: Date(location.timestamp)
+        stayDurationManager.onFenceExit(currentFenceState.fenceId, currentFenceState.fenceName, exitTime)
+        fenceEnterTimes.remove(currentFenceState.fenceId)
+        persistentStateManager.saveLastExitState(currentFenceState.fenceId, currentFenceState.fenceName, exitTime)
+        persistentStateManager.clearCurrentFenceState()
+        AppLog.d(TAG, "已关闭旧围栏 ${currentFenceState.fenceName} 的计时")
     }
 
     private fun updateApplicationStateForFence(fenceId: String, enterTs: Long, location: Location) {
@@ -352,7 +382,7 @@ class FenceProcessingHolder(
         val fenceName = fence?.name ?: fenceId
         val enterTime = Date(enterTs)
 
-        Log.d(TAG, "更新围栏状态: $fenceName, 进入时间=$enterTime")
+        AppLog.d(TAG, "更新围栏状态: $fenceName, 进入时间=$enterTime")
         fenceEnterTimes[fenceId] = enterTime
 
         // 【P0修复】使用 putIfAbsent 原子操作避免 check-then-act 竞态
@@ -365,9 +395,7 @@ class FenceProcessingHolder(
             )
         )
         persistentStateManager.saveCurrentFenceState(fenceId, fenceName, enterTime)
-        currentMatchedFences.clear()
-        val fenceObj = geoFences.find { it.id == fenceId }
-        if (fenceObj != null) currentMatchedFences.add(fenceObj)
+        repositoryHolder.currentMatchedFences = geoFences.filter { it.id == fenceId }
         onNotifyFenceStateChanged()
     }
 
@@ -380,7 +408,7 @@ class FenceProcessingHolder(
         val fenceName = fence?.name ?: fenceId
         val enterTime = Date(enterTs)
 
-        Log.d(TAG, "开始围栏计时: $fenceName, 进入时间=$enterTime")
+        AppLog.d(TAG, "开始围栏计时: $fenceName, 进入时间=$enterTime")
         if (stayDurationManager.isFenceActive(fenceId)) {
             stayDurationManager.onFenceExit(fenceId, fenceName, enterTime)
         }
@@ -388,11 +416,7 @@ class FenceProcessingHolder(
         stayDurationManager.onFenceEnter(fenceId, fenceName, enterTime)
         fenceEnterTimes[fenceId] = enterTime
         persistentStateManager.saveCurrentFenceState(fenceId, fenceName, enterTime)
-        currentMatchedFences.clear()
-        for (id in matchedFenceIds) {
-            val f = geoFences.find { it.id == id }
-            if (f != null) currentMatchedFences.add(f)
-        }
+        repositoryHolder.currentMatchedFences = matchedFenceIds.mapNotNull { id -> geoFences.find { it.id == id } }
         engine.setCurrentFenceForRecovery(fenceId, enterTs)
         onNotifyFenceStateChanged()
     }
@@ -405,7 +429,7 @@ class FenceProcessingHolder(
         )
         repositoryHolder.addEvent(event)  // 【Bug修复 H12】通过带cap的addEvent方法添加，自动清理超限事件
         dbHelper.insertEvent(event)
-        Log.d(TAG, "记录围栏事件: ${action.name} - $fenceName")
+        AppLog.d(TAG, "记录围栏事件: ${action.name} - $fenceName")
     }
 }
 

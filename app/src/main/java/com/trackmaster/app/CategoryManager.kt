@@ -1,7 +1,7 @@
 package com.trackmaster.app
 
 import android.content.Context
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.model.Category
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +15,7 @@ class CategoryManager(private val context: Context) {
         try {
             dbHelper.getAllCategories()
         } catch (e: Exception) {
-            Log.e(TAG, "获取分类列表失败", e)
+            AppLog.e(TAG, "获取分类列表失败", e)
             emptyList()
         }
     }
@@ -50,7 +50,7 @@ class CategoryManager(private val context: Context) {
                 Result.failure(Exception("创建分类失败"))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "创建分类失败", e)
+            AppLog.e(TAG, "创建分类失败", e)
             Result.failure(e)
         }
     }
@@ -73,7 +73,7 @@ class CategoryManager(private val context: Context) {
                 Result.failure(Exception("更新分类失败"))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "更新分类失败", e)
+            AppLog.e(TAG, "更新分类失败", e)
             Result.failure(e)
         }
     }
@@ -93,7 +93,7 @@ class CategoryManager(private val context: Context) {
                 Result.failure(Exception("删除分类失败"))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "删除分类失败", e)
+            AppLog.e(TAG, "删除分类失败", e)
             Result.failure(e)
         }
     }
@@ -107,7 +107,7 @@ class CategoryManager(private val context: Context) {
                 Result.failure(Exception("移动围栏失败"))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "移动围栏失败", e)
+            AppLog.e(TAG, "移动围栏失败", e)
             Result.failure(e)
         }
     }
@@ -116,7 +116,7 @@ class CategoryManager(private val context: Context) {
         try {
             dbHelper.getFencesByCategory(categoryId)
         } catch (e: Exception) {
-            Log.e(TAG, "获取分类下围栏失败", e)
+            AppLog.e(TAG, "获取分类下围栏失败", e)
             emptyList()
         }
     }
@@ -142,7 +142,7 @@ class CategoryManager(private val context: Context) {
             
             result
         } catch (e: Exception) {
-            Log.e(TAG, "获取分组围栏失败", e)
+            AppLog.e(TAG, "获取分组围栏失败", e)
             emptyMap()
         }
     }
@@ -170,7 +170,7 @@ class CategoryManager(private val context: Context) {
             
             result
         } catch (e: Exception) {
-            Log.e(TAG, "获取分类统计失败", e)
+            AppLog.e(TAG, "获取分类统计失败", e)
             emptyMap()
         }
     }

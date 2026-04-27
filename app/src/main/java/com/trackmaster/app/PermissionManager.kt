@@ -8,7 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import androidx.core.content.ContextCompat
 
 class PermissionManager(private val context: Context) {
@@ -71,7 +71,7 @@ class PermissionManager(private val context: Context) {
                 }
                 intent
             } catch (e: Exception) {
-                Log.e(TAG, "无法创建电池优化设置Intent", e)
+                AppLog.e(TAG, "无法创建电池优化设置Intent", e)
                 null
             }
         } else {

@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location as AndroidLocation
 import android.os.Looper
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback as GmsLocationCallback
 import com.google.android.gms.location.LocationRequest as GmsLocationRequest
@@ -39,13 +39,13 @@ class GoogleLocationProvider(
     private val gmsCallback = object : GmsLocationCallback() {
         override fun onLocationResult(result: GmsLocationResult) {
             val gmsLoc = result.lastLocation ?: run {
-                Log.w(TAG, "Google location result is null (failure)")
+                AppLog.w(TAG, "Google location result is null (failure)")
                 return
             }
             val location = convertLocation(gmsLoc)
             _lastLocation = location
             appCallback?.onLocationChanged(location)
-            Log.d(TAG, "Google location: (${location.latitude},${location.longitude}) acc=${location.accuracy}m type=${location.locationType}")
+            AppLog.d(TAG, "Google location: (${location.latitude},${location.longitude}) acc=${location.accuracy}m type=${location.locationType}")
         }
     }
 
@@ -60,9 +60,9 @@ class GoogleLocationProvider(
             val request = createGmsRequest(currentMode)
             fusedClient.requestLocationUpdates(request, gmsCallback, Looper.getMainLooper())
             isRequesting = true
-            Log.d(TAG, "GoogleLocationProvider started")
+            AppLog.d(TAG, "GoogleLocationProvider started")
         } catch (e: Exception) {
-            Log.e(TAG, "启动定位失败", e)
+            AppLog.e(TAG, "启动定位失败", e)
         }
     }
 
@@ -71,9 +71,9 @@ class GoogleLocationProvider(
         try {
             fusedClient.removeLocationUpdates(gmsCallback)
             isRequesting = false
-            Log.d(TAG, "GoogleLocationProvider stopped")
+            AppLog.d(TAG, "GoogleLocationProvider stopped")
         } catch (e: Exception) {
-            Log.e(TAG, "停止定位失败", e)
+            AppLog.e(TAG, "停止定位失败", e)
         }
     }
 
@@ -91,7 +91,7 @@ class GoogleLocationProvider(
         if (wasRunning) stop()
         currentMode = mode
         if (wasRunning) start()
-        Log.d(TAG, "Location mode changed to $mode")
+        AppLog.d(TAG, "Location mode changed to $mode")
     }
 
     override fun setInterval(intervalMs: Long) {
@@ -101,7 +101,7 @@ class GoogleLocationProvider(
             stop()
             start()
         }
-        Log.d(TAG, "Location interval changed to ${intervalMs}ms")
+        AppLog.d(TAG, "Location interval changed to ${intervalMs}ms")
     }
 
     override fun getProviderName(): String = "Google"

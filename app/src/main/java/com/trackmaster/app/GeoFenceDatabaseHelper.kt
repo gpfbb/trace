@@ -4,7 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFencePoint
 import com.trackmaster.app.core.GeoFenceType
@@ -17,6 +17,7 @@ import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
@@ -82,27 +83,29 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         private const val KEY_EXPORT_TIMESTAMP = "export_timestamp"
     }
 
-    // 内存缓存：使用 ConcurrentHashMap 保证线程安全
+    // 内存缓存：使用 ConcurrentHashMap + CopyOnWriteArrayList 保证线程安全
     private val fenceCache = ConcurrentHashMap<String, GeoFence>()
-    private val allFencesCache = mutableListOf<GeoFence>()
-    private var allFencesCacheValid = false
+    private val allFencesCache = CopyOnWriteArrayList<GeoFence>()
+    private val allFencesCacheValid = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private val categoryCache = ConcurrentHashMap<String, Category>()
-    private val allCategoriesCache = mutableListOf<Category>()
-    private var allCategoriesCacheValid = false
+    private val allCategoriesCache = CopyOnWriteArrayList<Category>()
+    private val allCategoriesCacheValid = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /** 使围栏缓存失效 */
     private fun invalidateFenceCache() {
         fenceCache.clear()
-        allFencesCacheValid = false
-        Log.d("GeoFenceDB", "围栏缓存已失效")
+        allFencesCache.clear()
+        allFencesCacheValid.set(false)
+        AppLog.d("GeoFenceDB", "围栏缓存已失效")
     }
 
     /** 使分类缓存失效 */
     private fun invalidateCategoryCache() {
         categoryCache.clear()
-        allCategoriesCacheValid = false
-        Log.d("GeoFenceDB", "分类缓存已失效")
+        allCategoriesCache.clear()
+        allCategoriesCacheValid.set(false)
+        AppLog.d("GeoFenceDB", "分类缓存已失效")
     }
 
     override fun onOpen(db: SQLiteDatabase) {
@@ -208,7 +211,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             try {
                 db.execSQL("ALTER TABLE $TABLE_FENCES ADD COLUMN $KEY_CATEGORY_ID TEXT DEFAULT 'unassigned'")
             } catch (e: Exception) {
-                Log.e("GeoFenceDB", "添加 category_id 列失败", e)
+                AppLog.e("GeoFenceDB", "添加 category_id 列失败", e)
             }
 
             val createCategoriesTable = """
@@ -226,7 +229,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_fences_category ON $TABLE_FENCES($KEY_CATEGORY_ID)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_categories_sort ON $TABLE_CATEGORIES($KEY_CATEGORY_SORT_ORDER)")
             } catch (e: Exception) {
-                Log.e("GeoFenceDB", "创建分类表失败", e)
+                AppLog.e("GeoFenceDB", "创建分类表失败", e)
             }
         }
 
@@ -246,18 +249,18 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             try {
                 db.execSQL(createDailyStaysTable)
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_daily_stays_date ON $TABLE_DAILY_STAYS($KEY_DAILY_DATE)")
-                Log.d("GeoFenceDB", "创建按日停留记录表成功")
+                AppLog.d("GeoFenceDB", "创建按日停留记录表成功")
             } catch (e: Exception) {
-                Log.e("GeoFenceDB", "创建按日停留记录表失败", e)
+                AppLog.e("GeoFenceDB", "创建按日停留记录表失败", e)
             }
         }
 
         if (oldVersion < 4) {
             try {
                 db.execSQL("ALTER TABLE $TABLE_FENCES ADD COLUMN $KEY_COLOR TEXT DEFAULT '#FF0000'")
-                Log.d("GeoFenceDB", "添加围栏颜色列成功")
+                AppLog.d("GeoFenceDB", "添加围栏颜色列成功")
             } catch (e: Exception) {
-                Log.e("GeoFenceDB", "添加围栏颜色列失败", e)
+                AppLog.e("GeoFenceDB", "添加围栏颜色列失败", e)
             }
         }
 
@@ -278,12 +281,12 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 }
                 if (!columnExists) {
                     db.execSQL("ALTER TABLE $TABLE_FENCES ADD COLUMN $KEY_ALPHA REAL DEFAULT 0.3")
-                    Log.d("GeoFenceDB", "添加围栏透明度列成功")
+                    AppLog.d("GeoFenceDB", "添加围栏透明度列成功")
                 } else {
-                    Log.d("GeoFenceDB", "透明度列已存在，跳过添加")
+                    AppLog.d("GeoFenceDB", "透明度列已存在，跳过添加")
                 }
             } catch (e: Exception) {
-                Log.e("GeoFenceDB", "添加围栏透明度列失败", e)
+                AppLog.e("GeoFenceDB", "添加围栏透明度列失败", e)
             }
         }
 
@@ -304,10 +307,10 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 }
                 if (!columnExists) {
                     db.execSQL("ALTER TABLE $TABLE_FENCES ADD COLUMN $KEY_ALPHA REAL DEFAULT 0.3")
-                    Log.d("GeoFenceDB", "v6迁移：添加围栏透明度列成功")
+                    AppLog.d("GeoFenceDB", "v6迁移：添加围栏透明度列成功")
                 }
             } catch (e: Exception) {
-                Log.e("GeoFenceDB", "v6迁移：添加围栏透明度列失败", e)
+                AppLog.e("GeoFenceDB", "v6迁移：添加围栏透明度列失败", e)
             }
         }
 
@@ -324,14 +327,16 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 """.trimIndent()
                 db.execSQL(createExportMetaTable)
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_export_timestamp ON $TABLE_EXPORT_META($KEY_EXPORT_TIMESTAMP)")
-                Log.d("GeoFenceDB", "v7迁移：创建导出元数据表成功")
+                AppLog.d("GeoFenceDB", "v7迁移：创建导出元数据表成功")
             } catch (e: Exception) {
-                Log.e("GeoFenceDB", "v7迁移：创建导出元数据表失败", e)
+                AppLog.e("GeoFenceDB", "v7迁移：创建导出元数据表失败", e)
             }
         }
     }
 
     fun insertFence(fence: GeoFence): Long {
+        // 【问题7修复】写前失效缓存，避免并发读脏数据
+        invalidateFenceCache()
         val db = writableDatabase
         val values = ContentValues()
         values.put(KEY_ID, fence.id)
@@ -348,23 +353,22 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_ALPHA, fence.alpha)
 
         val result = db.insert(TABLE_FENCES, null, values)
-        if (result != -1L) invalidateFenceCache()
         return result
     }
 
     fun getAllFences(): List<GeoFence> {
-        if (allFencesCacheValid) {
-            Log.d("GeoFenceDB", "getAllFences 返回缓存: ${allFencesCache.size} 个")
-            return allFencesCache.toList()
+        if (allFencesCacheValid.get()) {
+            AppLog.d("GeoFenceDB", "getAllFences 返回缓存: ${allFencesCache.size} 个")
+            return ArrayList(allFencesCache)
         }
 
-        Log.d("GeoFenceDB", "getAllFences 从数据库查询")
+        AppLog.d("GeoFenceDB", "getAllFences 从数据库查询")
         val fences = mutableListOf<GeoFence>()
         val db = readableDatabase
         val cursor = db.query(TABLE_FENCES, null, null, null, null, null, "$KEY_CREATED_AT DESC")
 
         try {
-            Log.d("GeoFenceDB", "Cursor行数: ${cursor.count}")
+            AppLog.d("GeoFenceDB", "Cursor行数: ${cursor.count}")
             if (cursor.moveToFirst()) {
                 do {
                     try {
@@ -419,9 +423,9 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                         )
                         fences.add(fence)
                         fenceCache[id] = fence
-                        Log.d("GeoFenceDB", "读取围栏: id=$id, name=$name, type=$type, center=$center, radius=$radius, pointsCount=${points?.size}")
+                        AppLog.d("GeoFenceDB", "读取围栏: id=$id, name=$name, type=$type, center=$center, radius=$radius, pointsCount=${points?.size}")
                     } catch (e: Exception) {
-                        Log.e("GeoFenceDB", "读取单个围栏出错: ${e.message}")
+                        AppLog.e("GeoFenceDB", "读取单个围栏出错: ${e.message}")
                     }
                 } while (cursor.moveToNext())
             }
@@ -431,8 +435,8 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
         allFencesCache.clear()
         allFencesCache.addAll(fences)
-        allFencesCacheValid = true
-        Log.d("GeoFenceDB", "getAllFences 返回 ${fences.size} 个围栏")
+        allFencesCacheValid.set(true)
+        AppLog.d("GeoFenceDB", "getAllFences 返回 ${fences.size} 个围栏")
         return fences
     }
 
@@ -491,6 +495,8 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
     }
 
     fun insertCategory(category: Category): Long {
+        // 【问题7修复】写前失效缓存，避免并发读脏数据
+        invalidateCategoryCache()
         val db = writableDatabase
         val values = ContentValues()
         values.put(KEY_CATEGORY_TABLE_ID, category.id)
@@ -500,13 +506,12 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
         values.put(KEY_CATEGORY_CREATED_AT, category.createdAt.time)
 
         val result = db.insert(TABLE_CATEGORIES, null, values)
-        if (result != -1L) invalidateCategoryCache()
         return result
     }
 
     fun getAllCategories(): List<Category> {
-        if (allCategoriesCacheValid) {
-            return allCategoriesCache.toList()
+        if (allCategoriesCacheValid.get()) {
+            return ArrayList(allCategoriesCache)
         }
 
         val categories = mutableListOf<Category>()
@@ -551,11 +556,13 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
 
         allCategoriesCache.clear()
         allCategoriesCache.addAll(categories)
-        allCategoriesCacheValid = true
+        allCategoriesCacheValid.set(true)
         return categories
     }
 
     fun updateCategory(category: Category): Int {
+        // 【问题7修复】写前失效缓存，避免并发读脏数据
+        invalidateCategoryCache()
         val db = writableDatabase
         val values = ContentValues()
         values.put(KEY_CATEGORY_NAME, category.name)
@@ -568,23 +575,26 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_TABLE_ID = ?",
             arrayOf(category.id)
         )
-        invalidateCategoryCache()
         return result
     }
 
     fun deleteCategory(categoryId: String): Int {
+        // 【问题7修复】写前失效缓存，避免并发读脏数据
+        invalidateCategoryCache()
+        invalidateFenceCache()
         val db = writableDatabase
         val result = db.delete(
             TABLE_CATEGORIES,
             "$KEY_CATEGORY_TABLE_ID = ?",
             arrayOf(categoryId)
         )
-        invalidateCategoryCache()
-        invalidateFenceCache()
         return result
     }
 
     fun moveFencesToCategory(fromCategoryId: String, toCategoryId: String): Int {
+        // 【问题7修复】写前失效缓存，避免并发读脏数据
+        invalidateFenceCache()
+        invalidateCategoryCache()
         val db = writableDatabase
         val values = ContentValues()
         values.put(KEY_CATEGORY_ID, toCategoryId)
@@ -595,13 +605,13 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_CATEGORY_ID = ?",
             arrayOf(fromCategoryId)
         )
-        // 【P0修复】移动多个围栏分类后必须同时失效分类缓存，否则getAllCategories()返回旧数据
-        invalidateFenceCache()
-        invalidateCategoryCache()
         return result
     }
 
     fun updateFenceCategory(fenceId: String, categoryId: String): Int {
+        // 【问题7修复】写前失效缓存，避免并发读脏数据
+        invalidateFenceCache()
+        invalidateCategoryCache()
         val db = writableDatabase
         val values = ContentValues()
         values.put(KEY_CATEGORY_ID, categoryId)
@@ -612,9 +622,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_ID = ?",
             arrayOf(fenceId)
         )
-        // 【P0修复】修改围栏分类后必须同时失效分类缓存，否则getAllCategories()返回旧数据
-        invalidateFenceCache()
-        invalidateCategoryCache()
         return result
     }
 
@@ -624,6 +631,8 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
      * @return 更新的行数
      */
     fun updateFence(fence: GeoFence): Int {
+        // 【问题7修复】写前失效缓存，避免并发读脏数据
+        invalidateFenceCache()
         val db = writableDatabase
         val values = ContentValues()
         values.put(KEY_NAME, fence.name)
@@ -643,7 +652,6 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_ID = ?",
             arrayOf(fence.id)
         )
-        invalidateFenceCache()
         return result
     }
 
@@ -760,9 +768,10 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
     }
 
     fun deleteFence(fenceId: String): Int {
+        // 【问题7修复】写前失效缓存，避免并发读脏数据
+        invalidateFenceCache()
         val db = writableDatabase
         val result = db.delete(TABLE_FENCES, "$KEY_ID = ?", arrayOf(fenceId))
-        invalidateFenceCache()
         return result
     }
 
@@ -780,7 +789,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             return result
         } catch (e: Exception) {
             db.endTransaction()
-            Log.e("GeoFenceDB", "删除所有围栏失败", e)
+            AppLog.e("GeoFenceDB", "删除所有围栏失败", e)
             invalidateFenceCache()
             return 0
         }
@@ -919,7 +928,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             "$KEY_FENCE_ID = ? AND $KEY_EXIT_TIME IS NULL",
             arrayOf(fenceId)
         )
-        Log.d("GeoFenceDB", "更新开放停留累积时长: fenceId=$fenceId, duration=$accumulatedDuration, updatedRows=$result")
+        AppLog.d("GeoFenceDB", "更新开放停留累积时长: fenceId=$fenceId, duration=$accumulatedDuration, updatedRows=$result")
         return result
     }
 
@@ -943,7 +952,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 arrayOf(fenceId)
             )
             db.setTransactionSuccessful()
-            Log.d("GeoFenceDB", "关闭开放停留记录: fenceId=$fenceId, exitTime=$exitTime, duration=$durationSeconds, updatedRows=$result")
+            AppLog.d("GeoFenceDB", "关闭开放停留记录: fenceId=$fenceId, exitTime=$exitTime, duration=$durationSeconds, updatedRows=$result")
             result
         } finally {
             db.endTransaction()
@@ -1145,10 +1154,10 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             val file = java.io.File(context.getExternalFilesDir(null), fileName)
             file.writeText(csvContent.toString())
 
-            Log.d("GeoFenceDB", "CSV导出成功: ${file.absolutePath}")
+            AppLog.d("GeoFenceDB", "CSV导出成功: ${file.absolutePath}")
             return file.absolutePath
         } catch (e: Exception) {
-            Log.e("GeoFenceDB", "CSV导出失败", e)
+            AppLog.e("GeoFenceDB", "CSV导出失败", e)
             return null
         }
     }
@@ -1244,7 +1253,7 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             """, arrayOf(record.date, record.fenceId, record.fenceName, record.totalDurationSeconds, record.lastUpdated.time))
 
             db.setTransactionSuccessful()
-            Log.d("GeoFenceDB", "保存日统计: ${record.fenceName}, 日期=${record.date}, 累加时长=${record.totalDurationSeconds}秒, 总计=${newDuration}秒")
+            AppLog.d("GeoFenceDB", "保存日统计: ${record.fenceName}, 日期=${record.date}, 累加时长=${record.totalDurationSeconds}秒, 总计=${newDuration}秒")
         } finally {
             db.endTransaction()
         }
@@ -1540,10 +1549,10 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                 put("fences", jsonArray)
             }
 
-            Log.d("GeoFenceDB", "围栏JSON生成成功，共${fences.size}个围栏")
+            AppLog.d("GeoFenceDB", "围栏JSON生成成功，共${fences.size}个围栏")
             return wrapper.toString(2)
         } catch (e: Exception) {
-            Log.e("GeoFenceDB", "围栏JSON生成失败", e)
+            AppLog.e("GeoFenceDB", "围栏JSON生成失败", e)
             return null
         }
     }
@@ -1554,10 +1563,10 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             val fileName = "TrackMaster_Fences_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.json"
             val file = java.io.File(context.getExternalFilesDir(null), fileName)
             file.writeText(json)
-            Log.d("GeoFenceDB", "围栏导出成功: ${file.absolutePath}")
+            AppLog.d("GeoFenceDB", "围栏导出成功: ${file.absolutePath}")
             return file.absolutePath
         } catch (e: Exception) {
-            Log.e("GeoFenceDB", "围栏导出失败", e)
+            AppLog.e("GeoFenceDB", "围栏导出失败", e)
             return null
         }
     }
@@ -1576,13 +1585,13 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
             // 验证文件格式
             val version = wrapper.optInt("version", 0)
             if (version == 0) {
-                Log.e("GeoFenceDB", "无效的围栏文件格式：缺少版本号")
+                AppLog.e("GeoFenceDB", "无效的围栏文件格式：缺少版本号")
                 return -1
             }
 
             val fencesArray = wrapper.getJSONArray("fences")
             val totalCount = fencesArray.length()
-            Log.d("GeoFenceDB", "开始导入围栏，共${totalCount}个")
+            AppLog.d("GeoFenceDB", "开始导入围栏，共${totalCount}个")
             var importedCount = 0
 
             for (i in 0 until totalCount) {
@@ -1639,19 +1648,19 @@ class GeoFenceDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATAB
                     val insertResult = insertFence(fence)
                     if (insertResult > 0) {
                         importedCount++
-                        Log.d("GeoFenceDB", "导入围栏成功: ${fence.name}, 类型: ${fence.type}, 中心: $center, 半径: $radius")
+                        AppLog.d("GeoFenceDB", "导入围栏成功: ${fence.name}, 类型: ${fence.type}, 中心: $center, 半径: $radius")
                     } else {
-                        Log.e("GeoFenceDB", "导入围栏失败: ${fence.name}, insert返回: $insertResult")
+                        AppLog.e("GeoFenceDB", "导入围栏失败: ${fence.name}, insert返回: $insertResult")
                     }
                 } catch (e: Exception) {
-                    Log.e("GeoFenceDB", "导入第${i+1}个围栏失败: ${e.message}")
+                    AppLog.e("GeoFenceDB", "导入第${i+1}个围栏失败: ${e.message}")
                 }
             }
 
-            Log.d("GeoFenceDB", "围栏导入完成，成功${importedCount}/$totalCount 个")
+            AppLog.d("GeoFenceDB", "围栏导入完成，成功${importedCount}/$totalCount 个")
             return importedCount
         } catch (e: Exception) {
-            Log.e("GeoFenceDB", "围栏导入失败", e)
+            AppLog.e("GeoFenceDB", "围栏导入失败", e)
             return -1
         }
     }

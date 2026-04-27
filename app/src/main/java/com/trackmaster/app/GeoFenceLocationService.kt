@@ -17,7 +17,7 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import androidx.core.app.NotificationCompat
 import com.amap.api.location.AMapLocation
 import com.amap.api.location.AMapLocationClient
@@ -53,6 +53,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         private const val CHANNEL_NAME = "地理围栏定位服务"
         private const val FIRST_LOCATION_TIMEOUT = 20000L
         private const val STOP_THRESHOLD = 5
+        private const val THROTTLE_THRESHOLD = 2  // 围栏内外统一：2次throttled即降频
         private const val CHECK_INTERVAL_WHEN_STOPPED = 8
 
         const val ACTION_WAKEUP = "com.trackmaster.app.ACTION_LOCATION_WAKEUP"
@@ -62,6 +63,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         // AMap 定位类型常量（与 AMapLocation.locationType 对应）
         private const val AMAP_TYPE_GPS = 1
         private const val AMAP_TYPE_NETWORK = 2
+
+        // 【P0修复】服务状态持久化键
+        private const val PREFS_SERVICE_STATE = "GeoFenceLocationServiceState"
+        private const val KEY_IS_LOCATION_CLIENT_STOPPED = "is_location_client_stopped"
+        private const val KEY_LAST_RESUME_CHECK_TIME = "last_resume_check_time"
+        private const val KEY_CONSECUTIVE_NOT_PROCESS_COUNT = "consecutive_not_process_count"
     }
 
     private val binder = LocalBinder()
@@ -76,7 +83,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "map_provider") {
-            Log.d(TAG, "检测到 mapProvider 变化，重新初始化定位客户端")
+            AppLog.d(TAG, "检测到 mapProvider 变化，重新初始化定位客户端")
             reinitLocationClient()
         }
     }
@@ -91,6 +98,24 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
     private var appCallback: LocationCallback? = null
     /** 临时检查是否已完成单次定位（避免连续启动） */
     private var temporaryCheckCompleted = false
+
+    // 【P0修复】服务状态持久化
+    private lateinit var serviceStatePrefs: SharedPreferences
+
+    private fun saveServiceState() {
+        serviceStatePrefs.edit()
+            .putBoolean(KEY_IS_LOCATION_CLIENT_STOPPED, isLocationClientStopped)
+            .putLong(KEY_LAST_RESUME_CHECK_TIME, lastResumeCheckTime)
+            .putInt(KEY_CONSECUTIVE_NOT_PROCESS_COUNT, consecutiveNotProcessCount)
+            .apply()
+    }
+
+    private fun restoreServiceState() {
+        isLocationClientStopped = serviceStatePrefs.getBoolean(KEY_IS_LOCATION_CLIENT_STOPPED, false)
+        lastResumeCheckTime = serviceStatePrefs.getLong(KEY_LAST_RESUME_CHECK_TIME, 0L)
+        consecutiveNotProcessCount = serviceStatePrefs.getInt(KEY_CONSECUTIVE_NOT_PROCESS_COUNT, 0)
+        AppLog.d(TAG, "恢复服务状态: isLocationClientStopped=$isLocationClientStopped, lastResumeCheckTime=$lastResumeCheckTime, consecutiveNotProcessCount=$consecutiveNotProcessCount")
+    }
 
     // ============================================================
     // 加速度传感器（用于静止检测）
@@ -117,7 +142,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             if (isLocationClientStopped) {
                 val now = System.currentTimeMillis()
                 if (now - lastResumeCheckTime >= CHECK_INTERVAL_WHEN_STOPPED * 60 * 1000L) {
-                    Log.d(TAG, "定时检查：尝试恢复定位")
+                    AppLog.d(TAG, "定时检查：尝试恢复定位")
                     lastResumeCheckTime = now
                     temporaryResumeForCheck()
                 }
@@ -139,8 +164,11 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "定位服务创建")
+        AppLog.d(TAG, "定位服务创建")
         createNotificationChannel()
+        // 【P0修复】初始化服务状态持久化并恢复状态
+        serviceStatePrefs = getSharedPreferences(PREFS_SERVICE_STATE, Context.MODE_PRIVATE)
+        restoreServiceState()
         initLocationClient()
         // 监听 MapProvider 切换
         (application as? TrackMasterApplication)?.appPreferences?.sharedPreferences
@@ -149,12 +177,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { accel ->
             sensorManager?.registerListener(accelListener, accel, SensorManager.SENSOR_DELAY_NORMAL)
-            Log.d(TAG, "加速度传感器已注册")
+            AppLog.d(TAG, "加速度传感器已注册")
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "定位服务启动")
+        AppLog.d(TAG, "定位服务启动")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         } else {
@@ -171,7 +199,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "定位服务销毁")
+        AppLog.d(TAG, "定位服务销毁")
         powerSaveHandler.removeCallbacks(powerSaveCheckRunnable)
         stopLocation()
         // 移除定位回调，防止泄漏
@@ -185,7 +213,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             ?.unregisterOnSharedPreferenceChangeListener(prefsListener)
         // 注销加速度传感器
         sensorManager?.unregisterListener(accelListener)
-        Log.d(TAG, "加速度传感器已注销")
+        AppLog.d(TAG, "加速度传感器已注销")
     }
 
     private fun createNotificationChannel() {
@@ -268,9 +296,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 if (cb != null && provider != null) {
                     provider.setLocationCallback(cb)
                 }
-                Log.d(TAG, "初始化 Google Fused Location Provider")
+                AppLog.d(TAG, "初始化 Google Fused Location Provider")
             } catch (e: Exception) {
-                Log.e(TAG, "初始化 Google 定位客户端失败，降级到 AMap", e)
+                AppLog.e(TAG, "初始化 Google 定位客户端失败，降级到 AMap", e)
                 initAmapClient()
             }
         } else {
@@ -280,7 +308,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
     }
 
     private fun reinitLocationClient() {
-        Log.d(TAG, "重新初始化定位客户端")
+        AppLog.d(TAG, "重新初始化定位客户端")
         // 停止旧 provider
         stopLocation()
         if (isUsingGoogleProvider) {
@@ -305,9 +333,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 AMapLocationClient.updatePrivacyAgree(applicationContext, true)
             }.also { locationClient = it }
             locationClient?.setLocationListener(this)
-            Log.d(TAG, "初始化 AMap 定位客户端（隐私合规已调用）")
+            AppLog.d(TAG, "初始化 AMap 定位客户端（隐私合规已调用）")
         } catch (e: Exception) {
-            Log.e(TAG, "初始化定位客户端失败", e)
+            AppLog.e(TAG, "初始化定位客户端失败", e)
         }
     }
 
@@ -316,9 +344,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
      * 如果之前因权限未授予 Google provider 启动失败，在这里重试
      */
     fun onLocationPermissionGranted() {
-        Log.d(TAG, "=== onLocationPermissionGranted() 被调用 ===")
+        AppLog.d(TAG, "=== onLocationPermissionGranted() 被调用 ===")
         if (serviceState.isRunning) {
-            Log.d(TAG, "onLocationPermissionGranted: 定位已在运行，跳过")
+            AppLog.d(TAG, "onLocationPermissionGranted: 定位已在运行，跳过")
             return
         }
         // 重试启动定位
@@ -329,18 +357,18 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
      * 处理 Google Provider 定位错误（来自 LocationCallback）
      */
     fun onLocationError(errorCode: Int, errorInfo: String) {
-        Log.e(TAG, "Google定位错误: $errorInfo, 错误码: $errorCode")
+        AppLog.e(TAG, "Google定位错误: $errorInfo, 错误码: $errorCode")
         if (serviceState.isFirstLocation) {
             if (firstLocationRetryCount < MAX_FIRST_LOCATION_RETRIES) {
                 firstLocationRetryCount++
-                Log.d(TAG, "Google首次定位失败，重试第${firstLocationRetryCount}次")
+                AppLog.d(TAG, "Google首次定位失败，重试第${firstLocationRetryCount}次")
                 if (isUsingGoogleProvider) {
                     locationProvider?.start()
                 } else {
                     locationClient?.startLocation()
                 }
             } else {
-                Log.d(TAG, "Google定位失败次数过多，切换到连续定位模式")
+                AppLog.d(TAG, "Google定位失败次数过多，切换到连续定位模式")
                 serviceState = serviceState.copy(isFirstLocation = false)
                 if (isUsingGoogleProvider) {
                     locationProvider?.stop()
@@ -362,7 +390,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             httpTimeOut = FIRST_LOCATION_TIMEOUT
         }
         locationClient?.setLocationOption(locationOption)
-        Log.d(TAG, "配置快速首次定位模式")
+        AppLog.d(TAG, "配置快速首次定位模式")
     }
 
     private fun updateLocationOptionsForContinuous(intervalMs: Long, forceGps: Boolean = false) {
@@ -388,7 +416,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         // 【Bug修复】setOption后需要stop+start才能让新interval生效
         locationClient?.stopLocation()
         locationClient?.startLocation()
-        Log.d(TAG, "配置连续定位模式，模式=${if (forceGps) "GPS" else "网络"}, 间隔: ${intervalMs}ms")
+        AppLog.d(TAG, "配置连续定位模式，模式=${if (forceGps) "GPS" else "网络"}, 间隔: ${intervalMs}ms")
     }
 
     private fun startLocationWithFastFirst() {
@@ -404,9 +432,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 updateLocationOptionsForFastFirst()
                 locationClient?.startLocation()
             }
-            Log.d(TAG, "启动快速首次定位, provider=${if (isUsingGoogleProvider) "Google" else "AMap"}")
+            AppLog.d(TAG, "启动快速首次定位, provider=${if (isUsingGoogleProvider) "Google" else "AMap"}")
         } catch (e: Exception) {
-            Log.e(TAG, "启动定位失败", e)
+            AppLog.e(TAG, "启动定位失败", e)
             serviceState = serviceState.copy(isRunning = false)
         }
     }
@@ -416,7 +444,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         engine?.setPowerMode(mode)
 
         if (isLocationClientStopped) {
-            Log.d(TAG, "电源模式切换: 定位已停止，触发临时检查")
+            AppLog.d(TAG, "电源模式切换: 定位已停止，触发临时检查")
             isTemporaryCheck = true
             lastResumeCheckTime = System.currentTimeMillis()
             temporaryResumeForCheck()
@@ -431,7 +459,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             } else {
                 updateLocationOptionsForContinuous(newIntervalMs)
             }
-            Log.d(TAG, "电源模式切换: 定位运行中，重置省电计数器，同步GPS间隔到${newIntervalMs}ms")
+            AppLog.d(TAG, "电源模式切换: 定位运行中，重置省电计数器，同步GPS间隔到${newIntervalMs}ms")
         }
     }
 
@@ -458,9 +486,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                         locationProvider?.setInterval(baseIntervalMs)
                         locationProvider?.start()
                         serviceState = serviceState.copy(isFirstLocation = false)
-                        Log.d(TAG, "切换到 Google 连续定位模式，间隔: ${baseIntervalMs}ms")
+                        AppLog.d(TAG, "切换到 Google 连续定位模式，间隔: ${baseIntervalMs}ms")
                     } catch (e: Exception) {
-                        Log.e(TAG, "启动 Google 连续定位失败", e)
+                        AppLog.e(TAG, "启动 Google 连续定位失败", e)
                     }
                 }, 100)
             } else {
@@ -470,14 +498,14 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                         updateLocationOptionsForContinuous(baseIntervalMs)
                         locationClient?.startLocation()
                         serviceState = serviceState.copy(isFirstLocation = false)
-                        Log.d(TAG, "切换到 AMap 连续定位模式，基础间隔: ${baseIntervalMs}ms")
+                        AppLog.d(TAG, "切换到 AMap 连续定位模式，基础间隔: ${baseIntervalMs}ms")
                     } catch (e: Exception) {
-                        Log.e(TAG, "启动连续定位失败", e)
+                        AppLog.e(TAG, "启动连续定位失败", e)
                     }
                 }, 100)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "停止定位失败", e)
+            AppLog.e(TAG, "停止定位失败", e)
         }
     }
 
@@ -489,9 +517,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 locationClient?.stopLocation()
             }
             serviceState = serviceState.copy(isRunning = false)
-            Log.d(TAG, "定位已停止")
+            AppLog.d(TAG, "定位已停止")
         } catch (e: Exception) {
-            Log.e(TAG, "停止定位失败", e)
+            AppLog.e(TAG, "停止定位失败", e)
         }
     }
 
@@ -502,28 +530,31 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             isTemporaryCheck = false
             temporaryCheckCompleted = true
             if (shouldProcess) {
-                Log.d(TAG, "省电: 临时检查需要处理，恢复定位")
+                AppLog.d(TAG, "省电: 临时检查需要处理，恢复定位")
                 isLocationClientStopped = false
                 consecutiveNotProcessCount = 0
                 cancelWakeupAlarm()
                 resumeLocationWithNormalMode()
+                saveServiceState()
             } else {
-                Log.d(TAG, "省电: 临时检查不需要处理，继续停止，调度 Alarm")
+                AppLog.d(TAG, "省电: 临时检查不需要处理，继续停止，调度 Alarm")
                 isLocationClientStopped = true
                 consecutiveNotProcessCount = 0
                 lastResumeCheckTime = now
                 stopLocation()
                 scheduleNextWakeup()
+                saveServiceState()
             }
             return
         }
 
         if (isLocationClientStopped) {
             if (now - lastResumeCheckTime >= CHECK_INTERVAL_WHEN_STOPPED * 60 * 1000L) {
-                Log.d(TAG, "省电: 定时检查，临时恢复定位")
+                AppLog.d(TAG, "省电: 定时检查，临时恢复定位")
                 lastResumeCheckTime = now
                 isTemporaryCheck = true
                 temporaryCheckCompleted = false
+                saveServiceState()
                 temporaryResumeForCheck()
             }
         } else {
@@ -533,25 +564,25 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 if (serviceState.isInsideFence) {
                     // 围栏内processed fix：保持counter，不要重置到0
                     // 这样下次throttled cycle不需要重新从0开始累加
-                    Log.d(TAG, "省电: 围栏内处理，重置计数(保持throttled状态)")
+                    AppLog.d(TAG, "省电: 围栏内处理，重置计数(保持throttled状态)")
                 } else {
                     consecutiveNotProcessCount = 0
                     cancelWakeupAlarm()
-                    Log.d(TAG, "省电: 需要处理，重置计数")
+                    AppLog.d(TAG, "省电: 需要处理，重置计数")
                 }
+                saveServiceState()
             } else {
                 consecutiveNotProcessCount++
-                Log.d(TAG, "省电: 不需要处理 ($consecutiveNotProcessCount/$STOP_THRESHOLD)")
+                AppLog.d(TAG, "省电: 不需要处理 ($consecutiveNotProcessCount/$STOP_THRESHOLD)")
 
                 // 【Bug修复】围栏内阈值：先降频（2次），STOP_THRESHOLD=5 对所有场景生效（5次后停止GPS）
                 // 围栏内用户对定位精度要求低，2次throttled即可触发降频
                 // 但无论围栏内外，STOP_THRESHOLD=5 统一触发停止GPS（防止围栏内静止时GPS永不停止）
-                val THROTTLE_THRESHOLD = 2  // 围栏内外统一：2次throttled即降频
                 if (consecutiveNotProcessCount >= THROTTLE_THRESHOLD) {
                     // 【P0修复】围栏外静止也要降频，不等5次
                     // engine 已根据 stationary 检测计算出合适的下次间隔，直接使用
                     val engineInterval = engineIntervalMs
-                    Log.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不处理，降频到${engineInterval}ms/次继续监控")
+                    AppLog.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不处理，降频到${engineInterval}ms/次继续监控")
                     if (isUsingGoogleProvider) {
                         locationProvider?.setInterval(engineInterval)
                     } else {
@@ -564,11 +595,12 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 }
                 // STOP_THRESHOLD=5 对所有场景统一生效（围栏内/外均适用）
                 if (consecutiveNotProcessCount >= STOP_THRESHOLD) {
-                    Log.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不处理，停止GPS，调度Alarm")
+                    AppLog.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不处理，停止GPS，调度Alarm")
                     isLocationClientStopped = true
                     lastResumeCheckTime = now
                     stopLocation()
                     scheduleNextWakeup()
+                    saveServiceState()
                 }
             }
         }
@@ -602,9 +634,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                     pendingIntent
                 )
             }
-            Log.d(TAG, "已调度 AlarmManager 唤醒，${WAKEUP_INTERVAL_MS / 1000 / 60}分钟后")
+            AppLog.d(TAG, "已调度 AlarmManager 唤醒，${WAKEUP_INTERVAL_MS / 1000 / 60}分钟后")
         } catch (e: Exception) {
-            Log.e(TAG, "调度 Alarm 失败", e)
+            AppLog.e(TAG, "调度 Alarm 失败", e)
         }
     }
 
@@ -622,14 +654,14 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             )
             alarmManager.cancel(pendingIntent)
             pendingIntent.cancel()
-            Log.d(TAG, "已取消 AlarmManager 唤醒")
+            AppLog.d(TAG, "已取消 AlarmManager 唤醒")
         } catch (e: Exception) {
-            Log.e(TAG, "取消 Alarm 失败", e)
+            AppLog.e(TAG, "取消 Alarm 失败", e)
         }
     }
 
     fun performWakeupLocation() {
-        Log.d(TAG, "执行唤醒定位检查")
+        AppLog.d(TAG, "执行唤醒定位检查")
         isTemporaryCheck = true
         lastResumeCheckTime = System.currentTimeMillis()
         temporaryResumeForCheck()
@@ -646,9 +678,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 locationClient?.startLocation()
             }
             serviceState = serviceState.copy(isRunning = true)
-            Log.d(TAG, "定位已恢复")
+            AppLog.d(TAG, "定位已恢复")
         } catch (e: Exception) {
-            Log.e(TAG, "恢复定位失败", e)
+            AppLog.e(TAG, "恢复定位失败", e)
         }
     }
 
@@ -661,9 +693,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 locationClient?.startLocation()
             }
             serviceState = serviceState.copy(isRunning = true, isFirstLocation = false)
-            Log.d(TAG, "恢复正常定位模式")
+            AppLog.d(TAG, "恢复正常定位模式")
         } catch (e: Exception) {
-            Log.e(TAG, "恢复正常定位失败", e)
+            AppLog.e(TAG, "恢复正常定位失败", e)
         }
     }
 
@@ -695,9 +727,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 // 【P0修复】flag必须在start()成功后才设置，避免start()失败后状态不一致
                 isTemporaryCheck = true
             }
-            Log.d(TAG, "临时恢复定位检查")
+            AppLog.d(TAG, "临时恢复定位检查")
         } catch (e: Exception) {
-            Log.e(TAG, "临时恢复定位失败", e)
+            AppLog.e(TAG, "临时恢复定位失败", e)
         }
     }
 
@@ -705,18 +737,18 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
         location ?: return
 
         if (location.errorCode != 0) {
-            Log.e(TAG, "定位错误: ${location.errorInfo}, 错误码: ${location.errorCode}")
+            AppLog.e(TAG, "定位错误: ${location.errorInfo}, 错误码: ${location.errorCode}")
             if (serviceState.isFirstLocation) {
                 if (firstLocationRetryCount < MAX_FIRST_LOCATION_RETRIES) {
                     firstLocationRetryCount++
-                    Log.d(TAG, "首次定位失败，重试第${firstLocationRetryCount}次")
+                    AppLog.d(TAG, "首次定位失败，重试第${firstLocationRetryCount}次")
                     if (isUsingGoogleProvider) {
                         locationProvider?.start()
                     } else {
                         locationClient?.startLocation()
                     }
                 } else {
-                    Log.d(TAG, "GPS定位失败次数过多，切换到连续定位模式")
+                    AppLog.d(TAG, "GPS定位失败次数过多，切换到连续定位模式")
                     serviceState = serviceState.copy(isFirstLocation = false)
                     if (isUsingGoogleProvider) {
                         locationProvider?.stop()
@@ -728,13 +760,13 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             }
             else {
                 // BUG-006 FIX: 连续定位模式：已有定时调度，不额外重试
-                Log.d(TAG, "连续定位模式下定位失败，等待下次定时调度")
+                AppLog.d(TAG, "连续定位模式下定位失败，等待下次定时调度")
                 // 【Bug修复】GPS 失败时重置临时检查标志，避免状态机卡住
                 // 如果此次失败属于临时检查，flags 必须重置让睡眠循环恢复
                 if (isTemporaryCheck) {
                     isTemporaryCheck = false
                     temporaryCheckCompleted = false
-                    Log.d(TAG, "省电: 临时检查GPS失败，重置标志，继续停止+调度Alarm")
+                    AppLog.d(TAG, "省电: 临时检查GPS失败，重置标志，继续停止+调度Alarm")
                     isLocationClientStopped = true
                     lastResumeCheckTime = System.currentTimeMillis()
                     stopLocation()
@@ -746,7 +778,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
 
         val isValidCoordinate = location.latitude != 0.0 && location.longitude != 0.0
         if (!isValidCoordinate) {
-            Log.w(TAG, "坐标无效 (0,0)，跳过此次定位")
+            AppLog.w(TAG, "坐标无效 (0,0)，跳过此次定位")
             if (serviceState.isFirstLocation && firstLocationRetryCount < MAX_FIRST_LOCATION_RETRIES) {
                 firstLocationRetryCount++
                 if (isUsingGoogleProvider) {
@@ -758,7 +790,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
             return
         }
 
-        Log.d(TAG, "定位成功: 精度=${location.accuracy}m, 速度=${location.speed}m/s, " +
+        AppLog.d(TAG, "定位成功: 精度=${location.accuracy}m, 速度=${location.speed}m/s, " +
                 "来源=${if (location.locationType == AMAP_TYPE_GPS) "GPS" else if (location.locationType == AMAP_TYPE_NETWORK) "前次" else "网络"}")
 
         val app = application as? TrackMasterApplication
@@ -788,14 +820,14 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 currentFenceName = currentFenceName
             )
 
-            Log.d(TAG, "省电检查: shouldProcess=$shouldProcess, isInFence=$isInFence, isStopped=$isLocationClientStopped")
+            AppLog.d(TAG, "省电检查: shouldProcess=$shouldProcess, isInFence=$isInFence, isStopped=$isLocationClientStopped")
 
             val shouldStopForPowerSave = isInFence.not()
             val engineInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
             updatePowerSavingState(shouldStopForPowerSave, engineInterval)
         } else {
             // Throttled回调：仍然调用省电state更新（用于计数累加），但不更新UI状态
-            Log.d(TAG, "Throttled回调（不更新UI）: shouldProcess=$shouldProcess, isStopped=$isLocationClientStopped")
+            AppLog.d(TAG, "Throttled回调（不更新UI）: shouldProcess=$shouldProcess, isStopped=$isLocationClientStopped")
             // 【修复】重新从 currentMatchedFences 获取围栏状态
             val matchedFences = app?.currentMatchedFences ?: emptyList()
             val isInFence = matchedFences.isNotEmpty()
@@ -821,7 +853,7 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
 
         if (serviceState.isFirstLocation) {
             firstLocationRetryCount = 0
-            Log.d(TAG, "首次定位成功，处理持久化状态恢复")
+            AppLog.d(TAG, "首次定位成功，处理持久化状态恢复")
             (application as? TrackMasterApplication)?.handleFirstLocationAfterRestore(toLocation(location))
 
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -839,9 +871,9 @@ class GeoFenceLocationService : Service(), AMapLocationListener {
                 locationClient?.stopLocation()
                 locationClient?.startLocation()
             }
-            Log.d(TAG, "手动刷新位置")
+            AppLog.d(TAG, "手动刷新位置")
         } catch (e: Exception) {
-            Log.e(TAG, "刷新位置失败", e)
+            AppLog.e(TAG, "刷新位置失败", e)
         }
     }
 

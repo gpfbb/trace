@@ -2,7 +2,7 @@ package com.trackmaster.app.ui.components
 
 import android.graphics.Color
 import android.os.Bundle
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import androidx.compose.foundation.Canvas
 import com.amap.api.maps.MapView
 import androidx.compose.foundation.layout.Box
@@ -86,7 +86,7 @@ fun AMapViewWrapper(
                     appPrefs.cameraZoom = mapPresenter.getZoom() ?: 15f
                     appPrefs.hasCameraPosition = true
                 }
-            } catch (e: Exception) { Log.e(TAG, "保存相机位置失败", e) }
+            } catch (e: Exception) { AppLog.e(TAG, "保存相机位置失败", e) }
         }
     }
 
@@ -103,7 +103,7 @@ fun AMapViewWrapper(
                 appPrefs.cameraLongitude = lng
                 appPrefs.cameraZoom = mapPresenter.getZoom() ?: 15f
                 appPrefs.hasCameraPosition = true
-            } catch (e: Exception) { Log.e(TAG, "保存相机位置失败", e) }
+            } catch (e: Exception) { AppLog.e(TAG, "保存相机位置失败", e) }
             // precision模式下同步更新相机中心点坐标
             if (isPrecisionMode) {
                 cameraCenterLat = lat

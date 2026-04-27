@@ -1,0 +1,20 @@
+{
+  "id": "when-working-in-this-project-follow-the-project--bbd25b3c6e",
+  "scope": "project",
+  "projectId": "project-be45f818141b6884",
+  "projectName": "trae_project",
+  "source": "session-observation",
+  "evidence": [
+    "【角色】你是资深 Android/Kotlin 代码审查专家。【任务】对日记应用进行全量代码审查。【步骤】1. 扫描 app/src/main/java 下所有 .kt 文件 2. 检查每类问题：空指针风险、资源泄漏、线程安全、性能瓶颈、架构违规、命名不规范、重复代码 3. 输出格式：```## 问题清单\n| 严重度 | 文件 | 行号 | 问题类型 | 描述 | 修复建议 |\n|--------|------|------|----------|------|----------|\n```【约束】先输出问题清单表格，再详细说明关键问题。不要修改代码，只审查。"
+  ],
+  "observationIds": [
+    "9193ea68-8302-4d9b-a99b-f0b3255e4996"
+  ],
+  "trigger": "When working in this project",
+  "action": "Follow the project convention: 【角色】你是资深 Android/Kotlin 代码审查专家。【任务】对日记应用进行全量代码审查。【步骤】1. 扫描 app/src/main/java 下所有 .kt 文件 2. 检查每类问题：空指针风险、资源泄漏、线程安全、性能瓶颈、架构违规、命名不规范、重复代码 3. 输出格式：```## 问题清单\n| 严重度 | 文件 | 行号 | 问题类型 | 描述 | 修复建议 |\n|--------|------|------|----------|------|----------|\n```【约束】先输出问题清单表格，再详细说明关键问题。不要修改代码，只审查。",
+  "confidence": 0.4,
+  "domain": "project",
+  "createdAt": "2026-04-26T16:36:21.805Z",
+  "updatedAt": "2026-04-26T16:36:21.805Z",
+  "status": "pending"
+}

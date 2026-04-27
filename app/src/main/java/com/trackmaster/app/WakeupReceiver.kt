@@ -3,7 +3,7 @@ package com.trackmaster.app
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 
 /**
  * AlarmManager 唤醒接收器
@@ -19,7 +19,7 @@ class WakeupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != ACTION_WAKEUP) return
 
-        Log.d(TAG, "AlarmManager 唤醒! 启动 WakeupService")
+        AppLog.d(TAG, "AlarmManager 唤醒! 启动 WakeupService")
 
         val serviceIntent = Intent(context, WakeupService::class.java).apply {
             action = ACTION_WAKEUP

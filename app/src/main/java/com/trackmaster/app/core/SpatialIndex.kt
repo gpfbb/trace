@@ -1,6 +1,6 @@
 package com.trackmaster.app.core
 
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 
 /**
  * 空间索引接口
@@ -117,7 +117,7 @@ class GridSpatialIndex(private val gridSizeDeg: Double = 0.01) : SpatialIndex {
         buildTimeMs = System.currentTimeMillis() - startTime
 
         val stats = getStats()
-        Log.d(TAG, "网格索引构建完成: 围栏=${stats.totalFences}, 网格=${stats.gridCells}, " +
+        AppLog.d(TAG, "网格索引构建完成: 围栏=${stats.totalFences}, 网格=${stats.gridCells}, " +
                 "平均每网格=${"%.2f".format(stats.avgFencesPerCell)}, " +
                 "最大每网格=${stats.maxFencesPerCell}, 耗时=${buildTimeMs}ms")
     }
@@ -162,7 +162,7 @@ class GridSpatialIndex(private val gridSizeDeg: Double = 0.01) : SpatialIndex {
         // 每100次查询记录一次平均候选数
         if (queryCount % 100 == 0) {
             val avgCandidates = if (queryCount > 0) totalCandidates.toDouble() / queryCount else 0.0
-            Log.d(TAG, "查询统计: 次数=$queryCount, 平均候选数=${"%.2f".format(avgCandidates)}")
+            AppLog.d(TAG, "查询统计: 次数=$queryCount, 平均候选数=${"%.2f".format(avgCandidates)}")
         }
 
         return candidates
@@ -174,7 +174,7 @@ class GridSpatialIndex(private val gridSizeDeg: Double = 0.01) : SpatialIndex {
         buildTimeMs = 0
         queryCount = 0
         totalCandidates = 0
-        Log.d(TAG, "网格索引已清除")
+        AppLog.d(TAG, "网格索引已清除")
     }
 
     override fun getStats(): SpatialIndexStats {

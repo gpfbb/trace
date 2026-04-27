@@ -1,6 +1,6 @@
 package com.trackmaster.app.locationservice.amap
 
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.amap.api.location.AMapLocation
 import com.amap.api.location.AMapLocationClient
 import com.amap.api.location.AMapLocationClientOption
@@ -52,14 +52,14 @@ class AMapLocationProvider(
     override fun start() {
         if (!client.isStarted) {
             client.startLocation()
-            Log.d(TAG, "AMapLocationProvider started")
+            AppLog.d(TAG, "AMapLocationProvider started")
         }
     }
 
     override fun stop() {
         if (client.isStarted) {
             client.stopLocation()
-            Log.d(TAG, "AMapLocationProvider stopped")
+            AppLog.d(TAG, "AMapLocationProvider stopped")
         }
     }
 
@@ -82,7 +82,7 @@ class AMapLocationProvider(
         if (wasRunning) {
             client.startLocation()
         }
-        Log.d(TAG, "Location mode changed to $mode")
+        AppLog.d(TAG, "Location mode changed to $mode")
     }
 
     override fun getProviderName(): String = "AMap"
@@ -158,7 +158,7 @@ class AMapLocationProvider(
         }
 
         client.startLocation()
-        Log.d(TAG, "AMapLocationProvider started in once-high-accuracy mode")
+        AppLog.d(TAG, "AMapLocationProvider started in once-high-accuracy mode")
     }
 
     override fun onLocationChanged(location: AMapLocation?) {
@@ -177,9 +177,9 @@ class AMapLocationProvider(
         locationCount++
 
         _lastLocation = toLocation(location)
-        callback?.onLocationChanged(_lastLocation!!)
+        _lastLocation?.let { callback?.onLocationChanged(it) }
 
-        Log.d(TAG, "AMap location: (${location.latitude}, ${location.longitude}), " +
+        AppLog.d(TAG, "AMap location: (${location.latitude}, ${location.longitude}), " +
                 "accuracy=${location.accuracy}m, type=${location.locationType}")
     }
 

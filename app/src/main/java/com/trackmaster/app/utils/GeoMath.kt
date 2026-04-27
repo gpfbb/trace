@@ -1,6 +1,6 @@
 package com.trackmaster.app.utils
 
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.core.BBox
 import com.trackmaster.app.core.Geofence
 import com.trackmaster.app.core.GeoFenceType
@@ -943,7 +943,7 @@ fun validateFenceTree(fences: List<Geofence>): TreeValidationResult {
     // 检查深度一致性
     val depths = mutableMapOf<String, Int>()
     fun calculateDepth(fenceId: String): Int {
-        if (fenceId in depths) return depths[fenceId]!!
+        if (fenceId in depths) return depths[fenceId] ?: 0
 
         val fence = fenceMap[fenceId] ?: return 0
         if (fence.parentId == null) {
@@ -980,9 +980,9 @@ fun buildFenceTree(fences: List<Geofence>, validate: Boolean = true): FenceTreeR
     if (validate) {
         val validation = validateFenceTree(fences)
         if (!validation.isValid) {
-            Log.w(TAG, "围栏树验证失败，但继续构建: ${validation.errors.joinToString(", ")}")
+            AppLog.w(TAG, "围栏树验证失败，但继续构建: ${validation.errors.joinToString(", ")}")
         } else {
-            Log.d(TAG, "围栏树验证通过: ${fences.size} 个围栏")
+            AppLog.d(TAG, "围栏树验证通过: ${fences.size} 个围栏")
         }
     }
 
@@ -1010,7 +1010,7 @@ fun buildFenceTree(fences: List<Geofence>, validate: Boolean = true): FenceTreeR
 
     val buildTime = System.currentTimeMillis() - startTime
 
-    Log.d(TAG, "围栏树构建完成: 总数=${fences.size}, 叶子=$leafCount, 最大深度=$maxDepth, 平均子节点数=${"%.2f".format(avgChildren)}, 有父级的围栏=$totalWithParent, 耗时=${buildTime}ms")
+    AppLog.d(TAG, "围栏树构建完成: 总数=${fences.size}, 叶子=$leafCount, 最大深度=$maxDepth, 平均子节点数=${"%.2f".format(avgChildren)}, 有父级的围栏=$totalWithParent, 耗时=${buildTime}ms")
 
     return FenceTreeResult(
         fenceMap = fenceMap,

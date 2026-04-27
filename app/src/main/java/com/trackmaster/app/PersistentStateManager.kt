@@ -2,7 +2,7 @@ package com.trackmaster.app
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import java.util.*
 
 /**
@@ -71,7 +71,7 @@ class PersistentStateManager(context: Context) {
             .putString(KEY_CURRENT_FENCE_NAME, fenceName)
             .putLong(KEY_CURRENT_FENCE_ENTER_TIME, enterTime.time)
             .commit()
-        Log.d(TAG, "保存当前围栏状态: $fenceName, 进入时间=$enterTime")
+        AppLog.d(TAG, "保存当前围栏状态: $fenceName, 进入时间=$enterTime")
     }
 
     /**
@@ -96,7 +96,7 @@ class PersistentStateManager(context: Context) {
             .remove(KEY_CURRENT_FENCE_NAME)
             .remove(KEY_CURRENT_FENCE_ENTER_TIME)
             .commit()
-        Log.d(TAG, "清除当前围栏状态")
+        AppLog.d(TAG, "清除当前围栏状态")
     }
 
     /**
@@ -109,7 +109,7 @@ class PersistentStateManager(context: Context) {
             .putString(KEY_LAST_EXIT_FENCE_NAME, fenceName)
             .putLong(KEY_LAST_EXIT_TIME, exitTime.time)
             .commit()
-        Log.d(TAG, "保存上次离开围栏状态: $fenceName, 离开时间=$exitTime")
+        AppLog.d(TAG, "保存上次离开围栏状态: $fenceName, 离开时间=$exitTime")
     }
 
     /**
@@ -133,9 +133,9 @@ class PersistentStateManager(context: Context) {
             .putLong(KEY_LAST_APP_CLOSE_TIME, time.time)
             .commit()
         if (!success) {
-            Log.e(TAG, "saveLastAppCloseTime: commit() failed")
+            AppLog.e(TAG, "saveLastAppCloseTime: commit() failed")
         }
-        Log.d(TAG, "保存上次应用关闭时间: $time")
+        AppLog.d(TAG, "保存上次应用关闭时间: $time")
     }
 
     /**
@@ -157,7 +157,7 @@ class PersistentStateManager(context: Context) {
             .putLong(KEY_LAST_LOCATION_LNG, java.lang.Double.doubleToRawLongBits(longitude))
             .putLong(KEY_LAST_LOCATION_TIME, time.time)
             .commit()
-        Log.d(TAG, "保存上次位置: ($latitude, $longitude), 时间=$time")
+        AppLog.d(TAG, "保存上次位置: ($latitude, $longitude), 时间=$time")
     }
 
     /**
@@ -198,6 +198,6 @@ class PersistentStateManager(context: Context) {
      */
     fun clearAll() {
         prefs.edit().clear().apply()
-        Log.d(TAG, "清除所有持久化状态")
+        AppLog.d(TAG, "清除所有持久化状态")
     }
 }

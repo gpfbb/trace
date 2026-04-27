@@ -9,7 +9,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.util.Log
+import com.trackmaster.app.utils.AppLog
 import androidx.core.app.NotificationCompat
 
 class WakeupService : Service() {
@@ -27,13 +27,13 @@ class WakeupService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "WakeupService 创建")
+        AppLog.d(TAG, "WakeupService 创建")
         acquireWakeLock()
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "WakeupService 启动，执行唤醒检查")
+        AppLog.d(TAG, "WakeupService 启动，执行唤醒检查")
 
         val notification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -45,7 +45,7 @@ class WakeupService : Service() {
         performWakeupCheck()
 
         android.os.Handler(mainLooper).postDelayed({
-            Log.d(TAG, "WakeupService 检查完成，停止")
+            AppLog.d(TAG, "WakeupService 检查完成，停止")
             releaseWakeLock()
             stopSelf()
         }, 5000)
@@ -56,23 +56,23 @@ class WakeupService : Service() {
     private fun performWakeupCheck() {
         val app = application as? TrackMasterApplication
         if (app == null) {
-            Log.e(TAG, "无法获取 TrackMasterApplication")
+            AppLog.e(TAG, "无法获取 TrackMasterApplication")
             return
         }
 
         val locationService = app.getLocationService()
         if (locationService == null) {
-            Log.e(TAG, "无法获取 LocationService")
+            AppLog.e(TAG, "无法获取 LocationService")
             return
         }
 
         if (locationService.isRunning()) {
-            Log.d(TAG, "定位服务正在运行，重新调度 Alarm")
+            AppLog.d(TAG, "定位服务正在运行，重新调度 Alarm")
             locationService.scheduleNextWakeup()
             return
         }
 
-        Log.d(TAG, "定位服务已停止，尝试恢复定位")
+        AppLog.d(TAG, "定位服务已停止，尝试恢复定位")
         locationService.performWakeupLocation()
         locationService.scheduleNextWakeup()
     }
@@ -117,13 +117,13 @@ class WakeupService : Service() {
         ).apply {
             acquire(WAKELOCK_TIMEOUT)
         }
-        Log.d(TAG, "获取 WakeLock")
+        AppLog.d(TAG, "获取 WakeLock")
     }
 
     private fun releaseWakeLock() {
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
-            Log.d(TAG, "释放 WakeLock")
+            AppLog.d(TAG, "释放 WakeLock")
         }
     }
 

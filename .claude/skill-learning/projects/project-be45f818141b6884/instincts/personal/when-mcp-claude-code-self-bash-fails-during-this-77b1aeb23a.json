@@ -1,0 +1,23 @@
+{
+  "id": "when-mcp-claude-code-self-bash-fails-during-this-77b1aeb23a",
+  "scope": "project",
+  "projectId": "project-be45f818141b6884",
+  "projectName": "trae_project",
+  "source": "session-observation",
+  "evidence": [
+    "{\"telemetryMessage\":\"MCP tool returned error\",\"name\":\"McpToolCallError\"}",
+    "{\"data\":[{\"type\":\"text\",\"text\":\"{\\\"stdout\\\":\\\"Microsoft Windows [�汾 10.0.26100.4946]\\\\r\\\\n(c) Microsoft Corporation����������Ȩ����\\\\r\\\\n\\\\r\\\\nD:\\\\\\\\trace>\\\",\\\"stderr\\\":\\\"\\\",\\\"interrupted\\\":false,\\\"isImage\\\":false,\\\"noOutputExpected\\\":false}\"}]}"
+  ],
+  "observationIds": [
+    "2c3bb8b8-94cb-4156-bbd7-42b3d3bda9e9",
+    "ecfd1cae-d575-4668-b69e-781df25b34c8"
+  ],
+  "trigger": "When mcp__claude-code-self__Bash fails during this project",
+  "action": "Use the follow-up successful mcp__claude-code-self__Bash invocation as the resolution pattern before retrying blindly.",
+  "confidence": 0.65,
+  "domain": "debugging",
+  "evidenceOutcome": "success",
+  "createdAt": "2026-04-26T15:35:51.604Z",
+  "updatedAt": "2026-04-26T16:24:41.951Z",
+  "status": "pending"
+}
