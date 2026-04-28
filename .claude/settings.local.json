@@ -1,5 +1,6 @@
 {
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Read(//c/Users/14708/.claude/plugins/marketplaces/pua-skills/hooks/**)",
       "Read(//c/Users/14708/.claude/plugins/cache/pua-skills/pua/3.1.0/hooks/**)",
@@ -29,7 +30,8 @@
       "Bash(powershell -Command \"& { cd D:\\\\trace; .\\\\gradlew.bat :app:compileDebugKotlin --no-daemon 2>&1 | Select-Object -Last 50 }\" 2>&1)",
       "Bash(powershell -Command \"& { cd D:\\\\trace; \\\\$env:JAVA_HOME='D:\\\\javajdk'; .\\\\gradlew.bat :app:compileDebugKotlin --no-daemon 2>&1 | Select-Object -Last 60 }\" 2>&1)",
       "WebFetch(domain:developers.google.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git commit *)"
     ]
   }
 }

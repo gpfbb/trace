@@ -24,13 +24,17 @@ data class TreeValidationResult(
     val errors: List<String> = emptyList()
 )
 
-/** 获取围栏深度（0 = 顶级，基于parentId） */
+/** 获取围栏深度（0 = 顶级，基于parentId）。最多遍历 100 层防止循环引用无限循环 */
 fun getFenceDepth(fenceId: String, fenceMap: Map<String, Geofence>): Int {
     var d = 0
     var cur = fenceMap[fenceId]
+    val visited = mutableSetOf<String>()
     while (cur?.parentId != null) {
+        if (cur.parentId in visited) break // 检测到循环
+        visited.add(cur.parentId)
         d++
         cur = fenceMap[cur.parentId]
+        if (d > 100) break // 安全上限
     }
     return d
 }

@@ -40,6 +40,7 @@ class DatabaseFacade(
     fun getFencesByCategory(categoryId: String): List<GeoFence> = fenceDao.getFencesByCategory(categoryId)
     fun moveFencesToCategory(fromCategoryId: String, toCategoryId: String): Int = fenceDao.moveFencesToCategory(fromCategoryId, toCategoryId)
     fun updateFenceCategory(fenceId: String, categoryId: String): Int = fenceDao.updateFenceCategory(fenceId, categoryId)
+    fun updateAllFencesAlpha(alpha: Float): Int = fenceDao.updateAllFencesAlpha(alpha)
 
     // ============================================================
     // 分类操作
@@ -48,6 +49,7 @@ class DatabaseFacade(
     fun insertCategory(category: Category): Long = categoryDao.insertCategory(category)
     fun getAllCategories(): List<Category> = categoryDao.getAllCategories()
     fun getCategoryByName(name: String): Category? = categoryDao.getCategoryByName(name)
+    fun getCategoryById(id: String): Category? = categoryDao.getCategoryById(id)
     fun updateCategory(category: Category): Int = categoryDao.updateCategory(category)
     fun deleteCategory(categoryId: String): Int = categoryDao.deleteCategory(categoryId)
 

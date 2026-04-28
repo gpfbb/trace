@@ -146,6 +146,12 @@ class StayDurationManager(private val context: Context) {
     }
 
     fun onFenceExit(fenceId: String, fenceName: String, exitTime: Date) {
+        synchronized(enterLock) {
+            onFenceExitLocked(fenceId, fenceName, exitTime)
+        }
+    }
+
+    private fun onFenceExitLocked(fenceId: String, fenceName: String, exitTime: Date) {
         val session = activeSessions.remove(fenceId)
 
         // 【关键防御】即使围栏不在 activeSessions 中，也要关闭 DB 中的开放记录
@@ -483,8 +489,8 @@ class StayDurationManager(private val context: Context) {
         }
 
         // 刚恢复的会话（lastSaveTime == null）：accumulated 已包含 gap 时长，直接返回
-        // 正常新会话：从未保存过，返回从 enterTime 到现在
-        return (System.currentTimeMillis() - session.enterTime.time) / 1000
+        // 正常新会话：从未保存过，返回从 enterTime 到现在（clamp 到 0 防止系统时钟回拨）
+        return maxOf(0L, (System.currentTimeMillis() - session.enterTime.time) / 1000)
     }
 
     private fun saveDailyRecord(record: DailyStayRecord) {
@@ -579,12 +585,14 @@ class StayDurationManager(private val context: Context) {
     }
 
     fun saveAllActiveSessions() {
-        AppLog.d(TAG, "保存所有活动会话, 数量=${activeSessions.size}")
+        // 使用快照避免迭代期间 ConcurrentHashMap 被并发修改
+        val snapshot = activeSessions.toList()
+        AppLog.d(TAG, "保存所有活动会话, 数量=${snapshot.size}")
         val openStays = dbHelper.getOpenStayRecords()
         val openFenceIds = openStays.map { it.fenceId }.toSet()
         val now = System.currentTimeMillis()
 
-        for (session in activeSessions.values) {
+        for ((fenceId, session) in snapshot) {
             val sessionAccumulated = if (session.lastSaveTime != null) {
                 session.accumulatedDuration + (now - session.lastSaveTime.time) / 1000
             } else {
@@ -592,26 +600,20 @@ class StayDurationManager(private val context: Context) {
                 session.accumulatedDuration + (now - gapStart.time) / 1000
             }
 
-            // 【关键修复】只更新 stays 表的已有开放记录，不插入新行
-            // 防止多次 periodic save 创建多条开放记录导致 stays 表求和时 2x 叠加
-            // onFenceEnter/onFenceExit 会负责创建和关闭记录，periodic save 只负责更新累积时长
-            if (session.fenceId in openFenceIds) {
-                // 【P1修复】DB更新成功后才能更新in-memory状态
-                // 原bug：DB更新在try内但in-memory在try外，DB失败时in-memory仍被更新
-                // 导致crash后lastSaveTime已是新值，但gap计算基准未变，造成时长重复
-                try {
-                    dbHelper.updateOpenStayAccumulatedDuration(session.fenceId, sessionAccumulated)
-                    // DB成功后才更新in-memory
-                    activeSessions[session.fenceId] = session.copy(
-                        accumulatedDuration = sessionAccumulated,
-                        lastSaveTime = Date()
-                    )
-                } catch (e: Exception) {
-                    AppLog.e(TAG, "DB更新失败，跳过此围栏: ${session.fenceName}", e)
-                    // 不更新in-memory，保持旧状态，下次重试
-                }
-            } else {
+            if (session.fenceId !in openFenceIds) {
                 AppLog.w(TAG, "saveAllActiveSessions 发现无开放记录的会话，跳过: ${session.fenceName}")
+                continue
+            }
+            try {
+                dbHelper.updateOpenStayAccumulatedDuration(session.fenceId, sessionAccumulated)
+                // 使用 replace 原子操作：只有会话未被并发修改/删除时才更新
+                val updated = session.copy(
+                    accumulatedDuration = sessionAccumulated,
+                    lastSaveTime = Date()
+                )
+                activeSessions.replace(fenceId, session, updated)
+            } catch (e: Exception) {
+                AppLog.e(TAG, "DB更新失败，跳过此围栏: ${session.fenceName}", e)
             }
         }
     }

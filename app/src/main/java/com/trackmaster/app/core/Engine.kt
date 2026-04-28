@@ -3,7 +3,7 @@ package com.trackmaster.app.core
 import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.storage.Repository
 import com.trackmaster.app.utils.SmartScheduler
-import com.trackmaster.app.utils.ThrottleConfig
+import com.trackmaster.app.throttle.ThrottleConfig
 import com.trackmaster.app.utils.DynamicBufferManager
 import com.trackmaster.app.utils.geometry.FenceState
 import com.trackmaster.app.utils.geometry.pointInBBox
@@ -11,6 +11,7 @@ import com.trackmaster.app.utils.geometry.pointInFence
 import com.trackmaster.app.core.buildFenceTree
 import com.trackmaster.app.core.GeoPoint
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 围栏追踪引擎 — 核心状态机
@@ -51,9 +52,9 @@ class Engine(
     @Volatile var lastComputedIntervalMs: Long = 60_000L
         private set
 
-    /** 当前命中的叶子围栏 ID */
-    @Volatile var currentLeafId: String? = null
-        private set
+    /** 当前命中的叶子围栏 ID（AtomicReference 保护 transition 竞态） */
+    private val currentLeafIdRef = AtomicReference<String?>(null)
+    val currentLeafId: String? get() = currentLeafIdRef.get()
 
     /** 当前所有命中的围栏 ID 列表（按深度排序，最深在前） */
     @Volatile var currentMatchedFenceIds: List<String> = emptyList()
@@ -111,7 +112,7 @@ class Engine(
         val open = repo.getOpenSegments()
         if (open.isNotEmpty()) {
             val latest = open.last()
-            currentLeafId = latest.leafGeofenceId
+            currentLeafIdRef.set(latest.leafGeofenceId)
             currentEnterTs = latest.startTs
             AppLog.d(TAG, "恢复未关闭 Segment: ${latest.leafGeofenceId}")
         }
@@ -219,7 +220,7 @@ class Engine(
 
     /** 应用终止 */
     suspend fun onAppTerminate() {
-        if (currentLeafId != null) {
+        if (currentLeafIdRef.get() != null) {
             transition(null, System.currentTimeMillis())
         }
         repo.flush()
@@ -227,16 +228,17 @@ class Engine(
 
     /** 设置当前围栏（用于恢复状态时直接设置） */
     fun setCurrentFenceForRecovery(fenceId: String?, enterTs: Long) {
-        currentLeafId = fenceId
+        currentLeafIdRef.set(fenceId)
         currentEnterTs = enterTs
         AppLog.d(TAG, "Engine恢复状态: currentLeafId=$fenceId, enterTs=$enterTs")
     }
 
-    /** 资源释放 */
+    /** 资源释放（不释放共享的 Repository，只清理调度器） */
     suspend fun dispose() {
-        onAppTerminate()
+        if (currentLeafIdRef.get() != null) {
+            transition(null, System.currentTimeMillis())
+        }
         scheduler.dispose()
-        repo.dispose()
     }
 
     // ============================================================
@@ -245,7 +247,7 @@ class Engine(
 
     fun getCurrentDurationSec(): Long {
         val enterTs = currentEnterTs
-        if (currentLeafId == null || enterTs == 0L) return 0
+        if (currentLeafIdRef.get() == null || enterTs == 0L) return 0
         return (System.currentTimeMillis() - enterTs) / 1000
     }
 
@@ -350,38 +352,23 @@ class Engine(
         return matched.map { it.id }
     }
 
-    /** BBox 快速排除 → 精确 point-in-polygon，返回最深叶子 */
-    private fun findDeepestMatch(fix: LocationFix): Geofence? {
-        var deepest: Geofence? = null
-        var maxDepth = -1
-
-        for (leaf in leafFences) {
-            val bbox = leaf.bbox ?: continue
-            if (!pointInBBox(fix.lat, fix.lng, bbox)) continue
-            if (pointInFence(GeoPoint(fix.lat, fix.lng), leaf)) {
-                if (leaf.depth > maxDepth) {
-                    maxDepth = leaf.depth
-                    deepest = leaf
-                }
-            }
-        }
-        return deepest
-    }
-
     /**
      * 状态转移：关闭旧 Segment → 打开新 Segment
+     * 使用 AtomicReference CAS 防止并发 transition 导致重复 Segment
      */
     private suspend fun transition(newLeafId: String?, ts: Long): StaySegment? {
-        var closedSeg: StaySegment? = null
-
-        // 关闭旧的
-        val oldLeafId = currentLeafId
+        val oldLeafId = currentLeafIdRef.get()
         val oldEnterTs = currentEnterTs
         if (oldLeafId != null && oldEnterTs > 0) {
+            // CAS 守卫：确保 transition 期间 currentLeafId 未被其他协程修改
+            if (!currentLeafIdRef.compareAndSet(oldLeafId, oldLeafId)) {
+                AppLog.w(TAG, "Transition CAS 失败：currentLeafId 已被其他协程修改")
+                return null
+            }
             val enterDateKey = formatDateKey(oldEnterTs)
             val exitDateKey = formatDateKey(ts)
 
-            closedSeg = StaySegment(
+            val closedSeg = StaySegment(
                 id = "seg_${segCounter.incrementAndGet()}_$oldEnterTs",
                 leafGeofenceId = oldLeafId,
                 startTs = oldEnterTs,
@@ -389,29 +376,23 @@ class Engine(
                 status = if (enterDateKey != exitDateKey) SegmentStatus.CROSSED_DAY else SegmentStatus.COMPLETED,
             )
 
-            // 【P0修复】只有写入成功后才更新状态
-            // 原问题：repo.enqueueSegment() 失败后 currentLeafId/currentEnterTs 已被更新
-            // 导致下次 transition 时旧 Segment 数据丢失
-            // 修复：先尝试写入，成功后才更新状态
-            runCatching { repo.enqueueSegment(closedSeg) }
-                .onSuccess {
-                    // 写入成功，更新状态
-                    currentLeafId = newLeafId
-                    currentEnterTs = if (newLeafId != null) ts else 0L
-                    AppLog.d(TAG, "Segment 写入成功，状态已更新: oldLeafId=$oldLeafId -> newLeafId=$newLeafId")
-                }
-                .onFailure { 
-                    AppLog.e(TAG, "Segment 写入失败，状态未更新，保留旧状态: currentLeafId=$currentLeafId", it)
-                    // 写入失败，不更新状态，返回 null 表示转移失败
-                    return null
-                }
+            try {
+                repo.enqueueSegment(closedSeg)
+                currentLeafIdRef.set(newLeafId)
+                currentEnterTs = if (newLeafId != null) ts else 0L
+                AppLog.d(TAG, "Segment 写入成功: $oldLeafId -> $newLeafId")
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                currentLeafIdRef.set(oldLeafId)
+                AppLog.e(TAG, "Segment 写入失败，状态保留: $oldLeafId", e)
+                return null
+            }
+            return closedSeg
         } else {
-            // 没有旧的 Segment，直接打开新的
-            currentLeafId = newLeafId
+            currentLeafIdRef.set(newLeafId)
             currentEnterTs = if (newLeafId != null) ts else 0L
+            return null
         }
-
-        return closedSeg
     }
 
     private fun formatDateKey(ts: Long): String = Repository.formatDateKey(ts)
@@ -461,7 +442,7 @@ class Engine(
 
         if (isStillInFence) {
             // 用户仍在围栏内，继续计时
-            currentLeafId = latest.leafGeofenceId
+            currentLeafIdRef.set(latest.leafGeofenceId)
             currentEnterTs = latest.startTs
             AppLog.d(TAG, "用户仍在围栏 ${latest.leafGeofenceId} 内，继续计时")
 
@@ -492,12 +473,16 @@ class Engine(
                 status = SegmentStatus.COMPLETED,
             )
 
-            runCatching { repo.enqueueSegment(closedSeg) }
-                .onFailure { AppLog.e(TAG, "真空期Segment关闭错误", it) }
+            try {
+                repo.enqueueSegment(closedSeg)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                AppLog.e(TAG, "真空期Segment关闭错误", e)
+            }
             AppLog.d(TAG, "真空期关闭Segment: ${latest.leafGeofenceId}, 离开时间=$exitTs")
 
             // 清除当前状态
-            currentLeafId = null
+            currentLeafIdRef.set(null)
             currentEnterTs = 0L
             currentMatchedFenceIds = emptyList()
 

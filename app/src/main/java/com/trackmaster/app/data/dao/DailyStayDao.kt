@@ -15,12 +15,6 @@ class DailyStayDao(private val dbManager: DatabaseManager) {
         val db = dbManager.writableDatabase
         db.beginTransaction()
         try {
-            val existing = getDailyStayRecord(record.date, record.fenceId)
-            val newDuration = if (existing != null) {
-                existing.totalDurationSeconds + record.totalDurationSeconds
-            } else {
-                record.totalDurationSeconds
-            }
             val table = DatabaseManager.TABLE_DAILY_STAYS
             db.execSQL("""
                 INSERT INTO $table (
@@ -33,7 +27,7 @@ class DailyStayDao(private val dbManager: DatabaseManager) {
                     ${DatabaseManager.KEY_DAILY_LAST_UPDATED} = excluded.${DatabaseManager.KEY_DAILY_LAST_UPDATED}
             """, arrayOf(record.date, record.fenceId, record.fenceName, record.totalDurationSeconds, record.lastUpdated.time))
             db.setTransactionSuccessful()
-            AppLog.d(TAG, "保存日统计: ${record.fenceName}, 日期=${record.date}, 累加时长=${record.totalDurationSeconds}秒, 总计=${newDuration}秒")
+            AppLog.d(TAG, "保存日统计: ${record.fenceName}, 日期=${record.date}, 累加=${record.totalDurationSeconds}秒")
         } finally {
             db.endTransaction()
         }
@@ -130,7 +124,7 @@ class DailyStayDao(private val dbManager: DatabaseManager) {
                         ${DatabaseManager.KEY_DAILY_FENCE_NAME} = excluded.${DatabaseManager.KEY_DAILY_FENCE_NAME},
                         ${DatabaseManager.KEY_DAILY_DURATION} = ${DatabaseManager.KEY_DAILY_DURATION} + excluded.${DatabaseManager.KEY_DAILY_DURATION},
                         ${DatabaseManager.KEY_DAILY_LAST_UPDATED} = excluded.${DatabaseManager.KEY_DAILY_LAST_UPDATED}
-                """, arrayOf(record.date, record.fenceId, record.fenceName, record.totalDurationSeconds, System.currentTimeMillis()))
+                """, arrayOf(record.date, record.fenceId, record.fenceName, record.totalDurationSeconds, record.lastUpdated.time))
             }
             db.setTransactionSuccessful()
         } finally {

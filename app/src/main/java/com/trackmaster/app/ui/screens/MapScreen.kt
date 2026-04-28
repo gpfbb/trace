@@ -55,6 +55,8 @@ import com.trackmaster.app.MapProvider
 import com.trackmaster.app.ui.components.AMapViewWrapper
 import com.trackmaster.app.ui.components.GoogleMapWrapper
 import com.trackmaster.app.ui.theme.*
+import com.trackmaster.app.viewmodel.MapViewModel
+import java.util.Random
 import java.util.UUID
 
 private fun AMapLocation.toLocation(): Location = Location(
@@ -72,7 +74,7 @@ private fun AMapLocation.toLocation(): Location = Location(
 )
 
 @Composable
-fun MapScreen(app: TrackMasterApplication) {
+fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
     var localFences by remember { mutableStateOf(app.geoFences.toList()) }
     var localMatchedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var localLocation by remember { mutableStateOf<Location?>(null) }
@@ -96,6 +98,7 @@ fun MapScreen(app: TrackMasterApplication) {
     var isEditingFence by remember { mutableStateOf(false) }
     var editingPoints by remember { mutableStateOf<List<GeoFencePoint>>(emptyList()) }
     var editingFence by remember { mutableStateOf<GeoFence?>(null) }
+    var showToolsPopup by remember { mutableStateOf(false) }
 
     val fenceColors = listOf(
         // 红色系
@@ -209,13 +212,14 @@ fun MapScreen(app: TrackMasterApplication) {
             highlightedFenceId = highlightedFenceId,
             displayedFenceId = displayedFenceId,
             mapType = mapType,
+            showToolsPopup = showToolsPopup,
             onMapTypeChange = { newType ->
                 mapType = newType
                 app.appPreferences.mapType = newType
             },
             onFenceListClick = { showFenceList = true },
+            onToolsClick = { showToolsPopup = !showToolsPopup },
             onFenceClick = { fenceId ->
-                // 切换显示状态：点击同一围栏则取消显示，否则跳转并显示该围栏
                 val targetId = if (displayedFenceId == fenceId) null else fenceId
                 app.setDisplayedFenceId(targetId)
                 app.setHighlightedFenceId(targetId)
@@ -225,6 +229,25 @@ fun MapScreen(app: TrackMasterApplication) {
                 .statusBarsPadding()
                 .padding(top = 8.dp)
         )
+
+        if (showToolsPopup) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 60.dp)
+            ) {
+                ToolsPopup(
+                    fences = localFences,
+                    fenceColors = fenceColors,
+                    app = app,
+                    onDismiss = { showToolsPopup = false },
+                    onFencesUpdated = {
+                        localFences = app.geoFences.toList()
+                    }
+                )
+            }
+        }
 
         AnimatedVisibility(
             visible = isDrawingMode,
@@ -276,13 +299,7 @@ fun MapScreen(app: TrackMasterApplication) {
                     editingPoints = emptyList()
                 },
                 onSave = { updatedFence ->
-                    val index = app.geoFences.indexOfFirst { it.id == updatedFence.id }
-                    if (index >= 0) {
-                        app.geoFences[index] = updatedFence
-                        app.dbHelper.updateFence(updatedFence)
-                        app.refreshEngineFences()
-                        app.checkAndUpdateFenceState()
-                    }
+                    mapViewModel.saveFence(updatedFence)
                     isEditingFence = false
                     editingFence = null
                     editingPoints = emptyList()
@@ -397,10 +414,7 @@ fun MapScreen(app: TrackMasterApplication) {
                     }
                 }
 
-                app.geoFences.add(fence)
-                app.dbHelper.insertFence(fence)
-                app.refreshEngineFences()
-                app.checkAndUpdateFenceState()
+                mapViewModel.addFence(fence)
 
                 showCreateDialog = false
                 showRecalculateHint = true
@@ -486,10 +500,7 @@ fun MapScreen(app: TrackMasterApplication) {
             confirmButton = {
                 Button(
                     onClick = {
-                        app.geoFences.removeIf { it.id == fenceToDelete.id }
-                        app.dbHelper.deleteFence(fenceToDelete.id)
-                        app.refreshEngineFences()
-                        app.checkAndUpdateFenceState()
+                        mapViewModel.deleteFence(fenceToDelete.id)
                         showDeleteConfirm = null
                         if (selectedFence?.id == fenceToDelete.id) selectedFence = null
                     },
@@ -514,8 +525,10 @@ private fun TopStatusIsland(
     highlightedFenceId: String?,
     displayedFenceId: String?,
     mapType: Int,
+    showToolsPopup: Boolean,
     onMapTypeChange: (Int) -> Unit,
     onFenceListClick: () -> Unit,
+    onToolsClick: () -> Unit,
     onFenceClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -597,11 +610,111 @@ private fun TopStatusIsland(
             )
             Spacer(Modifier.width(16.dp))
             Icon(
+                Icons.Filled.Settings,
+                contentDescription = stringResource(R.string.tools),
+                tint = if (showToolsPopup) NeonAmber else Color.White,
+                modifier = Modifier.size(20.dp).clickable { onToolsClick() }
+            )
+            Spacer(Modifier.width(16.dp))
+            Icon(
                 Icons.AutoMirrored.Filled.List,
                 contentDescription = stringResource(R.string.fence_list),
                 tint = Color.White,
                 modifier = Modifier.size(20.dp).clickable { onFenceListClick() }
             )
+        }
+    }
+}
+
+@Composable
+private fun ToolsPopup(
+    fences: List<GeoFence>,
+    fenceColors: List<String>,
+    app: TrackMasterApplication,
+    onDismiss: () -> Unit,
+    onFencesUpdated: () -> Unit
+) {
+    var globalAlpha by remember { mutableStateOf(0.3f) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 40.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = glassPanel().copy(alpha = 0.95f),
+        tonalElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(R.string.batch_tools),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = NeonCoral
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.close), fontSize = 12.sp, color = Color.Gray)
+                }
+            }
+
+            // Random Color Button
+            GlassButton(
+                onClick = {
+                    val rng = Random()
+                    fences.forEach { fence ->
+                        val newColor = fenceColors[rng.nextInt(fenceColors.size)]
+                        app.dbHelper.updateFence(fence.copy(color = newColor))
+                    }
+                    app.geoFences.clear()
+                    app.geoFences.addAll(app.dbHelper.getAllFences())
+                    app.refreshEngineFences()
+                    onFencesUpdated()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.Palette, contentDescription = null, tint = NeonAmber, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.random_colors), color = NeonAmber, fontSize = 13.sp)
+            }
+
+            // Global Transparency
+            Text(stringResource(R.string.global_transparency, (globalAlpha * 100).toInt()), fontSize = 12.sp, color = Color.Gray)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("10%", fontSize = 10.sp, color = Color.Gray)
+                Slider(
+                    value = globalAlpha,
+                    onValueChange = { globalAlpha = it },
+                    modifier = Modifier.weight(1f).height(24.dp),
+                    valueRange = 0.1f..0.8f,
+                    steps = 6,
+                    colors = SliderDefaults.colors(thumbColor = NeonCoral, activeTrackColor = NeonCoral)
+                )
+                Text("80%", fontSize = 10.sp, color = Color.Gray)
+            }
+            GlassButton(
+                onClick = {
+                    app.dbHelper.updateAllFencesAlpha(globalAlpha)
+                    app.geoFences.clear()
+                    app.geoFences.addAll(app.dbHelper.getAllFences())
+                    app.refreshEngineFences()
+                    onFencesUpdated()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.Opacity, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.apply_transparency), color = NeonBlue, fontSize = 13.sp)
+            }
         }
     }
 }
@@ -810,11 +923,21 @@ private fun EditingToolbar(
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 Button(
                     onClick = {
-                        if (fence.type == GeoFenceType.POLYGON && editingPoints.size >= 3) {
-                            onSave(fence.copy(points = editingPoints))
+                        when (fence.type) {
+                            GeoFenceType.POLYGON -> {
+                                if (editingPoints.size >= 3) onSave(fence.copy(points = editingPoints))
+                            }
+                            GeoFenceType.CIRCLE -> {
+                                if (editingPoints.size >= 1) {
+                                    onSave(fence.copy(center = editingPoints.firstOrNull()))
+                                }
+                            }
                         }
                     },
-                    enabled = editingPoints.size >= 3,
+                    enabled = when (fence.type) {
+                        GeoFenceType.POLYGON -> editingPoints.size >= 3
+                        GeoFenceType.CIRCLE -> editingPoints.size >= 1
+                    },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Success)
                 ) {
@@ -917,6 +1040,8 @@ private fun FenceListDialog(
     ): List<Pair<GeoFence, Int>> {
         if (allFences.isEmpty()) return emptyList()
 
+        val fenceById = allFences.associateBy { it.id }
+
         // 构建 parentId -> children 映射
         val childrenMap = mutableMapOf<String?, MutableList<String>>()
         for (fence in allFences) {
@@ -930,7 +1055,7 @@ private fun FenceListDialog(
         fun addVisible(parentId: String?, depth: Int) {
             val children = childrenMap[parentId] ?: return
             for (childId in children) {
-                val child = allFences.find { it.id == childId }
+                val child = fenceById[childId]
                 if (child != null) {
                     result.add(child to depth)
                     // 如果这个围栏被展开了，递归添加子围栏

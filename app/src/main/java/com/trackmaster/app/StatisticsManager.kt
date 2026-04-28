@@ -123,29 +123,29 @@ class StatisticsManager(private val context: Context) {
             }.setEnterCountValue(count)
         }
 
-        // 3. 添加当前活跃会话的实时时长（使用 accumulatedDuration，而非 enterTime 的 raw 差值）
+        // 3. 添加当前活跃会话的未保存增量（避免与定时保存到 daily_stays 的部分重复计数）
         val activeSessions = app.stayDurationManager.activeSessions
         AppLog.d("StatisticsManager", "Active sessions: ${activeSessions.size}")
         for ((fenceId, session) in activeSessions) {
-            // 使用 getCurrentDuration 获取实时累积时长（含 App 重启的 gap）
-            val currentDuration = app.stayDurationManager.getCurrentDuration(fenceId) ?: 0L
-            // 活跃会话只要 enterTime 在 endTime 之前就计入（已在围栏内）
-            if (session.enterTime <= timeRange.endTime) {
-                // 时长取 getCurrentDuration，但不超过时间范围跨度（防止单日超过24小时）
-                val maxRangeSeconds = maxOf(0L, (timeRange.endTime.time - maxOf(session.enterTime, timeRange.startTime).time) / 1000)
-                val effectiveDurationSeconds = minOf(currentDuration, maxRangeSeconds)
-                AppLog.d("StatisticsManager", "Active session $fenceId (${session.fenceName}): duration=${effectiveDurationSeconds}s")
-                val builder = statsMap.getOrPut(fenceId) {
-                    FenceStatisticsBuilder(fenceId = fenceId, fenceName = session.fenceName)
-                }
-                builder.addDuration(effectiveDurationSeconds)
-                // 只有当进入时间在所选时间范围内，才计入 enterCount
-                // 如果用户在时间范围之前就已进入，不应多数
-                if (!enterCounts.containsKey(fenceId) &&
-                    session.enterTime >= timeRange.startTime &&
-                    session.enterTime <= timeRange.endTime) {
-                    builder.incrementEnterCount()
-                }
+            if (session.enterTime > timeRange.endTime) continue
+            // 只计算自上次保存以来的增量时长（已保存部分已从 daily_stays 计入）
+            val incrementalSeconds = if (session.lastSaveTime != null) {
+                (System.currentTimeMillis() - session.lastSaveTime.time) / 1000
+            } else {
+                app.stayDurationManager.getCurrentDuration(fenceId) ?: 0L
+            }
+            if (incrementalSeconds <= 0) continue
+            val maxRangeSeconds = maxOf(0L, (timeRange.endTime.time - maxOf(session.enterTime, timeRange.startTime).time) / 1000)
+            val effective = minOf(incrementalSeconds, maxRangeSeconds)
+            AppLog.d("StatisticsManager", "Active session $fenceId: incremental=${effective}s")
+            val builder = statsMap.getOrPut(fenceId) {
+                FenceStatisticsBuilder(fenceId = fenceId, fenceName = session.fenceName)
+            }
+            builder.addDuration(effective)
+            if (!enterCounts.containsKey(fenceId) &&
+                session.enterTime >= timeRange.startTime &&
+                session.enterTime <= timeRange.endTime) {
+                builder.incrementEnterCount()
             }
         }
 

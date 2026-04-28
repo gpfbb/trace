@@ -20,6 +20,8 @@ import com.trackmaster.app.ui.screens.*
 import com.trackmaster.app.ui.theme.AppTheme
 import com.trackmaster.app.ui.theme.ThemeManager
 import com.trackmaster.app.ui.theme.backgroundColor
+import com.trackmaster.app.viewmodel.HomeViewModel
+import com.trackmaster.app.viewmodel.MapViewModel
 import org.koin.compose.koinInject
 
 @Composable
@@ -28,6 +30,8 @@ fun TrackMasterNavHost(
     modifier: Modifier = Modifier
 ) {
     val app: TrackMasterApplication = koinInject()
+    val mapViewModel: MapViewModel = koinInject()
+    val homeViewModel: HomeViewModel = koinInject()
     val bgColor = backgroundColor()
 
     val startDestination by remember {
@@ -100,7 +104,8 @@ fun TrackMasterNavHost(
             ) {
                 HomeScreen(
                     onNavigateToMap = { navController.navigate(Screen.Map.route) },
-                    onNavigateToStatistics = { showStatisticsDialog = true }
+                    onNavigateToStatistics = { showStatisticsDialog = true },
+                    homeViewModel = homeViewModel
                 )
             }
 
@@ -109,7 +114,7 @@ fun TrackMasterNavHost(
                 enterTransition = { fadeIn(animationSpec = tween(200)) },
                 exitTransition = { fadeOut(animationSpec = tween(150)) }
             ) {
-                MapScreen(app = app)
+                MapScreen(app = app, mapViewModel = mapViewModel)
             }
 
             composable(

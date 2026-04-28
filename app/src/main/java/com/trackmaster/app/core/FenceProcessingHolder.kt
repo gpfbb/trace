@@ -9,7 +9,7 @@ import com.trackmaster.app.data.GeoFenceEvent
 import com.trackmaster.app.data.FenceStayRecord
 import com.trackmaster.app.model.Category
 import com.trackmaster.app.services.Aggregator
-import com.trackmaster.app.utils.ThrottleConfig
+import com.trackmaster.app.throttle.ThrottleConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,7 +42,7 @@ class FenceProcessingHolder(
     private val persistentStateManager get() = managersHolder.persistentStateManager
 
     // ---- 内部状态 ----
-    private var isRestoringFirstLocation = false
+    @Volatile private var isRestoringFirstLocation = false
     private val previousSmallestFenceId = java.util.concurrent.atomic.AtomicReference<String?>(null)
 
     // ============================================================

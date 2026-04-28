@@ -115,4 +115,32 @@ class CategoryDao(private val dbManager: DatabaseManager) {
         }
         return category
     }
+
+    fun getCategoryById(id: String): Category? {
+        categoryCache[id]?.let { return it }
+        val db = dbManager.readableDatabase
+        val cursor = db.query(
+            DatabaseManager.TABLE_CATEGORIES, null,
+            "${DatabaseManager.KEY_CATEGORY_TABLE_ID} = ?", arrayOf(id),
+            null, null, null
+        )
+        var category: Category? = null
+        try {
+            if (cursor.moveToFirst()) {
+                category = Category(
+                    id = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CATEGORY_TABLE_ID)),
+                    name = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CATEGORY_NAME)),
+                    icon = if (cursor.getColumnIndex(DatabaseManager.KEY_CATEGORY_ICON) >= 0 && !cursor.isNull(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CATEGORY_ICON)))
+                        cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CATEGORY_ICON)) else null,
+                    sortOrder = if (cursor.getColumnIndex(DatabaseManager.KEY_CATEGORY_SORT_ORDER) >= 0)
+                        cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CATEGORY_SORT_ORDER)) else 0,
+                    createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CATEGORY_CREATED_AT)))
+                )
+                categoryCache[category.id] = category
+            }
+        } finally {
+            cursor.close()
+        }
+        return category
+    }
 }

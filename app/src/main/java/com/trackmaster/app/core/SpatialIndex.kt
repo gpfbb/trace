@@ -80,8 +80,8 @@ class GridSpatialIndex(private val gridSizeDeg: Double = 0.01) : SpatialIndex {
      * 计算点的网格键
      */
     private fun gridKey(lat: Double, lng: Double): String {
-        val latCell = (lat / gridSizeDeg).toInt()
-        val lngCell = (lng / gridSizeDeg).toInt()
+        val latCell = kotlin.math.floor(lat / gridSizeDeg).toInt()
+        val lngCell = kotlin.math.floor(lng / gridSizeDeg).toInt()
         return "${latCell}_${lngCell}"
     }
 
@@ -91,11 +91,11 @@ class GridSpatialIndex(private val gridSizeDeg: Double = 0.01) : SpatialIndex {
     private fun bboxGridKeys(bbox: BBox): Set<String> {
         val keys = mutableSetOf<String>()
 
-        // 计算bbox覆盖的网格范围
-        val minLatCell = (bbox.minLat / gridSizeDeg).toInt()
-        val maxLatCell = (bbox.maxLat / gridSizeDeg).toInt()
-        val minLngCell = (bbox.minLng / gridSizeDeg).toInt()
-        val maxLngCell = (bbox.maxLng / gridSizeDeg).toInt()
+        // 计算bbox覆盖的网格范围（使用 floor/ceil 确保负坐标覆盖正确）
+        val minLatCell = kotlin.math.floor(bbox.minLat / gridSizeDeg).toInt()
+        val maxLatCell = kotlin.math.ceil(bbox.maxLat / gridSizeDeg).toInt()
+        val minLngCell = kotlin.math.floor(bbox.minLng / gridSizeDeg).toInt()
+        val maxLngCell = kotlin.math.ceil(bbox.maxLng / gridSizeDeg).toInt()
 
         // 遍历所有网格
         for (latCell in minLatCell..maxLatCell) {

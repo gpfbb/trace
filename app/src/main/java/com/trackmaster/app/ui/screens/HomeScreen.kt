@@ -21,84 +21,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.R
-import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.ui.theme.*
-import java.text.SimpleDateFormat
-import java.util.*
+import com.trackmaster.app.viewmodel.HomeViewModel
 
 @Composable
 fun HomeScreen(
     onNavigateToMap: () -> Unit,
-    onNavigateToStatistics: () -> Unit
+    onNavigateToStatistics: () -> Unit,
+    homeViewModel: HomeViewModel
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as TrackMasterApplication }
 
-    var currentFenceName by remember { mutableStateOf<String?>(null) }
-    var isInsideFence by remember { mutableStateOf(false) }
-    var todayEnterCount by remember { mutableStateOf(0) }
-    var todayExitCount by remember { mutableStateOf(0) }
-    var monthTopFences by remember { mutableStateOf<List<Pair<String, Long>>>(emptyList()) }
-
-    val fenceStateVersion by app.fenceStateVersion.collectAsState()
-
-    // 【关键修复】fenceStateVersion 变化时立即更新当前围栏状态和热门围栏
-    // 确保灵动岛/首页的"当前所在围栏"和"本月热门围栏"能实时反映围栏状态变化
-    LaunchedEffect(fenceStateVersion) {
-        val matched = app.currentMatchedFences
-        isInsideFence = matched.isNotEmpty()
-        currentFenceName = matched.firstOrNull()?.name
-
-        // 更新热门围栏数据（包含 activeSessions 的实时时长）
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.DAY_OF_MONTH, 1)
-        val allDailyRecords = mutableListOf<com.trackmaster.app.DailyStayRecord>()
-        val nowCal = Calendar.getInstance()
-        while (!cal.after(nowCal)) {
-            val dateKey = dateFormat.format(cal.time)
-            allDailyRecords.addAll(app.dbHelper.getDailyStayRecordsByDate(dateKey))
-            cal.add(Calendar.DAY_OF_MONTH, 1)
-        }
-
-        val dailyDurations = allDailyRecords
-            .groupBy { it.fenceName }
-            .mapValues { (_, recs) -> recs.sumOf { it.totalDurationSeconds } }
-            .toMutableMap()
-
-        val activeSessions = app.stayDurationManager.activeSessions
-        for ((fenceId, session) in activeSessions) {
-            // getCurrentDuration 已经包含 accumulatedDuration，不需要再相加
-            val currentDuration = app.stayDurationManager.getCurrentDuration(fenceId) ?: 0L
-            if (currentDuration > 0) {
-                val currentName = dailyDurations.keys.find { it == session.fenceName } ?: session.fenceName
-                dailyDurations[currentName] = (dailyDurations[currentName] ?: 0L) + currentDuration
-            }
-        }
-
-        val top = dailyDurations
-            .entries
-            .sortedByDescending { it.value }
-            .take(3)
-            .map { it.key to it.value }
-        monthTopFences = top
-    }
+    val currentFenceName by homeViewModel.currentFenceName.collectAsState()
+    val isInsideFence by homeViewModel.isInsideFence.collectAsState()
+    val todayEnterCount by homeViewModel.todayEnterCount.collectAsState()
+    val todayExitCount by homeViewModel.todayExitCount.collectAsState()
+    val monthTopFences by homeViewModel.monthTopFences.collectAsState()
 
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     val lifecycle = lifecycleOwner.lifecycle
     DisposableEffect(lifecycle) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                val today = Calendar.getInstance()
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                val todayStr = dateFormat.format(today.time)
-                val todayEvents = app.geoFenceEvents.filter { dateFormat.format(it.time).startsWith(todayStr) }
-                todayEnterCount = todayEvents.count { it.action == GeoFenceAction.ENTER }
-                todayExitCount = todayEvents.count { it.action == GeoFenceAction.EXIT }
                 app.notifyFenceStateChanged()
-
-                // notifyFenceStateChanged() 会触发 LaunchedEffect(fenceStateVersion) 更新状态
             }
         }
         lifecycle.addObserver(observer)
@@ -161,7 +108,7 @@ fun HomeScreen(
                     if (monthTopFences.isEmpty()) {
                         Text(stringResource(R.string.no_data), fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
                     } else {
-                        monthTopFences.forEachIndexed { idx, pair ->
+                        monthTopFences.forEachIndexed { idx, stats ->
                             Row(
                                 Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                 Arrangement.SpaceBetween, Alignment.CenterVertically
@@ -169,9 +116,9 @@ fun HomeScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("${idx + 1}.", fontSize = 14.sp, color = if (idx == 0) NeonAmber else Color.Gray, fontWeight = FontWeight.Bold)
                                     Spacer(Modifier.width(8.dp))
-                                    Text(pair.first, fontSize = 14.sp, color = Color.White)
+                                    Text(stats.fenceName, fontSize = 14.sp, color = Color.White)
                                 }
-                                Text(formatDuration(pair.second), fontSize = 14.sp, color = primaryColor())
+                                Text(formatDuration(stats.totalDurationSeconds), fontSize = 14.sp, color = primaryColor())
                             }
                         }
                     }

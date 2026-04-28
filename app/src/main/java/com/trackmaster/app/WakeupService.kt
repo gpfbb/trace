@@ -24,6 +24,8 @@ class WakeupService : Service() {
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var retryCount = 0
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
@@ -44,12 +46,6 @@ class WakeupService : Service() {
 
         performWakeupCheck()
 
-        android.os.Handler(mainLooper).postDelayed({
-            AppLog.d(TAG, "WakeupService 检查完成，停止")
-            releaseWakeLock()
-            stopSelf()
-        }, 5000)
-
         return START_NOT_STICKY
     }
 
@@ -57,24 +53,41 @@ class WakeupService : Service() {
         val app = application as? TrackMasterApplication
         if (app == null) {
             AppLog.e(TAG, "无法获取 TrackMasterApplication")
+            stopSelfSafely()
             return
         }
 
         val locationService = app.getLocationService()
         if (locationService == null) {
-            AppLog.e(TAG, "无法获取 LocationService")
+            // GeoFenceLocationService 可能尚未完成绑定（进程恢复时存在竞态窗口）
+            // 重试最多 3 次，每次间隔 500ms
+            if (retryCount < 3) {
+                retryCount++
+                AppLog.w(TAG, "LocationService 尚未绑定，${retryCount}/3 次重试...")
+                handler.postDelayed({ performWakeupCheck() }, 500)
+            } else {
+                AppLog.e(TAG, "重试耗尽，无法获取 LocationService")
+                stopSelfSafely()
+            }
             return
         }
 
         if (locationService.isRunning()) {
             AppLog.d(TAG, "定位服务正在运行，重新调度 Alarm")
             locationService.scheduleNextWakeup()
-            return
+        } else {
+            AppLog.d(TAG, "定位服务已停止，尝试恢复定位")
+            locationService.performWakeupLocation()
+            locationService.scheduleNextWakeup()
         }
+        stopSelfSafely()
+    }
 
-        AppLog.d(TAG, "定位服务已停止，尝试恢复定位")
-        locationService.performWakeupLocation()
-        locationService.scheduleNextWakeup()
+    private fun stopSelfSafely() {
+        handler.postDelayed({
+            releaseWakeLock()
+            stopSelf()
+        }, 3000)
     }
 
     private fun createNotificationChannel() {

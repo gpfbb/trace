@@ -2,7 +2,7 @@ package com.trackmaster.app.core
 
 import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.AppPreferences
-import com.trackmaster.app.utils.ThrottleConfig
+import com.trackmaster.app.throttle.ThrottleConfig
 import com.trackmaster.app.storage.Repository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

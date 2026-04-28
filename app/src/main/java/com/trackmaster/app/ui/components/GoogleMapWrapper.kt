@@ -234,7 +234,7 @@ fun GoogleMapWrapper(
     }
 
     // 选中围栏时，摄像机跳转到围栏位置
-    LaunchedEffect(displayedFenceId, isMapReady) {
+    LaunchedEffect(displayedFenceId, fences, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
         val fid = displayedFenceId ?: return@LaunchedEffect
         val fence = fences.find { it.id == fid } ?: return@LaunchedEffect
@@ -262,7 +262,7 @@ fun GoogleMapWrapper(
     }
 
     // 围栏覆盖物
-    LaunchedEffect(displayedFenceId, fences.map { it.id to it }.hashCode(), isMapReady) {
+    LaunchedEffect(displayedFenceId, fences, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
 
         mapPresenter.clearAll()

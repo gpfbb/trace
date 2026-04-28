@@ -222,6 +222,14 @@ class FenceDao(private val dbManager: DatabaseManager) {
         return db.update(DatabaseManager.TABLE_FENCES, values, "${DatabaseManager.KEY_CATEGORY_ID} = ?", arrayOf(fromCategoryId))
     }
 
+    fun updateAllFencesAlpha(alpha: Float): Int {
+        invalidateCache()
+        val db = dbManager.writableDatabase
+        val values = ContentValues()
+        values.put(DatabaseManager.KEY_ALPHA, alpha)
+        return db.update(DatabaseManager.TABLE_FENCES, values, null, null)
+    }
+
     fun updateFenceCategory(fenceId: String, categoryId: String): Int {
         invalidateCache()
         val db = dbManager.writableDatabase

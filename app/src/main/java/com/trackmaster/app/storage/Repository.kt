@@ -70,12 +70,15 @@ class Repository(
         }
     }
 
-    /** 按日期获取 Segment（缓存优先） */
+    /** 按日期获取 Segment（缓存优先，与 flush 互斥防止竞态） */
     suspend fun getSegmentsByDate(dateKey: String): List<StaySegment> {
         segmentCache[dateKey]?.let { return it }
-        val dbSegs = adapter.querySegmentsByDate(dateKey)
-        // Merge with pending writeBuffer segments for same date
-        val pendingSegs = writeBuffer.filter { formatDateKey(it.startTs) == dateKey }
+        val dbSegs: List<StaySegment>
+        val pendingSegs: List<StaySegment>
+        synchronized(flushLock) {
+            dbSegs = adapter.querySegmentsByDate(dateKey)
+            pendingSegs = writeBuffer.filter { formatDateKey(it.startTs) == dateKey }.toList()
+        }
         val merged = (dbSegs + pendingSegs).sortedBy { it.startTs }
         segmentCache[dateKey] = merged
         return merged

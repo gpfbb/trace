@@ -368,4 +368,11 @@
     <string name="date_format_day">yyyy年MM月dd日</string>
     <string name="date_format_month">yyyy年MM月</string>
     <string name="date_format_year">yyyy年</string>
+
+    <!-- Map Tools -->
+    <string name="tools">工具</string>
+    <string name="batch_tools">批量工具</string>
+    <string name="random_colors">随机分配颜色</string>
+    <string name="global_transparency">全局透明度: %d%%</string>
+    <string name="apply_transparency">应用到全部</string>
 </resources>

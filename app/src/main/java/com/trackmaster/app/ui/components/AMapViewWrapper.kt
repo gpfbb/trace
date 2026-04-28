@@ -58,10 +58,10 @@ fun AMapViewWrapper(
     val mapPresenter = remember { AMapPresenter(mapView, lifecycleOwner) }
 
     // 内部状态管理
-    val tempMarkers = remember { mutableStateListOf<MarkerWrapper>() }
+    val tempMarkers = remember { mutableListOf<MarkerWrapper>() }
     var previewCircle by remember { mutableStateOf<CircleWrapper?>(null) }
     var previewPolygon by remember { mutableStateOf<PolygonWrapper?>(null) }
-    val editingMarkers = remember { mutableStateListOf<MarkerWrapper>() }
+    val editingMarkers = remember { mutableListOf<MarkerWrapper>() }
     var cameraCenterLat by remember { mutableStateOf(0.0) }
     var cameraCenterLng by remember { mutableStateOf(0.0) }
     var hasCameraMoved by remember { mutableStateOf(false) }
@@ -147,7 +147,7 @@ fun AMapViewWrapper(
     }
 
     // 选中围栏时，摄像机跳转到围栏位置
-    LaunchedEffect(displayedFenceId, isMapReady) {
+    LaunchedEffect(displayedFenceId, fences, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
         val fid = displayedFenceId ?: return@LaunchedEffect
         val fence = fences.find { it.id == fid } ?: return@LaunchedEffect
@@ -175,7 +175,7 @@ fun AMapViewWrapper(
     }
 
     // 围栏覆盖物 - 使用 MapPresenter 管理
-    LaunchedEffect(displayedFenceId, fences.map { it.id to it }.hashCode(), isMapReady) {
+    LaunchedEffect(displayedFenceId, fences, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
 
         // 清理旧的覆盖物

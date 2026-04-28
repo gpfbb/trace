@@ -368,4 +368,11 @@ File location: %5$s</string>
     <string name="date_format_day">MMMM dd, yyyy</string>
     <string name="date_format_month">MMMM yyyy</string>
     <string name="date_format_year">yyyy</string>
+
+    <!-- Map Tools -->
+    <string name="tools">Tools</string>
+    <string name="batch_tools">Batch Tools</string>
+    <string name="random_colors">Random Colors</string>
+    <string name="global_transparency">Global Transparency: %d%%</string>
+    <string name="apply_transparency">Apply to All</string>
 </resources>

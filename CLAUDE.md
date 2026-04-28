@@ -1,104 +1,120 @@
-# Ralph Agent Instructions
+# CLAUDE.md
 
-You are an autonomous coding agent working on a software project.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Your Task
+## Build / Test / Lint
 
-1. Read the PRD at `prd.json` (in the same directory as this file)
-2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
-3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
-4. Pick the **highest priority** user story where `passes: false`
-5. Implement that single user story
-6. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)
-7. Update CLAUDE.md files if you discover reusable patterns (see below)
-8. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
-9. Update the PRD to set `passes: true` for the completed story
-10. Append your progress to `progress.txt`
-
-## Progress Report Format
-
-APPEND to progress.txt (never replace, always append):
-```
-## [Date/Time] - [Story ID]
-- What was implemented
-- Files changed
-- **Learnings for future iterations:**
-  - Patterns discovered (e.g., "this codebase uses X for Y")
-  - Gotchas encountered (e.g., "don't forget to update Z when changing W")
-  - Useful context (e.g., "the evaluation panel is in component X")
----
+```bash
+./gradlew assembleDebug          # Build debug APK
+./gradlew test                   # Run JUnit unit tests (app/src/test/)
+./gradlew connectedAndroidTest   # Run instrumented tests (requires device)
+./gradlew compileDebugKotlin     # Fast type-check without full build
+./gradlew lint                   # Android lint
 ```
 
-The learnings section is critical - it helps future iterations avoid repeating mistakes and understand the codebase better.
+- Gradle 9.0, AGP 8.12.3, Kotlin 1.9.24, JDK 17 target
+- `minSdk 26`, `targetSdk 34`, Compose compiler extension 1.5.14
+- Koin 3.5.3 for DI (the README says Hilt — that is wrong)
 
-## Consolidate Patterns
-
-If you discover a **reusable pattern** that future iterations should know, add it to the `## Codebase Patterns` section at the TOP of progress.txt (create it if it doesn't exist). This section should consolidate the most important learnings:
+## Architecture Overview
 
 ```
-## Codebase Patterns
-- Example: Use `sql<number>` template for aggregations
-- Example: Always use `IF NOT EXISTS` for migrations
-- Example: Export types from actions.ts for UI components
+┌─────────────────────────────────────────┐
+│  MainActivity (Compose host)            │
+│  TrackMasterNavHost → screens/          │
+│  ViewModels consume Repositories        │
+└──────────────┬──────────────────────────┘
+               │ Koin DI (AppModule.kt)
+┌──────────────▼──────────────────────────┐
+│  TrackMasterApplication (singleton)      │
+│  ├─ ManagersHolder  (stayDuration, etc) │
+│  ├─ RepositoryHolder (shared state)     │
+│  ├─ EngineHolder     (fence engine)     │
+│  ├─ FenceProcessingHolder (core logic)  │
+│  └─ FenceTreeManager (parent/child)     │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│  GeoFenceLocationService (foreground)    │
+│  ├─ LocationProviderManager             │
+│  │   └─ AMapLocationProvider (default)  │
+│  │   └─ GoogleLocationProvider          │
+│  ├─ PowerSaveController                 │
+│  └─ calls app.checkGeoFences()          │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│  Engine (core state machine)            │
+│  ├─ SmartScheduler (adaptive interval)  │
+│  ├─ SpatialIndex (BBox pre-filter)      │
+│  ├─ DynamicBufferManager                │
+│  └─ Repository (write buffer + flush)   │
+└─────────────────────────────────────────┘
 ```
 
-Only add patterns that are **general and reusable**, not story-specific details.
+### Data Flow
 
-## Update CLAUDE.md Files
+1. **GPS → Engine**: `GeoFenceLocationService.onLocationChanged()` calls `app.checkGeoFences(location, accel)`
+2. **Engine.evaluateLocation()**: SmartScheduler decides `shouldProcess` (drift filter + adaptive interval)
+3. **Engine.onLocationUpdate()** (async via `appScope.launch`): spatial query → fence matching → state transition → `StaySegment` generation
+4. **FenceProcessingHolder**: handles enter/exit events, stay timing via `StayDurationManager`, persistent state save
+5. **UI observes**: `RepositoryHolder` state (currentMatchedFences, fenceStateVersion) via `collectAsState()`
 
-Before committing, check if any edited files have learnings worth preserving in nearby CLAUDE.md files:
+### Key Design Decisions
 
-1. **Identify directories with edited files** - Look at which directories you modified
-2. **Check for existing CLAUDE.md** - Look for CLAUDE.md in those directories or parent directories
-3. **Add valuable learnings** - If you discovered something future developers/agents should know:
-   - API patterns or conventions specific to that module
-   - Gotchas or non-obvious requirements
-   - Dependencies between files
-   - Testing approaches for that area
-   - Configuration or environment requirements
+- **Leaf-first timing**: Only the deepest matched fence triggers `StaySegment` tracking. Parents are tracked for containment context but don't independently generate segments.
+- **Repository as write buffer**: `Repository.enqueueSegment()` buffers in memory, flushes to SQLite in batches of 5. Cache is cleared AFTER successful transaction (P0 fix to prevent crash data loss).
+- **DI pattern**: Repository interfaces (`FenceRepository`, `SessionRepository`, etc.) wrap `TrackMasterApplication` — they are thin delegates, not independent data stores.
+- **Engine is replaceable**: `EngineHolder.engine` is a `var` that gets replaced on fence import/delete via `refresh()`.
 
-**Examples of good CLAUDE.md additions:**
-- "When modifying X, also update Y to keep them in sync"
-- "This module uses pattern Z for all API calls"
-- "Tests require the dev server running on PORT 3000"
-- "Field names must match the template exactly"
+## Critical Gotchas
 
-**Do NOT add:**
-- Story-specific implementation details
-- Temporary debugging notes
-- Information already in progress.txt
+- **LaunchedEffect stale closures**: When setting up listeners inside `LaunchedEffect` that read `State` variables, those state vars MUST be in the effect's key list — otherwise the closure captures stale values on recomposition.
+- **AMap privacy consent**: Must call `AMapLocationClient.updatePrivacyShow()` and `updatePrivacyAgree()` BEFORE any map/location SDK calls. Done in `MainActivity.onCreate()`.
+- **TOCTOU races**: `appScope.launch` in `checkGeoFences` is async. Operations after the launch may see stale state. The codebase captures snapshots (`matchedFenceIdsSnapshot`) before launching to mitigate this.
+- **Engine state writes**: `Engine.transition()` writes to repo BEFORE updating `currentLeafId` — if repo write fails, state is preserved. Don't invert this order.
+- **Repository cache invalidation**: After deleting/updating fences, call `repo.clearCache()` and `app.refreshEngineFences()`. Failing to do both will return stale segments.
+- **`setCurrentMatchedFenceIds`**: External code should NOT call this on Engine (it's used internally by `onLocationUpdate`). External sync calls create TOCTOU races with async updates. Use `checkFenceMatch()` or `checkFenceMatchWithDynamicBuffer()` instead.
+- **Google provider throttling**: `GoogleLocationProvider.setInterval()` exists but requires explicit calls. Engine saves `lastComputedIntervalMs` for `GeoFenceLocationService` to read and apply.
 
-Only update CLAUDE.md if you have **genuinely reusable knowledge** that would help future work in that directory.
+## Module Map
 
-## Quality Requirements
+| Package | Purpose |
+|---|---|
+| `core/` | Engine, GeofenceModels, FenceProcessingHolder, FenceTreeBuilder/Manager, SpatialIndex |
+| `locationservice/` | Location provider abstraction (AMap, Google) |
+| `mapstraction/` | Map UI abstraction (AMap, Google maps) |
+| `data/dao/` | Room DAOs (FenceDao, EventDao, StayDao, DailyStayDao, CategoryDao) |
+| `data/database/` | DatabaseManager, DatabaseFacade, FenceExporter |
+| `data/repository/` | Repository interfaces + App implementations (delegates to Application) |
+| `storage/` | Repository (write buffer), StorageAdapter, SqliteStorageAdapter |
+| `viewmodel/` | HomeVM, MapVM, SettingsVM, StatisticsVM, MainVM |
+| `ui/screens/` | HomeScreen, MapScreen, HistoryScreen, OnboardingScreen |
+| `ui/navigation/` | NavHost, bottom bar variants, Screen routes |
+| `ui/theme/` | ThemeManager, ColorScheme, GlassComponents |
+| `ui/components/` | AMapViewWrapper, GoogleMapWrapper, ThemePicker |
+| `utils/geometry/` | GeoCalculator, FenceStateMachine, CirclePolygonCache, FenceAnalyzer |
+| `utils/scheduler/` | StationaryDetector |
+| `throttle/` | ThrottleConfig |
+| `services/` | Aggregator |
+| `model/` | Category, GeoFenceEvent, GeoPoint |
 
-- ALL commits must pass your project's quality checks (typecheck, lint, test)
-- Do NOT commit broken code
-- Keep changes focused and minimal
-- Follow existing code patterns
+## Map & Location Providers
 
-## Browser Testing (If Available)
+The app supports both AMap and Google Maps via abstraction layers:
+- **Map rendering**: `MapProvider` interface → `AMapProvider` / `GoogleMapProvider` → respective `MapPresenter`
+- **Location**: `LocationProvider` interface → `AMapLocationProvider` / `GoogleLocationProvider`
+- Default is AMap; switchable via `appPreferences.mapProvider`
 
-For any story that changes UI, verify it works in the browser if you have browser testing tools configured (e.g., via MCP):
+## Signing
 
-1. Navigate to the relevant page
-2. Verify the UI changes work as expected
-3. Take a screenshot if helpful for the progress log
+- Debug keystore: `trackmaster_debug.jks` (password: `trackmaster2024`)
+- Release keystore: `trackmaster.jks` (password: `trackmaster2024`)
+- AMap API key is in `app/build.gradle.kts` as `buildConfigField`
 
-If no browser tools are available, note in your progress report that manual browser verification is needed.
+## DI Registration
 
-## Stop Condition
-
-After completing a user story, check if ALL stories have `passes: true`.
-
-If ALL stories are complete and passing, reply with:
-<promise>COMPLETE</promise>
-
-If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
-
-## Important
-
-- Work on ONE story per iteration
-- Commit frequently
-- Keep CI green
-- Read the Codebase Patterns section in progress.txt before starting
+When adding new DAOs, repositories, or managers, register them in `AppModule.kt` (Koin). The pattern is:
+- DAOs → `single { XxxDao(get()) }` (DatabaseManager is the parameter)
+- Repositories → `single<Interface> { AppImpl(get()) }` (Application is the parameter)
+- ViewModels → `viewModel { XxxViewModel(get()) }`

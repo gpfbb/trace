@@ -17,7 +17,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -64,6 +63,28 @@ class DataManager(private val context: Context) {
         }
     }
     
+    /** 将 JSON 内容写入公共 Downloads 目录，返回显示路径 */
+    private fun writeToPublicDownloads(fileName: String, jsonContent: String): String {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/TrackMaster")
+            }
+            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                ?: throw Exception("无法创建文件")
+            context.contentResolver.openOutputStream(uri)?.use { it.write(jsonContent.toByteArray(Charsets.UTF_8)) }
+            "Downloads/TrackMaster/$fileName"
+        } else {
+            @Suppress("DEPRECATION")
+            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrackMaster")
+            if (!dir.exists()) dir.mkdirs()
+            val file = File(dir, fileName)
+            file.writeText(jsonContent)
+            file.absolutePath
+        }
+    }
+
     suspend fun exportData(
         options: DataExportOptions,
         onProgress: ((Int, String) -> Unit)? = null
@@ -99,6 +120,8 @@ class DataManager(private val context: Context) {
                 fenceJson.put("name", fence.name)
                 fenceJson.put("type", fence.type.name)
                 fenceJson.put("categoryId", fence.categoryId)
+                fenceJson.put("color", fence.color)
+                fenceJson.put("alpha", fence.alpha.toDouble())
                 fenceJson.put("createdAt", dateTimeFormat.get().format(fence.createdAt))
 
                 if (fence.type == GeoFenceType.CIRCLE) {
@@ -167,33 +190,7 @@ class DataManager(private val context: Context) {
             onProgress?.invoke(90, "写入 Downloads 文件夹...")
 
             val jsonContent = json.toString(2)
-            val savedFileName: String
-            val savedPath: String
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 10+：通过 MediaStore 写入公共 Downloads
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
-                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/TrackMaster")
-                }
-                val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-                    ?: throw Exception("无法创建文件")
-                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(jsonContent.toByteArray(Charsets.UTF_8))
-                }
-                savedFileName = fileName
-                savedPath = "Downloads/TrackMaster/$fileName"
-            } else {
-                // Android 9 及以下：直接写到公共 Downloads
-                @Suppress("DEPRECATION")
-                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrackMaster")
-                if (!dir.exists()) dir.mkdirs()
-                val exportFile = File(dir, fileName)
-                FileWriter(exportFile).use { writer -> writer.write(jsonContent) }
-                savedFileName = exportFile.name
-                savedPath = exportFile.absolutePath
-            }
+            val savedPath = writeToPublicDownloads(fileName, jsonContent)
 
             // 同步写一份到私有缓存（供"已导出文件"列表展示）
             val cacheFile = File(exportCacheDir, fileName)
@@ -204,7 +201,7 @@ class DataManager(private val context: Context) {
             DataExportResult(
                 success = true,
                 filePath = savedPath,
-                message = "导出成功！文件已保存至: $savedFileName\n路径: Downloads/TrackMaster/",
+                message = "导出成功！文件已保存至: $fileName\n路径: Downloads/TrackMaster/",
                 exportedFences = allFences.size,
                 exportedEvents = filteredEvents.size,
                 exportedStays = filteredStays.size,
@@ -269,6 +266,8 @@ class DataManager(private val context: Context) {
                 }
                 if (name == null || type == null) continue
                 val categoryId = fenceJson.optString("categoryId", Category.UNASSIGNED_ID)
+                val color = fenceJson.optString("color", "#FF0000")
+                val alpha = fenceJson.optDouble("alpha", 0.3).toFloat()
                 val createdAt = try {
                     dateTimeFormat.get().parse(fenceJson.getString("createdAt"))
                 } catch (e: Exception) {
@@ -281,33 +280,22 @@ class DataManager(private val context: Context) {
                     val radius = fenceJson.optDouble("radius", Double.NaN).toFloat()
                     if (centerLat.isNaN() || centerLng.isNaN() || radius.isNaN()) continue
                     GeoFence(
-                        id = fenceId,
-                        name = name,
-                        type = type,
+                        id = fenceId, name = name, type = type,
                         center = GeoFencePoint(centerLat, centerLng),
-                        radius = radius,
-                        categoryId = categoryId,
-                        createdAt = createdAt
+                        radius = radius, categoryId = categoryId,
+                        createdAt = createdAt, color = color, alpha = alpha
                     )
                 } else {
                     val pointsArray = fenceJson.getJSONArray("points")
                     val points = mutableListOf<GeoFencePoint>()
                     for (j in 0 until pointsArray.length()) {
                         val pointJson = pointsArray.getJSONObject(j)
-                        points.add(
-                            GeoFencePoint(
-                                pointJson.getDouble("lat"),
-                                pointJson.getDouble("lng")
-                            )
-                        )
+                        points.add(GeoFencePoint(pointJson.getDouble("lat"), pointJson.getDouble("lng")))
                     }
                     GeoFence(
-                        id = fenceId,
-                        name = name,
-                        type = type,
-                        points = points,
-                        categoryId = categoryId,
-                        createdAt = createdAt
+                        id = fenceId, name = name, type = type,
+                        points = points, categoryId = categoryId,
+                        createdAt = createdAt, color = color, alpha = alpha
                     )
                 }
 
@@ -465,6 +453,8 @@ class DataManager(private val context: Context) {
                 obj.put("name", fence.name)
                 obj.put("type", fence.type.name)
                 obj.put("categoryId", fence.categoryId)
+                obj.put("color", fence.color)
+                obj.put("alpha", fence.alpha.toDouble())
                 if (fence.type == GeoFenceType.CIRCLE) {
                     obj.put("centerLat", fence.center?.latitude)
                     obj.put("centerLng", fence.center?.longitude)
@@ -485,27 +475,7 @@ class DataManager(private val context: Context) {
             val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
             val fileName = "trackmaster_fences_$dateStr.json"
             val jsonContent = jsonArray.toString(2)
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
-                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/TrackMaster")
-                }
-                val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-                    ?: return@withContext null
-                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(jsonContent.toByteArray(Charsets.UTF_8))
-                }
-                "Downloads/TrackMaster/$fileName"
-            } else {
-                @Suppress("DEPRECATION")
-                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrackMaster")
-                if (!dir.exists()) dir.mkdirs()
-                val file = File(dir, fileName)
-                file.writeText(jsonContent)
-                file.absolutePath
-            }
+            writeToPublicDownloads(fileName, jsonContent)
         } catch (e: Exception) {
             null
         }
@@ -526,12 +496,15 @@ class DataManager(private val context: Context) {
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
                 val catId = obj.optString("categoryId", Category.UNASSIGNED_ID)
-                if (catId != Category.UNASSIGNED_ID && dbHelper.getCategoryByName(catId) == null) {
+                // catId 可能是 UUID（完整备份）或名称（模板分享），优先按 ID 查，fallback 按名称查
+                if (catId != Category.UNASSIGNED_ID
+                    && dbHelper.getCategoryById(catId) == null
+                    && dbHelper.getCategoryByName(catId) == null) {
                     categoryNames.add(catId)
                 }
             }
 
-            // 自动创建不存在的分类
+            // 自动创建不存在的分类（使用导入的名称作为分类名）
             for (catName in categoryNames) {
                 val newCat = Category(name = catName)
                 dbHelper.insertCategory(newCat)
@@ -661,28 +634,7 @@ class DataManager(private val context: Context) {
             json.put("events", eventsArray)
 
             val jsonContent = json.toString(2)
-            val savedPath: String
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
-                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/TrackMaster")
-                }
-                val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-                    ?: throw Exception("无法创建文件")
-                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(jsonContent.toByteArray(Charsets.UTF_8))
-                }
-                savedPath = "Downloads/TrackMaster/$fileName"
-            } else {
-                @Suppress("DEPRECATION")
-                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrackMaster")
-                if (!dir.exists()) dir.mkdirs()
-                val exportFile = File(dir, fileName)
-                FileWriter(exportFile).use { writer -> writer.write(jsonContent) }
-                savedPath = exportFile.absolutePath
-            }
+            val savedPath = writeToPublicDownloads(fileName, jsonContent)
 
             StatsExportResult(
                 success = true,

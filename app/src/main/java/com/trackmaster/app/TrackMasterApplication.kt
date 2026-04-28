@@ -17,7 +17,7 @@ import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.di.appModule
 import com.trackmaster.app.services.Aggregator
 import com.trackmaster.app.ui.theme.ThemeManager
-import com.trackmaster.app.utils.ThrottleConfig
+import com.trackmaster.app.throttle.ThrottleConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -218,6 +218,7 @@ class TrackMasterApplication : Application() {
         // 【P0修复】必须等待 engine.init() 完成后再创建新 Aggregator
         // 否则新 Aggregator 可能在 Engine 未完全初始化时就开始使用，导致数据不一致
         appScope.launch {
+            aggregator = null  // 释放旧 Aggregator 对旧 fence 列表的引用
             engine.init()
             aggregator = Aggregator(coreFences, repository)
         }

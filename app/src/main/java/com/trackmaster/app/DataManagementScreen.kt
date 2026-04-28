@@ -55,24 +55,7 @@ fun DataManagementScreen(
     var autoCleanupDays by remember { mutableStateOf(prefs.autoCleanupDays) }
     var showAutoCleanupDialog by remember { mutableStateOf(false) }
 
-    // Pre-compute strings for use in lambdas (stringResource cannot be called in lambdas)
-    val readingFileMsg = stringResource(R.string.reading_file)
-    val importingDataMsg = stringResource(R.string.importing_data)
-    val importSuccessTemplate = stringResource(R.string.import_success, 0, 0, 0)
-    val importFailedTemplate = stringResource(R.string.import_failed, "")
-    val fileReadErrorMsg = stringResource(R.string.file_read_error)
-    val preparingExportMsg = stringResource(R.string.preparing_export)
-    val exportSuccessTemplate = stringResource(R.string.export_success, 0, 0, 0, 0, "")
-    val exportFailedTemplate = stringResource(R.string.export_failed, "")
-    val noFencesToShareMsg = stringResource(R.string.no_fences_to_share)
-    val generatingFenceTemplateMsg = stringResource(R.string.generating_fence_template)
-    val shareFenceTitleMsg = stringResource(R.string.share_fence_title)
-    val shareFenceMsg = stringResource(R.string.share_fence)
-    val fenceShareReadyTemplate = stringResource(R.string.fence_share_ready, 0)
-    val fenceGenerateErrorMsg = stringResource(R.string.fence_generate_error)
-    val shareFailedTemplate = stringResource(R.string.share_failed, "")
-    val cleanedOldLogsTemplate = stringResource(R.string.cleaned_old_logs, 0)
-    val deleteSuccessTemplate = stringResource(R.string.delete_success_records, 0)
+    val ctx = context
 
     fun refreshData() {
         scope.launch {
@@ -88,28 +71,30 @@ fun DataManagementScreen(
         if (uri != null) {
             scope.launch {
                 isImporting = true
-                importMessage = readingFileMsg
+                importMessage = ctx.getString(R.string.reading_file)
 
                 val tempFile = copyUriToFile(context, uri)
                 if (tempFile != null) {
-                    importMessage = importingDataMsg
+                    importMessage = ctx.getString(R.string.importing_data)
                     val result = dataManager.importData(tempFile.absolutePath)
 
                     isImporting = false
                     if (result.success) {
-                        successMessage = importSuccessTemplate
-                            .replace("%1\$d", result.importedFences.toString())
-                            .replace("%2\$d", result.importedEvents.toString())
-                            .replace("%3\$d", result.importedStays.toString())
+                        if (result.importedFences > 0) {
+                            app.geoFences.clear()
+                            app.geoFences.addAll(app.dbHelper.getAllFences())
+                            app.refreshEngineFences()
+                        }
+                        successMessage = ctx.getString(R.string.import_success, result.importedFences, result.importedEvents, result.importedStays)
                         showSuccessDialog = true
                         refreshData()
                     } else {
-                        successMessage = importFailedTemplate.replace("%s", result.message)
+                        successMessage = ctx.getString(R.string.import_failed, result.message)
                         showSuccessDialog = true
                     }
                 } else {
                     isImporting = false
-                    successMessage = fileReadErrorMsg
+                    successMessage = ctx.getString(R.string.file_read_error)
                     showSuccessDialog = true
                 }
             }
@@ -146,23 +131,19 @@ fun DataManagementScreen(
                     onExportAll = {
                         scope.launch {
                             isExporting = true
-                            exportMessage = preparingExportMsg
+                            exportMessage = ctx.getString(R.string.preparing_export)
                             val result = dataManager.exportData(
                                 options = DataExportOptions(exportAll = true),
-                                onProgress = { progress, msg ->
-                                    exportMessage = msg
-                                }
+                                onProgress = { _, msg -> exportMessage = msg }
                             )
                             isExporting = false
                             if (result.success) {
-                                successMessage = exportSuccessTemplate
-                                    .replace("%1", result.exportedFences.toString())
-                                    .replace("%2", result.exportedEvents.toString())
-                                    .replace("%3", result.exportedStays.toString())
-                                    .replace("%4", result.exportedDailyStays.toString())
-                                    .replace("%5", result.filePath ?: "")
+                                successMessage = ctx.getString(R.string.export_success,
+                                    result.exportedFences, result.exportedEvents,
+                                    result.exportedStays, result.exportedDailyStays,
+                                    result.filePath ?: "")
                             } else {
-                                successMessage = exportFailedTemplate.replace("%s", result.message)
+                                successMessage = ctx.getString(R.string.export_failed, result.message)
                             }
                             showSuccessDialog = true
                             refreshData()
@@ -171,13 +152,13 @@ fun DataManagementScreen(
                     onShareFences = {
                         val fences = app.geoFences.toList()
                         if (fences.isEmpty()) {
-                            successMessage = noFencesToShareMsg
+                            successMessage = ctx.getString(R.string.no_fences_to_share)
                             showSuccessDialog = true
                             return@ExportImportSection
                         }
                         scope.launch {
                             isExporting = true
-                            exportMessage = generatingFenceTemplateMsg
+                            exportMessage = ctx.getString(R.string.generating_fence_template)
                             try {
                                 val jsonContent = app.exportFencesToJson(fences)
                                 if (jsonContent != null) {
@@ -190,19 +171,18 @@ fun DataManagementScreen(
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                         type = "application/json"
                                         putExtra(Intent.EXTRA_STREAM, uri)
-                                        putExtra(Intent.EXTRA_SUBJECT, shareFenceTitleMsg)
+                                        putExtra(Intent.EXTRA_SUBJECT, ctx.getString(R.string.share_fence_title))
                                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
-                                    context.startActivity(Intent.createChooser(shareIntent, shareFenceMsg).apply {
+                                    context.startActivity(Intent.createChooser(shareIntent, ctx.getString(R.string.share_fence)).apply {
                                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     })
-                                    successMessage = fenceShareReadyTemplate.replace("%d", fences.size.toString())
+                                    successMessage = ctx.getString(R.string.fence_share_ready, fences.size)
                                 } else {
-                                    successMessage = fenceGenerateErrorMsg
+                                    successMessage = ctx.getString(R.string.fence_generate_error)
                                 }
                             } catch (e: Exception) {
-                                val errorMsg = e.message ?: "Unknown error"
-                                successMessage = shareFailedTemplate.replace("%s", errorMsg)
+                                successMessage = ctx.getString(R.string.share_failed, e.message ?: "Unknown")
                             }
                             isExporting = false
                             showSuccessDialog = true
@@ -228,7 +208,7 @@ fun DataManagementScreen(
                             val deleted = dataManager.deleteEventsBefore(
                                 Date(System.currentTimeMillis() - autoCleanupDays * 24 * 60 * 60 * 1000L)
                             )
-                            successMessage = cleanedOldLogsTemplate.replace("%d", deleted.toString())
+                            successMessage = ctx.getString(R.string.cleaned_old_logs, deleted)
                             showSuccessDialog = true
                             refreshData()
                         }
@@ -256,17 +236,16 @@ fun DataManagementScreen(
                     onImportFile = { file ->
                         scope.launch {
                             isImporting = true
-                            importMessage = importingDataMsg
+                            importMessage = ctx.getString(R.string.importing_data)
                             val result = dataManager.importData(file.absolutePath)
                             isImporting = false
                             if (result.success) {
                                 if (result.importedFences > 0) {
-                                    app.importFencesAndRefresh(file.readText(), preserveId = false)
+                                    app.geoFences.clear()
+                                    app.geoFences.addAll(app.dbHelper.getAllFences())
+                                    app.refreshEngineFences()
                                 }
-                                successMessage = importSuccessTemplate
-                                    .replace("%1", result.importedFences.toString())
-                                    .replace("%2", result.importedEvents.toString())
-                                    .replace("%3", result.importedStays.toString())
+                                successMessage = ctx.getString(R.string.import_success, result.importedFences, result.importedEvents, result.importedStays)
                             } else {
                                 successMessage = result.message
                             }
@@ -292,7 +271,7 @@ fun DataManagementScreen(
                 scope.launch {
                     val deletedCount = dataManager.deleteData(beforeDate)
                     showDeleteDialog = false
-                    successMessage = deleteSuccessTemplate.replace("%d", deletedCount.toString())
+                    successMessage = ctx.getString(R.string.delete_success_records, deletedCount)
                     showSuccessDialog = true
                     refreshData()
                 }

@@ -86,16 +86,6 @@ fun StatisticsScreen(
     var showMonthPicker by remember { mutableStateOf(false) }
     var showYearPicker by remember { mutableStateOf(false) }
 
-    val isToday by remember {
-        derivedStateOf {
-            val today = Calendar.getInstance()
-            selectedTimeDimension == TimeDimension.DAY &&
-                selectedYear == today.get(Calendar.YEAR) &&
-                selectedMonth == today.get(Calendar.MONTH) &&
-                selectedDay == today.get(Calendar.DAY_OF_MONTH)
-        }
-    }
-
     fun flattenTreeIds(node: FenceStatisticTree): List<String> {
         return listOf(node.fenceId) + node.children.flatMap { flattenTreeIds(it) }
     }
@@ -119,11 +109,10 @@ fun StatisticsScreen(
         statistics = statisticsManager.getStatistics(selectedTimeDimension, timeRange)
         statisticsTree = statisticsManager.buildFenceStatisticTree(selectedTimeDimension, timeRange)
         isLoading = false
-    }
 
-    LaunchedEffect(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
         var lastUpdateTime = 0L
         while (currentCoroutineContext().isActive) {
+            delay(30_000)
             val now = System.currentTimeMillis()
             val today = Calendar.getInstance()
             val isTodayNow = selectedTimeDimension == TimeDimension.DAY &&
@@ -135,28 +124,20 @@ fun StatisticsScreen(
                 TimeDimension.DAY -> isTodayNow
                 TimeDimension.MONTH, TimeDimension.YEAR -> now - lastUpdateTime >= 10_000
             }
-
-            if (shouldUpdate) {
-                val currentTimeRange = when (selectedTimeDimension) {
-                    TimeDimension.DAY -> statisticsManager.getDateRange(
-                        today.get(Calendar.YEAR),
-                        today.get(Calendar.MONTH),
-                        today.get(Calendar.DAY_OF_MONTH)
-                    )
-                    TimeDimension.MONTH -> statisticsManager.getMonthRange(selectedYear, selectedMonth)
-                    TimeDimension.YEAR -> statisticsManager.getYearRange(selectedYear)
-                }
-                val newStatistics = statisticsManager.getStatistics(selectedTimeDimension, currentTimeRange)
-                if (newStatistics.map { it.fenceId to it.totalDurationSeconds } !=
-                    statistics.map { it.fenceId to it.totalDurationSeconds }) {
-                    AppLog.d("StatisticsScreen", "实时更新统计数据: ${newStatistics.size} 项")
-                    statistics = newStatistics
-                    statisticsTree = statisticsManager.buildFenceStatisticTree(selectedTimeDimension, currentTimeRange)
-                }
-                lastUpdateTime = now
+            if (!shouldUpdate || !currentCoroutineContext().isActive) continue
+            val currentTimeRange = when (selectedTimeDimension) {
+                TimeDimension.DAY -> statisticsManager.getDateRange(
+                    today.get(Calendar.YEAR), today.get(Calendar.MONTH), today.get(Calendar.DAY_OF_MONTH))
+                TimeDimension.MONTH -> statisticsManager.getMonthRange(selectedYear, selectedMonth)
+                TimeDimension.YEAR -> statisticsManager.getYearRange(selectedYear)
             }
-
-            delay(1000)
+            val newStats = statisticsManager.getStatistics(selectedTimeDimension, currentTimeRange)
+            if (newStats.map { it.fenceId to it.totalDurationSeconds } !=
+                statistics.map { it.fenceId to it.totalDurationSeconds }) {
+                statistics = newStats
+                statisticsTree = statisticsManager.buildFenceStatisticTree(selectedTimeDimension, currentTimeRange)
+            }
+            lastUpdateTime = now
         }
     }
     
@@ -808,7 +789,7 @@ private fun FenceTreeItem(
                     expandedIds = expandedIds,
                     onToggleExpand = onToggleExpand,
                     statisticsManager = statisticsManager,
-                    totalDuration = node.totalDurationSeconds
+                    totalDuration = totalDuration
                 )
             }
         }

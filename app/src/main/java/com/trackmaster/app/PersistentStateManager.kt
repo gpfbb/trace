@@ -197,7 +197,7 @@ class PersistentStateManager(context: Context) {
      * 清除所有状态
      */
     fun clearAll() {
-        prefs.edit().clear().apply()
+        prefs.edit().clear().commit()
         AppLog.d(TAG, "清除所有持久化状态")
     }
 }
