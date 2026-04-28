@@ -30,10 +30,11 @@ fun getFenceDepth(fenceId: String, fenceMap: Map<String, Geofence>): Int {
     var cur = fenceMap[fenceId]
     val visited = mutableSetOf<String>()
     while (cur?.parentId != null) {
-        if (cur.parentId in visited) break // 检测到循环
-        visited.add(cur.parentId)
+        val parentId = cur.parentId ?: break
+        if (parentId in visited) break // 检测到循环
+        visited.add(parentId)
         d++
-        cur = fenceMap[cur.parentId]
+        cur = fenceMap[parentId]
         if (d > 100) break // 安全上限
     }
     return d
