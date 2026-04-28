@@ -386,40 +386,42 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                     GeoFenceType.CIRCLE -> {
                         if (drawingPoints.isEmpty()) {
                             showCreateDialog = false
-                            return@CreateFenceDialog
+                            null
+                        } else {
+                            GeoFence(
+                                id = UUID.randomUUID().toString(),
+                                name = name,
+                                type = GeoFenceType.CIRCLE,
+                                center = drawingPoints.first(),
+                                radius = radius,
+                                color = color,
+                                alpha = alpha
+                            )
                         }
-                        GeoFence(
-                            id = UUID.randomUUID().toString(),
-                            name = name,
-                            type = GeoFenceType.CIRCLE,
-                            center = drawingPoints.first(),
-                            radius = radius,
-                            color = color,
-                            alpha = alpha
-                        )
                     }
                     GeoFenceType.POLYGON -> {
                         if (drawingPoints.size < 3) {
                             showCreateDialog = false
-                            return@CreateFenceDialog
+                            null
+                        } else {
+                            GeoFence(
+                                id = UUID.randomUUID().toString(),
+                                name = name,
+                                type = GeoFenceType.POLYGON,
+                                points = drawingPoints,
+                                color = color,
+                                alpha = alpha
+                            )
                         }
-                        GeoFence(
-                            id = UUID.randomUUID().toString(),
-                            name = name,
-                            type = GeoFenceType.POLYGON,
-                            points = drawingPoints,
-                            color = color,
-                            alpha = alpha
-                        )
                     }
                 }
-
-                mapViewModel.addFence(fence)
-
-                showCreateDialog = false
-                showRecalculateHint = true
-                drawingPoints = emptyList()
-                isDrawingMode = false
+                if (fence != null) {
+                    mapViewModel.addFence(fence)
+                    showCreateDialog = false
+                    showRecalculateHint = true
+                    drawingPoints = emptyList()
+                    isDrawingMode = false
+                }
             }
         )
     }

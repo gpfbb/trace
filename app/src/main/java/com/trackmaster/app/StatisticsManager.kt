@@ -195,7 +195,7 @@ class StatisticsManager(private val context: Context) {
                 val childTree = buildTree(childId, depth + 1, childAccumulated)
                 if (childTree != null) {
                     childTrees.add(childTree)
-                    totalChildrenDirect += childTree.ownDurationSeconds
+                    totalChildrenDirect += childTree.totalDurationSeconds
                 }
             }
 
@@ -215,7 +215,7 @@ class StatisticsManager(private val context: Context) {
                 children = childTrees,
                 isExpanded = false,
                 depth = depth,
-                totalChildrenDirect = ownDur + totalChildrenDirect
+                totalChildrenDirect = totalChildrenDirect
             )
         }
 

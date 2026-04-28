@@ -51,7 +51,7 @@ class StayDurationManager(private val context: Context) {
     private val persistentStateManager by lazy { (context.applicationContext as TrackMasterApplication).persistentStateManager }
 
     public val activeSessions: ConcurrentHashMap<String, FenceActiveSession> = ConcurrentHashMap()
-    private val dailyCache = ConcurrentHashMap<String, MutableMap<String, DailyStayRecord>>()
+    private val dailyCache = ConcurrentHashMap<String, ConcurrentHashMap<String, DailyStayRecord>>()
 
     // Background thread for periodic saving to avoid main-thread DB writes
     private val saveThread = HandlerThread("StayDurationSaver").apply { start() }
@@ -284,7 +284,7 @@ class StayDurationManager(private val context: Context) {
     }
 
     fun getDailyRecord(dateKey: String, fenceId: String): DailyStayRecord? {
-        val dateRecords = dailyCache.getOrPut(dateKey) { mutableMapOf() }
+        val dateRecords = dailyCache.getOrPut(dateKey) { ConcurrentHashMap() }
         return dateRecords[fenceId] ?: loadDailyRecordFromDatabase(dateKey, fenceId)?.also {
             dateRecords[fenceId] = it
         }
@@ -292,7 +292,7 @@ class StayDurationManager(private val context: Context) {
 
     fun getAllDailyRecords(dateKey: String): List<DailyStayRecord> {
         val fromDb = loadAllDailyRecordsFromDatabase(dateKey)
-        val dateRecords = dailyCache.getOrPut(dateKey) { mutableMapOf() }
+        val dateRecords = dailyCache.getOrPut(dateKey) { ConcurrentHashMap() }
         fromDb.forEach { record ->
             dateRecords[record.fenceId] = record
         }
@@ -428,6 +428,12 @@ class StayDurationManager(private val context: Context) {
      * 关键：transferChildDurationToParent 不需要加 gapDuration，因为 accumulated 已经在 updateParentOnChildEnter 时被正确设置
      */
     fun transferChildDurationToParent(childFenceId: String, parentFenceId: String, childExitTime: Date) {
+        synchronized(enterLock) {
+            transferChildDurationToParentLocked(childFenceId, parentFenceId, childExitTime)
+        }
+    }
+
+    private fun transferChildDurationToParentLocked(childFenceId: String, parentFenceId: String, childExitTime: Date) {
         val childSession = activeSessions[childFenceId] ?: return
         val parentSession = activeSessions[parentFenceId] ?: return
 
@@ -490,13 +496,14 @@ class StayDurationManager(private val context: Context) {
             return session.accumulatedDuration + timeSinceLastSave
         }
 
-        // 刚恢复的会话（lastSaveTime == null）：accumulated 已包含 gap 时长，直接返回
-        // 正常新会话：从未保存过，返回从 enterTime 到现在（clamp 到 0 防止系统时钟回拨）
-        return maxOf(0L, (System.currentTimeMillis() - session.enterTime.time) / 1000)
+        // 刚恢复的会话（lastSaveTime == null）：accumulated 已包含 gap 时长
+        // 使用 gapStartTime（App关闭时刻）或 enterTime 计算增量
+        val gapStart = session.gapStartTime ?: session.enterTime
+        return maxOf(0L, session.accumulatedDuration + (System.currentTimeMillis() - gapStart.time) / 1000)
     }
 
     private fun saveDailyRecord(record: DailyStayRecord) {
-        val dateRecords = dailyCache.getOrPut(record.date) { mutableMapOf() }
+        val dateRecords = dailyCache.getOrPut(record.date) { ConcurrentHashMap() }
         dateRecords[record.fenceId] = record
         dbHelper.saveDailyStayRecord(record)
     }
@@ -516,7 +523,7 @@ class StayDurationManager(private val context: Context) {
         val todayKey = formatDate(Date())
         val todayRecords = dbHelper.getDailyStayRecordsByDate(todayKey)
         for (record in todayRecords) {
-            val dateRecords = dailyCache.getOrPut(record.date) { mutableMapOf() }
+            val dateRecords = dailyCache.getOrPut(record.date) { ConcurrentHashMap() }
             dateRecords[record.fenceId] = record
             AppLog.d(TAG, "恢复日统计: ${record.fenceName}, 日期=${record.date}, 时长=${record.totalDurationSeconds}秒")
         }

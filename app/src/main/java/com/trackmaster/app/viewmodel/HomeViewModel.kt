@@ -145,15 +145,15 @@ class HomeViewModel(
 
     private fun startAutoRefresh() {
         viewModelScope.launch {
-            try {
-                while (isActive) {
-                    delay(60_000)
+            while (isActive) {
+                delay(60_000)
+                try {
                     if (_isInsideFence.value) {
                         updateCurrentFenceStatus()
                     }
+                } catch (e: Exception) {
+                    AppLog.e("HomeViewModel", "autoRefresh error", e)
                 }
-            } catch (e: Exception) {
-                AppLog.e("HomeViewModel", "autoRefresh error", e)
             }
         }
     }

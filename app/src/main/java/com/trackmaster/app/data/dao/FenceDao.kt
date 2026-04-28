@@ -121,7 +121,7 @@ class FenceDao(private val dbManager: DatabaseManager) {
                         fences.add(fence)
                         fenceCache[fence.id] = fence
                     } catch (e: Exception) {
-                        AppLog.e(TAG, "读取单个围栏出错: ${e.message}")
+                        AppLog.e(TAG, "读取单个围栏出错", e)
                     }
                 } while (cursor.moveToNext())
             }
@@ -206,7 +206,11 @@ class FenceDao(private val dbManager: DatabaseManager) {
         )
         try {
             if (cursor.moveToFirst()) {
-                do { fences.add(cursorToFence(cursor)) } while (cursor.moveToNext())
+                do {
+                    val fence = cursorToFence(cursor)
+                    fences.add(fence)
+                    fenceCache[fence.id] = fence
+                } while (cursor.moveToNext())
             }
         } finally {
             cursor.close()

@@ -47,8 +47,8 @@ data class DataImportResult(
 class DataManager(private val context: Context) {
 
     private val dbHelper = (context.applicationContext as TrackMasterApplication).dbHelper
-    private val dateFormat = ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
-    private val dateTimeFormat = ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+    private val dateFormat = ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    private val dateTimeFormat = ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US) }
     // 使用公共 Downloads 目录，卸载 App 后文件仍可访问
     // Android 10+ 直接写到公共 Downloads（通过 MediaStore）
     // Android 9 及以下写到公共 Downloads 目录

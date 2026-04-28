@@ -9,8 +9,8 @@ class MapViewModel(
 ) : ViewModel() {
 
     fun addFence(fence: GeoFence) {
-        fenceRepo.allFences.add(fence)
         fenceRepo.insertFence(fence)
+        fenceRepo.allFences.add(fence)
         fenceRepo.refreshEngineFences()
         fenceRepo.checkAndUpdateFenceState()
     }
@@ -27,8 +27,8 @@ class MapViewModel(
     }
 
     fun deleteFence(fenceId: String) {
-        fenceRepo.allFences.removeIf { it.id == fenceId }
         fenceRepo.deleteFence(fenceId)
+        fenceRepo.allFences.removeIf { it.id == fenceId }
         fenceRepo.refreshEngineFences()
         fenceRepo.checkAndUpdateFenceState()
     }

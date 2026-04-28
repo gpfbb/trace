@@ -262,6 +262,7 @@ class SmartScheduler(
      */
     private fun getIntervalForLevel(isInsideFence: Boolean): Long {
         val steps = getCurrentThrottleSteps(isInsideFence)
+        if (steps.isEmpty()) return 60_000L
         return steps[level.coerceAtMost(steps.size - 1)].intervalMs
     }
 

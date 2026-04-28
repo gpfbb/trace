@@ -97,7 +97,7 @@ class AppPreferences(context: Context) {
             prefs.edit()
                 .putInt(KEY_TOTAL_LOCATIONS, total)
                 .putInt(KEY_PROCESSED_LOCATIONS, processed)
-                .apply()
+                .commit()
         }
     }
 
