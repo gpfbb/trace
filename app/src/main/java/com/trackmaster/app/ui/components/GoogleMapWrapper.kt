@@ -69,10 +69,6 @@ fun GoogleMapWrapper(
     var previewCircle by remember { mutableStateOf<GCircleWrapper?>(null) }
     var previewPolygon by remember { mutableStateOf<GPolygonWrapper?>(null) }
     val editingMarkers = remember { mutableStateListOf<GMarkerWrapper>() }
-    var cameraCenterLat by remember { mutableStateOf(0.0) }
-    var cameraCenterLng by remember { mutableStateOf(0.0) }
-    var hasCameraMoved by remember { mutableStateOf(false) }
-    var hasNavigatedToUser by remember { mutableStateOf(false) }
 
     // 地图真正就绪后才会触发后续 LaunchedEffect
     val isMapReady by mapPresenter.isMapReady.collectAsState()
@@ -97,14 +93,6 @@ fun GoogleMapWrapper(
     // 都调用 setOnCameraCenterChangeListener，导致监听器累积
     LaunchedEffect(isMapReady, isPrecisionMode) {
         if (!isMapReady) return@LaunchedEffect
-        // precision模式进入时立即初始化相机中心（不用等相机移动）
-        if (isPrecisionMode) {
-            mapPresenter.getCameraCenter()?.let { (lat, lng) ->
-                cameraCenterLat = lat
-                cameraCenterLng = lng
-                hasCameraMoved = true
-            }
-        }
         mapPresenter.setOnCameraCenterChangeListener { lat, lng ->
             try {
                 appPrefs.cameraLatitude = lat
@@ -112,12 +100,6 @@ fun GoogleMapWrapper(
                 appPrefs.cameraZoom = mapPresenter.getZoom() ?: 17f
                 appPrefs.hasCameraPosition = true
             } catch (e: Exception) { AppLog.e(TAG, "保存相机位置失败", e) }
-            // precision模式下同步更新相机中心点坐标
-            if (isPrecisionMode) {
-                cameraCenterLat = lat
-                cameraCenterLng = lng
-                hasCameraMoved = true
-            }
         }
     }
 
@@ -217,7 +199,6 @@ fun GoogleMapWrapper(
         if (!isMapReady) return@LaunchedEffect
         mapPresenter.setOnMapClickListener { lat, lng ->
             if (isPrecisionMode) {
-                // 精确模式:使用相机中心点
                 mapPresenter.getCameraCenter()?.let { (centerLat, centerLng) ->
                     onMapClick(centerLat, centerLng)
                 } ?: onMapClick(lat, lng)

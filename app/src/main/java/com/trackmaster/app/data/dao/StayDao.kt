@@ -19,7 +19,7 @@ class StayDao(private val dbManager: DatabaseManager) {
         db.beginTransaction()
         return try {
             val values = ContentValues()
-            values.put(DatabaseManager.KEY_STAY_ID, UUID.randomUUID().toString())
+            values.put(DatabaseManager.KEY_STAY_ID, record.id ?: UUID.randomUUID().toString())
             values.put(DatabaseManager.KEY_FENCE_ID, record.fenceId)
             values.put(DatabaseManager.KEY_FENCE_NAME, record.fenceName)
             values.put(DatabaseManager.KEY_ENTER_TIME, record.enterTime.time)

@@ -51,7 +51,8 @@ fun HistoryScreen(
     val events = remember { mutableStateOf<List<GeoFenceEvent>>(emptyList()) }
     var selectedFilter by remember { mutableStateOf<EventFilter>(EventFilter.ALL) }
 
-    LaunchedEffect(Unit) {
+    val fenceStateVersion by application.fenceStateVersion.collectAsState()
+    LaunchedEffect(fenceStateVersion) {
         events.value = application.geoFenceEvents
             .sortedByDescending { it.time }
     }

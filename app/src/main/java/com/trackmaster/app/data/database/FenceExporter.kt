@@ -156,7 +156,16 @@ class FenceExporter(private val dbManager: DatabaseManager) {
     fun importFencesFromJson(jsonContent: String, fenceDao: com.trackmaster.app.data.dao.FenceDao, preserveId: Boolean = false): Int {
         try {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-            val wrapper = org.json.JSONObject(jsonContent)
+            // 兼容裸数组格式（DataManager.exportFencesToJson 产出）和包装格式
+            val trimmed = jsonContent.trimStart()
+            val wrapper = if (trimmed.startsWith("[")) {
+                org.json.JSONObject().apply {
+                    put("version", 1)
+                    put("fences", org.json.JSONArray(trimmed))
+                }
+            } else {
+                org.json.JSONObject(trimmed)
+            }
 
             val version = wrapper.optInt("version", 0)
             if (version == 0) {

@@ -368,7 +368,9 @@ class StayDurationManager(private val context: Context) {
         }
 
         val result = base.toMutableMap()
+        val visited = mutableSetOf<String>()
         fun addChildrenToParent(parentId: String) {
+            if (!visited.add(parentId)) return // 循环引用保护
             val children = childrenOf[parentId] ?: return
             val parentDuration = result[parentId] ?: 0L
             var accumulated = parentDuration

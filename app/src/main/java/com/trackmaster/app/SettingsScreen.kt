@@ -331,13 +331,18 @@ fun SettingsPage(
             // 重新计算父子关系
             var showRecalculateDialog by remember { mutableStateOf(false) }
             var recalculateMessage by remember { mutableStateOf<String?>(null) }
+            var recalculateIsSuccess by remember { mutableStateOf(false) }
 
             SettingsMenuCard(
                 icon = Icons.Default.AccountTree,
                 title = stringResource(R.string.recalculate_relationships),
                 description = stringResource(R.string.recalculate_desc),
                 tint = NeonBlue,
-                onClick = { showRecalculateDialog = true }
+                onClick = {
+                    recalculateIsSuccess = false
+                    recalculateMessage = null
+                    showRecalculateDialog = true
+                }
             )
 
             if (showRecalculateDialog) {
@@ -978,7 +983,7 @@ fun AdvancedSettingsSection(
         // 重置按钮
         GlassButton(
             onClick = {
-                onStationaryThresholdChange(30.0)
+                onStationaryThresholdChange(20.0)
                 onBoundaryBufferChange(10.0)
                 onDriftThresholdChange(30.0)
             },

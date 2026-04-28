@@ -70,10 +70,18 @@ class DataManager(private val context: Context) {
                 put(MediaStore.Downloads.DISPLAY_NAME, fileName)
                 put(MediaStore.Downloads.MIME_TYPE, "application/json")
                 put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/TrackMaster")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
             }
             val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
                 ?: throw Exception("无法创建文件")
-            context.contentResolver.openOutputStream(uri)?.use { it.write(jsonContent.toByteArray(Charsets.UTF_8)) }
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(jsonContent.toByteArray(Charsets.UTF_8)) }
+            } finally {
+                val finalize = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
+                context.contentResolver.update(uri, finalize, null, null)
+            }
             "Downloads/TrackMaster/$fileName"
         } else {
             @Suppress("DEPRECATION")

@@ -50,25 +50,18 @@ class SqliteStorageAdapter(
 
     override suspend fun insertSegments(segments: List<StaySegment>) {
         val db = dbHelper.writableDatabase
-        // 【Bug修复】添加批量事务保护，确保所有 segment 原子写入
-        // 事务成功：全部提交；事务失败：全部回滚
-        db.beginTransaction()
-        try {
-            for (seg in segments) {
-                val values = ContentValues().apply {
-                    put(COL_STAY_ID, seg.id)
-                    put(COL_FENCE_ID, seg.leafGeofenceId)
-                    put(COL_FENCE_NAME, seg.leafGeofenceId) // 名称由后续 join 补全
-                    put(COL_ENTER_TIME, seg.startTs)
+        // 调用方（Repository.flush）已持有外层事务，此处不使用嵌套事务
+        for (seg in segments) {
+            val values = ContentValues().apply {
+                put(COL_STAY_ID, seg.id)
+                put(COL_FENCE_ID, seg.leafGeofenceId)
+                put(COL_FENCE_NAME, seg.leafGeofenceId)
+                put(COL_ENTER_TIME, seg.startTs)
                     put(COL_EXIT_TIME, seg.endTs)
                     put(COL_DURATION, seg.endTs?.let { (it - seg.startTs) / 1000 })
                 }
                 db.insertWithOnConflict(TABLE_STAYS, null, values, SQLiteDatabase.CONFLICT_IGNORE)
             }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
-        }
     }
 
     override suspend fun querySegmentsByDate(dateKey: String): List<StaySegment> {

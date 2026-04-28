@@ -203,7 +203,7 @@ class Aggregator(
     companion object {
         private fun parseDateKey(dateKey: String): Long {
             val parts = dateKey.split("-")
-            val cal = java.util.Calendar.getInstance()
+            val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
             cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt(), 0, 0, 0)
             cal.set(java.util.Calendar.MILLISECOND, 0)
             return cal.timeInMillis

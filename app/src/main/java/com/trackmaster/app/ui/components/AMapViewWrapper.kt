@@ -62,9 +62,6 @@ fun AMapViewWrapper(
     var previewCircle by remember { mutableStateOf<CircleWrapper?>(null) }
     var previewPolygon by remember { mutableStateOf<PolygonWrapper?>(null) }
     val editingMarkers = remember { mutableListOf<MarkerWrapper>() }
-    var cameraCenterLat by remember { mutableStateOf(0.0) }
-    var cameraCenterLng by remember { mutableStateOf(0.0) }
-    var hasCameraMoved by remember { mutableStateOf(false) }
 
     // 初始化地图
     // 【P0修复】之前立即设置isMapReady=true，所有LaunchedEffect在地图未实际就绪时就执行
@@ -104,12 +101,6 @@ fun AMapViewWrapper(
                 appPrefs.cameraZoom = mapPresenter.getZoom() ?: 15f
                 appPrefs.hasCameraPosition = true
             } catch (e: Exception) { AppLog.e(TAG, "保存相机位置失败", e) }
-            // precision模式下同步更新相机中心点坐标
-            if (isPrecisionMode) {
-                cameraCenterLat = lat
-                cameraCenterLng = lng
-                hasCameraMoved = true
-            }
         }
     }
 
@@ -136,7 +127,6 @@ fun AMapViewWrapper(
         if (!isMapReady) return@LaunchedEffect
         mapPresenter.setOnMapClickListener { lat, lng ->
             if (isPrecisionMode) {
-                // 精确模式:使用相机中心点
                 mapPresenter.getCameraCenter()?.let { (centerLat, centerLng) ->
                     onMapClick(centerLat, centerLng)
                 } ?: onMapClick(lat, lng)

@@ -479,7 +479,12 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
             },
             onConfirm = { updatedFence ->
                 editingFence = updatedFence
-                editingPoints = updatedFence.points?.toList() ?: emptyList()
+                editingPoints = when (updatedFence.type) {
+                    GeoFenceType.CIRCLE -> updatedFence.center?.let {
+                        listOf(GeoFencePoint(it.latitude, it.longitude))
+                    } ?: emptyList()
+                    GeoFenceType.POLYGON -> updatedFence.points?.toList() ?: emptyList()
+                }
                 isEditingFence = true
                 showEditDialog = false
             },

@@ -37,6 +37,6 @@ class WakeupReceiver : BroadcastReceiver() {
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             try { wakeLock.release() } catch (_: Exception) {}
             pendingResult.finish()
-        }, 10_000L)
+        }, 4_000L)
     }
 }

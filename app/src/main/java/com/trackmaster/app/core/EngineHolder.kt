@@ -43,8 +43,12 @@ class EngineHolder(
         }
         if (oldEngine != null) {
             CoroutineScope(Dispatchers.IO).launch {
-                runCatching { oldEngine.dispose() }
-                    .onFailure { AppLog.e(TAG, "旧Engine dispose失败", it) }
+                try {
+                    oldEngine.dispose()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    AppLog.e(TAG, "旧Engine dispose失败", e)
+                }
             }
         }
         AppLog.d(TAG, "Engine refreshed with ${fences.size} fences")

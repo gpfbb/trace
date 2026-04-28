@@ -114,6 +114,7 @@ class Engine(
             val latest = open.last()
             currentLeafIdRef.set(latest.leafGeofenceId)
             currentEnterTs = latest.startTs
+            currentMatchedFenceIds = listOf(latest.leafGeofenceId)
             AppLog.d(TAG, "恢复未关闭 Segment: ${latest.leafGeofenceId}")
         }
     }
