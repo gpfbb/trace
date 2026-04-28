@@ -77,8 +77,10 @@ class GeoFenceLocationService : Service() {
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "map_provider") {
             AppLog.d(TAG, "检测到 mapProvider 变化，重新初始化定位客户端")
-            providerManager.reinit()
-            startLocationWithFastFirst()
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                providerManager.reinit()
+                startLocationWithFastFirst()
+            }
         }
     }
 
@@ -88,7 +90,7 @@ class GeoFenceLocationService : Service() {
     // 加速度传感器（用于静止检测）
     // ============================================================
     private var sensorManager: SensorManager? = null
-    private var accelerometerData: AccelerometerData? = null
+    @Volatile private var accelerometerData: AccelerometerData? = null
     private val accelListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
             if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
@@ -150,7 +152,6 @@ class GeoFenceLocationService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
-        super.onDestroy()
         AppLog.d(TAG, "定位服务销毁")
         powerSaveController.stopPeriodicCheck()
         providerManager.stop()
@@ -159,6 +160,7 @@ class GeoFenceLocationService : Service() {
         (application as? TrackMasterApplication)?.appPreferences?.sharedPreferences
             ?.unregisterOnSharedPreferenceChangeListener(prefsListener)
         sensorManager?.unregisterListener(accelListener)
+        super.onDestroy()
         AppLog.d(TAG, "加速度传感器已注销")
     }
 

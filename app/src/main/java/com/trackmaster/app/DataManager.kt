@@ -106,6 +106,7 @@ class DataManager(private val context: Context) {
 
             val filteredEvents = filterEvents(allEvents, options)
             val filteredStays = filterStays(allStays, options)
+            val filteredDailyStays = filterDailyStays(allDailyStays, options)
 
             onProgress?.invoke(40, "生成导出文件...")
 
@@ -177,7 +178,7 @@ class DataManager(private val context: Context) {
 
             // 每日汇总数据
             val dailyStaysArray = JSONArray()
-            allDailyStays.forEach { daily ->
+            filteredDailyStays.forEach { daily ->
                 val dailyJson = JSONObject()
                 dailyJson.put("date", daily.date)
                 dailyJson.put("fenceId", daily.fenceId)
@@ -205,7 +206,7 @@ class DataManager(private val context: Context) {
                 exportedFences = allFences.size,
                 exportedEvents = filteredEvents.size,
                 exportedStays = filteredStays.size,
-                exportedDailyStays = allDailyStays.size
+                exportedDailyStays = filteredDailyStays.size
             )
         } catch (e: Exception) {
             DataExportResult(
@@ -348,7 +349,28 @@ class DataManager(private val context: Context) {
                 dbHelper.insertStayRecord(stay)
                 importedStays++
             }
-            
+
+            // 导入 dailyStays
+            var importedDaily = 0
+            val dailyArray = json.optJSONArray("dailyStays") ?: JSONArray()
+            val dailyRecords = mutableListOf<DailyStayRecord>()
+            for (i in 0 until dailyArray.length()) {
+                val obj = dailyArray.getJSONObject(i)
+                val fenceId = obj.optString("fenceId", "").takeIf { it.isNotBlank() } ?: continue
+                val fenceName = obj.optString("fenceName", "")
+                dailyRecords.add(DailyStayRecord(
+                    date = obj.getString("date"),
+                    fenceId = fenceId,
+                    fenceName = fenceName,
+                    totalDurationSeconds = obj.getLong("duration"),
+                    lastUpdated = Date()
+                ))
+                importedDaily++
+            }
+            if (dailyRecords.isNotEmpty()) {
+                dbHelper.upsertDailyStayRecords(dailyRecords)
+            }
+
             DataImportResult(
                 success = true,
                 message = "导入成功！",
@@ -434,6 +456,18 @@ class DataManager(private val context: Context) {
             if (options.afterDate != null) {
                 include = include && stay.enterTime >= options.afterDate
             }
+            include
+        }
+    }
+
+    private fun filterDailyStays(dailyStays: List<DailyStayRecord>, options: DataExportOptions): List<DailyStayRecord> {
+        val beforeStr = options.beforeDate?.let { dateFormat.get().format(it) }
+        val afterStr = options.afterDate?.let { dateFormat.get().format(it) }
+        if (beforeStr == null && afterStr == null) return dailyStays
+        return dailyStays.filter { daily ->
+            var include = true
+            if (beforeStr != null) include = include && daily.date <= beforeStr
+            if (afterStr != null) include = include && daily.date >= afterStr
             include
         }
     }

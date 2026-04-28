@@ -43,11 +43,11 @@ class PowerSaveController(
     var providerControl: LocationProviderControl? = null
 
     // ---- 省电状态 ----
-    var isLocationClientStopped = false
-    var lastResumeCheckTime = 0L
-    var consecutiveNotProcessCount = 0
-    var isTemporaryCheck = false
-    var temporaryCheckCompleted = false
+    @Volatile var isLocationClientStopped = false
+    @Volatile var lastResumeCheckTime = 0L
+    @Volatile var consecutiveNotProcessCount = 0
+    @Volatile var isTemporaryCheck = false
+    @Volatile var temporaryCheckCompleted = false
 
     private val serviceStatePrefs: SharedPreferences =
         context.getSharedPreferences(PREFS_SERVICE_STATE, Context.MODE_PRIVATE)
@@ -90,7 +90,7 @@ class PowerSaveController(
             .putBoolean(KEY_IS_LOCATION_CLIENT_STOPPED, isLocationClientStopped)
             .putLong(KEY_LAST_RESUME_CHECK_TIME, lastResumeCheckTime)
             .putInt(KEY_CONSECUTIVE_NOT_PROCESS_COUNT, consecutiveNotProcessCount)
-            .apply()
+            .commit()
     }
 
     fun restoreServiceState() {

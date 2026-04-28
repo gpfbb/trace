@@ -277,7 +277,7 @@ class StayDurationManager(private val context: Context) {
                 accumulatedDuration = s.accumulatedDuration + safeDuration,
                 lastSaveTime = Date()
             )
-            activeSessions.replace(fenceId, updated)
+            activeSessions.replace(fenceId, s, updated)
         }
 
         AppLog.d(TAG, "更新日统计: $fenceName, 日期=$dateKey, 总时长=${newDuration}秒")

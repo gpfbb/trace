@@ -99,6 +99,7 @@ class MainActivity : ComponentActivity() {
 
     private var locationServiceListener: ((com.trackmaster.app.LocationServiceState) -> Unit)? = null
     private val locationSetupHandler = Handler(Looper.getMainLooper())
+    private var locationSetupRetries = 0
     private val locationSetupRetryRunnable = Runnable { setupLocationServiceListener() }
 
     private fun startLocation() {
@@ -123,11 +124,15 @@ class MainActivity : ComponentActivity() {
                     AppLog.d("TrackMaster", "位置更新: ${state.locationCount}次, isRunning=${state.isRunning}")
                 }
             }
+            locationSetupRetries = 0
             locationServiceListener?.let { service.addStateListener(it) }
             AppLog.d("TrackMaster", "已设置定位服务状态监听")
-        } else {
-            AppLog.w("TrackMaster", "定位服务尚未绑定，稍后重试")
+        } else if (locationSetupRetries < 5) {
+            locationSetupRetries++
+            AppLog.w("TrackMaster", "定位服务尚未绑定，${locationSetupRetries}/5 次重试")
             locationSetupHandler.postDelayed(locationSetupRetryRunnable, 1000)
+        } else {
+            AppLog.e("TrackMaster", "定位服务绑定失败，已达最大重试次数")
         }
     }
 

@@ -136,15 +136,7 @@ class StayDao(private val dbManager: DatabaseManager) {
         try {
             if (cursor.moveToFirst()) {
                 do {
-                    records.add(FenceStayRecord(
-                        fenceId = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_FENCE_ID)),
-                        fenceName = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_FENCE_NAME)),
-                        enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_ENTER_TIME))),
-                        exitTime = if (cursor.isNull(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_EXIT_TIME))) null
-                            else Date(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_EXIT_TIME))),
-                        durationSeconds = if (cursor.isNull(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_DURATION))) null
-                            else cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_DURATION))
-                    ))
+                    records.add(cursorToStayRecord(cursor))
                 } while (cursor.moveToNext())
             }
         } finally {
@@ -164,15 +156,7 @@ class StayDao(private val dbManager: DatabaseManager) {
         try {
             if (cursor.moveToFirst()) {
                 do {
-                    records.add(FenceStayRecord(
-                        fenceId = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_FENCE_ID)),
-                        fenceName = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_FENCE_NAME)),
-                        enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_ENTER_TIME))),
-                        exitTime = if (cursor.isNull(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_EXIT_TIME))) null
-                            else Date(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_EXIT_TIME))),
-                        durationSeconds = if (cursor.isNull(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_DURATION))) null
-                            else cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_DURATION))
-                    ))
+                    records.add(cursorToStayRecord(cursor))
                 } while (cursor.moveToNext())
             }
         } finally {
@@ -258,6 +242,8 @@ class StayDao(private val dbManager: DatabaseManager) {
 
     private fun cursorToStayRecord(cursor: android.database.Cursor): FenceStayRecord {
         return FenceStayRecord(
+            id = if (!cursor.isNull(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_STAY_ID)))
+                cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_STAY_ID)) else null,
             fenceId = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_FENCE_ID)),
             fenceName = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_FENCE_NAME)),
             enterTime = Date(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_ENTER_TIME))),

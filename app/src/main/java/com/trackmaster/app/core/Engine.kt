@@ -357,42 +357,49 @@ class Engine(
      * 使用 AtomicReference CAS 防止并发 transition 导致重复 Segment
      */
     private suspend fun transition(newLeafId: String?, ts: Long): StaySegment? {
-        val oldLeafId = currentLeafIdRef.get()
-        val oldEnterTs = currentEnterTs
-        if (oldLeafId != null && oldEnterTs > 0) {
-            // CAS 守卫：确保 transition 期间 currentLeafId 未被其他协程修改
-            if (!currentLeafIdRef.compareAndSet(oldLeafId, oldLeafId)) {
-                AppLog.w(TAG, "Transition CAS 失败：currentLeafId 已被其他协程修改")
-                return null
-            }
-            val enterDateKey = formatDateKey(oldEnterTs)
-            val exitDateKey = formatDateKey(ts)
-
-            val closedSeg = StaySegment(
-                id = "seg_${segCounter.incrementAndGet()}_$oldEnterTs",
-                leafGeofenceId = oldLeafId,
-                startTs = oldEnterTs,
-                endTs = ts,
-                status = if (enterDateKey != exitDateKey) SegmentStatus.CROSSED_DAY else SegmentStatus.COMPLETED,
-            )
-
-            try {
-                repo.enqueueSegment(closedSeg)
-                currentLeafIdRef.set(newLeafId)
-                currentEnterTs = if (newLeafId != null) ts else 0L
-                AppLog.d(TAG, "Segment 写入成功: $oldLeafId -> $newLeafId")
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                currentLeafIdRef.set(oldLeafId)
-                AppLog.e(TAG, "Segment 写入失败，状态保留: $oldLeafId", e)
-                return null
-            }
-            return closedSeg
-        } else {
+        val oldLeafId = currentLeafIdRef.get() ?: run {
+            // 无旧状态，直接设置新值
             currentLeafIdRef.set(newLeafId)
             currentEnterTs = if (newLeafId != null) ts else 0L
             return null
         }
+        val oldEnterTs = currentEnterTs
+        if (oldEnterTs <= 0) {
+            currentLeafIdRef.set(newLeafId)
+            currentEnterTs = if (newLeafId != null) ts else 0L
+            return null
+        }
+
+        // CAS 守卫：将 currentLeafId 原子地从 oldLeafId 换为 TRANSITIONING 标记，防止并发
+        val marker = "##TRANSITIONING##"
+        if (!currentLeafIdRef.compareAndSet(oldLeafId, marker)) {
+            AppLog.w(TAG, "Transition CAS 失败：已被其他协程抢占")
+            return null
+        }
+
+        val enterDateKey = formatDateKey(oldEnterTs)
+        val exitDateKey = formatDateKey(ts)
+
+        val closedSeg = StaySegment(
+            id = "seg_${segCounter.incrementAndGet()}_$oldEnterTs",
+            leafGeofenceId = oldLeafId,
+            startTs = oldEnterTs,
+            endTs = ts,
+            status = if (enterDateKey != exitDateKey) SegmentStatus.CROSSED_DAY else SegmentStatus.COMPLETED,
+        )
+
+        try {
+            repo.enqueueSegment(closedSeg)
+            currentLeafIdRef.set(newLeafId)
+            currentEnterTs = if (newLeafId != null) ts else 0L
+            AppLog.d(TAG, "Segment 写入成功: $oldLeafId -> $newLeafId")
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            currentLeafIdRef.set(oldLeafId) // 回滚
+            AppLog.e(TAG, "Segment 写入失败，状态回滚: $oldLeafId", e)
+            return null
+        }
+        return closedSeg
     }
 
     private fun formatDateKey(ts: Long): String = Repository.formatDateKey(ts)
