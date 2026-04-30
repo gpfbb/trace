@@ -23,7 +23,8 @@ class DailyStayDao(private val dbManager: DatabaseManager) {
                     ${DatabaseManager.KEY_DAILY_LAST_UPDATED}
                 ) VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(${DatabaseManager.KEY_DAILY_DATE}, ${DatabaseManager.KEY_DAILY_FENCE_ID}) DO UPDATE SET
-                    ${DatabaseManager.KEY_DAILY_DURATION} = ${DatabaseManager.KEY_DAILY_DURATION} + excluded.${DatabaseManager.KEY_DAILY_DURATION},
+                    ${DatabaseManager.KEY_DAILY_FENCE_NAME} = excluded.${DatabaseManager.KEY_DAILY_FENCE_NAME},
+                    ${DatabaseManager.KEY_DAILY_DURATION} = excluded.${DatabaseManager.KEY_DAILY_DURATION},
                     ${DatabaseManager.KEY_DAILY_LAST_UPDATED} = excluded.${DatabaseManager.KEY_DAILY_LAST_UPDATED}
             """, arrayOf(record.date, record.fenceId, record.fenceName, record.totalDurationSeconds, record.lastUpdated.time))
             db.setTransactionSuccessful()
@@ -122,7 +123,7 @@ class DailyStayDao(private val dbManager: DatabaseManager) {
                     ) VALUES (?, ?, ?, ?, ?)
                     ON CONFLICT(${DatabaseManager.KEY_DAILY_DATE}, ${DatabaseManager.KEY_DAILY_FENCE_ID}) DO UPDATE SET
                         ${DatabaseManager.KEY_DAILY_FENCE_NAME} = excluded.${DatabaseManager.KEY_DAILY_FENCE_NAME},
-                        ${DatabaseManager.KEY_DAILY_DURATION} = ${DatabaseManager.KEY_DAILY_DURATION} + excluded.${DatabaseManager.KEY_DAILY_DURATION},
+                        ${DatabaseManager.KEY_DAILY_DURATION} = excluded.${DatabaseManager.KEY_DAILY_DURATION},
                         ${DatabaseManager.KEY_DAILY_LAST_UPDATED} = excluded.${DatabaseManager.KEY_DAILY_LAST_UPDATED}
                 """, arrayOf(record.date, record.fenceId, record.fenceName, record.totalDurationSeconds, record.lastUpdated.time))
             }

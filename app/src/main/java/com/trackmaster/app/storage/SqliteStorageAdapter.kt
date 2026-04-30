@@ -145,13 +145,12 @@ class SqliteStorageAdapter(
     override suspend fun saveDailySummaries(summaries: List<DailySummary>) {
         val db = dbHelper.writableDatabase
         for (s in summaries) {
-            // 【Bug修复】使用 ON CONFLICT UPDATE ... = ... + excluded.xxx 增量模式
-            // 避免 CONFLICT_REPLACE 覆盖 StayDurationManager 之前累加的时长数据
+            // Aggregator 计算的是当日最终总时长，应直接设置而非累加
             db.execSQL("""
                 INSERT INTO $TABLE_DAILY_STAYS ($COL_DAILY_DATE, $COL_DAILY_FENCE_ID, $COL_DAILY_FENCE_NAME, $COL_DAILY_DURATION, $COL_DAILY_LAST_UPDATED)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT($COL_DAILY_DATE, $COL_DAILY_FENCE_ID) DO UPDATE SET
-                    $COL_DAILY_DURATION = $COL_DAILY_DURATION + excluded.$COL_DAILY_DURATION,
+                    $COL_DAILY_DURATION = excluded.$COL_DAILY_DURATION,
                     $COL_DAILY_FENCE_NAME = excluded.$COL_DAILY_FENCE_NAME,
                     $COL_DAILY_LAST_UPDATED = excluded.$COL_DAILY_LAST_UPDATED
             """, arrayOf(s.date, s.geofenceId, s.name, s.spatialDurationMin * 60, System.currentTimeMillis()))

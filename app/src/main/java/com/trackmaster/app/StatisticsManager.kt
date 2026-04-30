@@ -123,25 +123,22 @@ class StatisticsManager(private val context: Context) {
             }.setEnterCountValue(count)
         }
 
-        // 3. 添加当前活跃会话的未保存增量（避免与定时保存到 daily_stays 的部分重复计数）
+        // 3. 添加活跃会话在时间范围内的时长（已保存到 daily_stays 的不会重复计入）
         val activeSessions = app.stayDurationManager.activeSessions
+        val now = System.currentTimeMillis()
         AppLog.d("StatisticsManager", "Active sessions: ${activeSessions.size}")
         for ((fenceId, session) in activeSessions) {
             if (session.enterTime > timeRange.endTime) continue
-            // 只计算自上次保存以来的增量时长（已保存部分已从 daily_stays 计入）
-            val incrementalSeconds = if (session.lastSaveTime != null) {
-                (System.currentTimeMillis() - session.lastSaveTime.time) / 1000
-            } else {
-                app.stayDurationManager.getCurrentDuration(fenceId) ?: 0L
-            }
-            if (incrementalSeconds <= 0) continue
-            val maxRangeSeconds = maxOf(0L, (timeRange.endTime.time - maxOf(session.enterTime, timeRange.startTime).time) / 1000)
-            val effective = minOf(incrementalSeconds, maxRangeSeconds)
-            AppLog.d("StatisticsManager", "Active session $fenceId: incremental=${effective}s")
+            // 将活跃会话 clamp 到查询时间范围，只计算落在范围内的部分
+            val effectiveStart = maxOf(session.enterTime.time, timeRange.startTime.time)
+            val effectiveEnd = minOf(now, timeRange.endTime.time)
+            val effectiveSeconds = maxOf(0L, (effectiveEnd - effectiveStart) / 1000)
+            if (effectiveSeconds <= 0) continue
+            AppLog.d("StatisticsManager", "Active session $fenceId: effective=${effectiveSeconds}s")
             val builder = statsMap.getOrPut(fenceId) {
                 FenceStatisticsBuilder(fenceId = fenceId, fenceName = session.fenceName)
             }
-            builder.addDuration(effective)
+            builder.addDuration(effectiveSeconds)
             if (!enterCounts.containsKey(fenceId) &&
                 session.enterTime >= timeRange.startTime &&
                 session.enterTime <= timeRange.endTime) {
