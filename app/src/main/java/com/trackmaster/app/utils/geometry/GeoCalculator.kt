@@ -117,28 +117,51 @@ fun calculateFenceArea(fence: Geofence): Double {
     }
 }
 
-/** 计算多边形面积（平方米），使用 shoelace 公式 */
+/**
+ * 计算多边形面积（平方米）。
+ *
+ * 用等距圆柱投影把经纬度换算成米，再套标准鞋带公式：
+ *
+ * ```
+ * x = λ · R · cos(φ_mean)      （经度方向，随纬度收缩）
+ * y = φ · R                    （纬度方向）
+ * A = ½ |Σ (x_i · y_{i+1} − x_{i+1} · y_i)|
+ * ```
+ *
+ * 围栏尺度（几百米到几公里）下这个近似足够准确，误差远小于 GPS 本身。
+ *
+ * ## 之前的实现是错的
+ *
+ * 旧代码写的是 `Σ (Δλ · Δφ)`，也就是把每条边的经纬度增量相乘再累加。
+ * 那不是鞋带公式：**对轴对齐的矩形，每条边要么 Δλ=0 要么 Δφ=0，
+ * 乘积恒为 0，面积恒等于 0**。而 `MapScreen` 用这个面积挑"最小的匹配围栏"，
+ * 于是只要同时命中圆和多边形，多边形永远以 0 胜出——不管它实际多大。
+ */
 private fun calculatePolygonArea(polygon: List<GeoPoint>): Double {
     if (polygon.size < 3) return 0.0
 
-    var area = 0.0
-    val n = polygon.size
+    var latSum = 0.0
+    for (p in polygon) latSum += p.lat
+    // 用平均纬度做经度收缩因子。同时 clamp 一下，避免在极点附近算出 0。
+    val meanLatRad = (latSum / polygon.size) * DEG
+    val metersPerRadLng = EARTH_R * cos(meanLatRad).coerceAtLeast(1e-6)
 
+    var twiceArea = 0.0
+    val n = polygon.size
     for (i in 0 until n) {
         val j = (i + 1) % n
         val p1 = polygon[i]
         val p2 = polygon[j]
 
-        val midLat = (p1.lat + p2.lat) / 2
-        val latRad = midLat * DEG
+        val x1 = p1.lng * DEG * metersPerRadLng
+        val y1 = p1.lat * DEG * EARTH_R
+        val x2 = p2.lng * DEG * metersPerRadLng
+        val y2 = p2.lat * DEG * EARTH_R
 
-        val dLng = (p2.lng - p1.lng) * DEG
-        val dLat = (p2.lat - p1.lat) * DEG
-
-        area += dLng * EARTH_R * EARTH_R * cos(latRad) * dLat
+        twiceArea += x1 * y2 - x2 * y1
     }
 
-    return Math.abs(area) / 2
+    return Math.abs(twiceArea) / 2.0
 }
 
 // ============================================================

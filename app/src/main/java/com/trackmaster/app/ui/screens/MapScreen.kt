@@ -553,29 +553,6 @@ private fun TopStatusIsland(
     onFenceClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 计算围栏面积（用于找出最小的围栏）
-    fun calculateFenceArea(fence: GeoFence): Double {
-        return when (fence.type) {
-            GeoFenceType.CIRCLE -> {
-                val r = (fence.radius ?: 0f).toDouble()
-                Math.PI * r * r
-            }
-            GeoFenceType.POLYGON -> {
-                // 使用鞋带公式计算多边形面积
-                val pts = fence.points ?: return 0.0
-                if (pts.size < 3) return 0.0
-                var area = 0.0
-                val n = pts.size
-                for (i in 0 until n) {
-                    val j = (i + 1) % n
-                    area += pts[i].longitude * pts[j].latitude
-                    area -= pts[j].longitude * pts[i].latitude
-                }
-                kotlin.math.abs(area) / 2.0 * 111000.0 * 111000.0 // approximate m² conversion
-            }
-        }
-    }
-
     val palette = currentPalette
 
     Box(
@@ -593,8 +570,17 @@ private fun TopStatusIsland(
             horizontalArrangement = Arrangement.Center
         ) {
             // 找出所有匹配的围栏中最小的一个（面积最小）
+            //
+            // 面积用 GeoCalculator 里的实现（带 cos(纬度) 校正）。
+            // 这里曾经有一份自己的鞋带公式，直接把经纬度平方乘 111000²，
+            // 没有考虑经度随纬度收缩——在北纬 40 度会把多边形面积高估约 30%，
+            // 导致和圆形围栏比较时选错"最小围栏"。
             val matchedFences = fences.filter { it.id in currentMatchedFenceIds }
-            val smallestFence = matchedFences.minByOrNull { calculateFenceArea(it) }
+            val smallestFence = matchedFences.minByOrNull {
+                com.trackmaster.app.utils.geometry.calculateFenceArea(
+                    com.trackmaster.app.core.buildEngineGeofence(it)
+                )
+            }
 
             if (smallestFence != null) {
                 Icon(
