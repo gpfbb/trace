@@ -85,6 +85,7 @@ class GeoFenceLocationService : Service() {
     }
 
     private var firstLocationRetryCount = 0
+    private var lastAppliedGpsIntervalMs = 0L
 
     // ============================================================
     // 加速度传感器（用于静止检测）
@@ -233,9 +234,10 @@ class GeoFenceLocationService : Service() {
             providerManager.temporaryResumeForCheck()
         } else {
             powerSaveController.consecutiveNotProcessCount = 0
-            val newIntervalMs = 60_000L
-            providerManager.setInterval(newIntervalMs)
-            AppLog.d(TAG, "电源模式切换: 定位运行中，重置省电计数器，同步GPS间隔到${newIntervalMs}ms")
+            val engineInterval = engine?.lastComputedIntervalMs ?: 60_000L
+            lastAppliedGpsIntervalMs = engineInterval
+            providerManager.setInterval(engineInterval)
+            AppLog.d(TAG, "电源模式切换: 定位运行中，重置省电计数器，同步GPS间隔到${engineInterval}ms")
         }
     }
 
@@ -334,9 +336,21 @@ class GeoFenceLocationService : Service() {
         val app = application as? TrackMasterApplication
         val shouldProcess = app?.checkGeoFences(toLocation(location), accelerometerData) ?: false
 
+        val engineInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
+        val matchedFences = app?.currentMatchedFences ?: emptyList()
+        val isInFence = matchedFences.isNotEmpty()
+
+        // 省电核心：每次定位回调都同步 GPS 硬件间隔到 SmartScheduler 的计算值
+        // 之前只在 shouldProcess=false 时更新，导致 GPS 间隔永远滞后一个阶梯
+        if (!powerSaveController.isLocationClientStopped && !serviceState.isFirstLocation) {
+            if (engineInterval != lastAppliedGpsIntervalMs) {
+                providerManager.setInterval(engineInterval)
+                lastAppliedGpsIntervalMs = engineInterval
+                AppLog.d(TAG, "GPS间隔同步: ${engineInterval}ms (level=${app?.engine?.getScheduler()?.getLevel()})")
+            }
+        }
+
         if (shouldProcess) {
-            val matchedFences = app?.currentMatchedFences ?: emptyList()
-            val isInFence = matchedFences.isNotEmpty()
             val currentFenceName = if (isInFence) matchedFences.firstOrNull()?.name else null
 
             serviceState = serviceState.copy(
@@ -349,19 +363,14 @@ class GeoFenceLocationService : Service() {
 
             AppLog.d(TAG, "省电检查: shouldProcess=$shouldProcess, isInFence=$isInFence, isStopped=${powerSaveController.isLocationClientStopped}")
 
-            val engineInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
             powerSaveController.updatePowerSavingState(
-                shouldProcess = !isInFence,
+                shouldProcess = shouldProcess,
                 engineIntervalMs = engineInterval,
                 isInFence = isInFence,
             )
         } else {
             AppLog.d(TAG, "Throttled回调（不更新UI）: shouldProcess=$shouldProcess, isStopped=${powerSaveController.isLocationClientStopped}")
-            val matchedFences = app?.currentMatchedFences ?: emptyList()
-            val isInFence = matchedFences.isNotEmpty()
-            val nextInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
-            providerManager.setThrottledInterval(nextInterval, forceGps = !isInFence)
-            val engineInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
+
             powerSaveController.updatePowerSavingState(
                 shouldProcess = false,
                 engineIntervalMs = engineInterval,
@@ -376,8 +385,10 @@ class GeoFenceLocationService : Service() {
             AppLog.d(TAG, "首次定位成功，处理持久化状态恢复")
             (application as? TrackMasterApplication)?.handleFirstLocationAfterRestore(toLocation(location))
 
+            val initialInterval = app?.engine?.lastComputedIntervalMs ?: 60_000L
+            lastAppliedGpsIntervalMs = initialInterval
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                providerManager.startContinuous(60_000L)
+                providerManager.startContinuous(initialInterval)
                 serviceState = serviceState.copy(isFirstLocation = false)
             }, 1000)
         }

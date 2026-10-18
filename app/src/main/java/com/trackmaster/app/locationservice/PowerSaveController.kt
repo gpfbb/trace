@@ -167,25 +167,16 @@ class PowerSaveController(
 
     private fun handleRunningState(shouldProcess: Boolean, engineIntervalMs: Long, isInFence: Boolean) {
         if (shouldProcess) {
-            if (isInFence) {
-                AppLog.d(TAG, "省电: 围栏内处理，保持计数(维持throttled状态)")
-            } else {
-                consecutiveNotProcessCount = 0
-                cancelWakeupAlarm()
-                AppLog.d(TAG, "省电: 需要处理，重置计数")
-            }
+            consecutiveNotProcessCount = 0
+            cancelWakeupAlarm()
+            AppLog.d(TAG, "省电: 引擎处理了定位，重置计数器")
             saveServiceState()
         } else {
             consecutiveNotProcessCount++
-            AppLog.d(TAG, "省电: 不需要处理 ($consecutiveNotProcessCount/$STOP_THRESHOLD)")
+            AppLog.d(TAG, "省电: 引擎未处理 ($consecutiveNotProcessCount/$STOP_THRESHOLD)")
 
-            if (consecutiveNotProcessCount >= THROTTLE_THRESHOLD) {
-                val interval = engineIntervalMs
-                AppLog.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不处理，降频到${interval}ms/次")
-                providerControl?.setThrottledInterval(interval, forceGps = !isInFence)
-            }
             if (consecutiveNotProcessCount >= STOP_THRESHOLD) {
-                AppLog.d(TAG, "省电: 连续${consecutiveNotProcessCount}次不处理，停止GPS，调度Alarm")
+                AppLog.d(TAG, "省电: 连续${consecutiveNotProcessCount}次未处理，停止GPS，调度Alarm")
                 isLocationClientStopped = true
                 lastResumeCheckTime = System.currentTimeMillis()
                 providerControl?.stop()
