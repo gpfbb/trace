@@ -151,7 +151,10 @@ fun TrackMasterDesignTheme(
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = MaterialTheme.typography,
+            // 用 AppType 映射出来的排版。原来这里写的是
+            // `MaterialTheme.typography`——读的是外层默认值再原样传回去，
+            // 等于没设置，Material 组件因此一直用默认的 14sp 字号。
+            typography = MaterialTypography,
             content = content
         )
     }

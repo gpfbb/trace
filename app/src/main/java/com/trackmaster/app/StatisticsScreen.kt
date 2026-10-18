@@ -30,9 +30,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import java.text.SimpleDateFormat
 import java.util.*
-import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.ui.design.currentPalette
+import com.trackmaster.app.ui.design.DesignSecondaryButton
 
 val chartColors = listOf(
     Color(0xFF6366F1),
@@ -158,7 +158,7 @@ fun StatisticsScreen(
         TimeDimension.YEAR -> yearFormat.format(calendar.time)
     }
 
-    GlassDialog(
+    com.trackmaster.app.ui.design.AppDialog(
         onDismissRequest = {
             if (!dismissHandled) {
                 dismissHandled = true
@@ -173,7 +173,7 @@ fun StatisticsScreen(
                     stringResource(R.string.statistics_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = primaryColor()
+                    color = currentPalette.accent
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -267,8 +267,8 @@ fun StatisticsScreen(
             }
         },
         confirmButton = {
-            GlassButton(onClick = onDismiss) {
-                Text(stringResource(R.string.close_short), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onDismiss) {
+                Text(stringResource(R.string.close_short), color = currentPalette.accent)
             }
         }
     )
@@ -335,7 +335,7 @@ fun DatePickerDialog(
 
     day = remember(day, maxDay) { if (day > maxDay) maxDay else day }
     
-    GlassDialog(
+    com.trackmaster.app.ui.design.AppDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.select_date), color = currentPalette.accent) },
         text = {
@@ -371,13 +371,13 @@ fun DatePickerDialog(
             }
         },
         confirmButton = {
-            GlassButton(onClick = { onDateSelected(year, month, day) }) {
-                Text(stringResource(R.string.confirm_short), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = { onDateSelected(year, month, day) }) {
+                Text(stringResource(R.string.confirm_short), color = currentPalette.accent)
             }
         },
         dismissButton = {
-            GlassButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel_short), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel_short), color = currentPalette.accent)
             }
         }
     )
@@ -396,7 +396,7 @@ fun MonthPickerDialog(
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     val yearRange = 2020..(currentYear + 10)
     
-    GlassDialog(
+    com.trackmaster.app.ui.design.AppDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.select_month), color = currentPalette.accent) },
         text = {
@@ -425,13 +425,13 @@ fun MonthPickerDialog(
             }
         },
         confirmButton = {
-            GlassButton(onClick = { onMonthSelected(year, month) }) {
-                Text(stringResource(R.string.confirm_short), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = { onMonthSelected(year, month) }) {
+                Text(stringResource(R.string.confirm_short), color = currentPalette.accent)
             }
         },
         dismissButton = {
-            GlassButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel_short), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel_short), color = currentPalette.accent)
             }
         }
     )
@@ -448,7 +448,7 @@ fun YearPickerDialog(
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     val yearRange = 2020..(currentYear + 10)
     
-    GlassDialog(
+    com.trackmaster.app.ui.design.AppDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.select_year), color = currentPalette.accent) },
         text = {
@@ -464,13 +464,13 @@ fun YearPickerDialog(
             }
         },
         confirmButton = {
-            GlassButton(onClick = { onYearSelected(year) }) {
-                Text(stringResource(R.string.confirm_short), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = { onYearSelected(year) }) {
+                Text(stringResource(R.string.confirm_short), color = currentPalette.accent)
             }
         },
         dismissButton = {
-            GlassButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel_short), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel_short), color = currentPalette.accent)
             }
         }
     )
@@ -588,10 +588,13 @@ fun TimeDimensionSelector(
                             TimeDimension.MONTH -> stringResource(R.string.month_dimension)
                             TimeDimension.YEAR -> stringResource(R.string.year_dimension)
                         },
-                        color = if (selectedDimension == dimension) 
-                            Color.White 
-                            else 
-                            currentPalette.labelSecondary,
+                        // 选中的胶囊底色就是强调色，文字必须用 onAccent
+                        // （浅色模式下是白字）。用 accent 会变成深橙压深橙。
+                        color = if (selectedDimension == dimension) {
+                            currentPalette.onAccent
+                        } else {
+                            currentPalette.labelSecondary
+                        },
                         fontWeight = if (selectedDimension == dimension) 
                             FontWeight.Bold 
                             else 
@@ -700,7 +703,7 @@ private fun FenceTreeItem(
                     Icon(
                         imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                         contentDescription = if (isExpanded) stringResource(R.string.collapse_short) else stringResource(R.string.expand_short),
-                        tint = NeonBlue,
+                        tint = currentPalette.accent,
                         modifier = Modifier.size(20.dp)
                     )
                 } else {
@@ -739,7 +742,7 @@ private fun FenceTreeItem(
                             Text(
                                 text = "(${node.children.size})",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = NeonBlue
+                                color = currentPalette.accent
                             )
                         }
                     }
@@ -874,7 +877,7 @@ fun DurationProgressSection(
                                         text = "${index + 1}",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        color = currentPalette.label,
                                         modifier = Modifier.align(Alignment.Center)
                                     )
                                 }

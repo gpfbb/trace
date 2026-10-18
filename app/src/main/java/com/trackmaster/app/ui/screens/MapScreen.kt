@@ -73,7 +73,6 @@ import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.MapProvider
 import com.trackmaster.app.ui.components.AMapViewWrapper
 import com.trackmaster.app.ui.components.GoogleMapWrapper
-import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.viewmodel.MapViewModel
 import java.util.Random
 import java.util.UUID
@@ -647,7 +646,7 @@ private fun DrawingToolbar(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = glassPanel().copy(alpha = 0.95f),
+        color = currentPalette.groupedCell.copy(alpha = 0.95f),
         tonalElevation = 4.dp
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -768,7 +767,7 @@ private fun DrawingToolbar(
                         }
                     },
                     fontSize = 11.sp,
-                    color = primaryColor(),
+                    color = currentPalette.accent,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -779,7 +778,7 @@ private fun DrawingToolbar(
                         GeoFenceType.POLYGON -> drawingPoints.size >= 3
                     },
                     modifier = Modifier.height(36.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor()),
+                    colors = ButtonDefaults.buttonColors(containerColor = currentPalette.accent),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
                 ) {
                     Text(stringResource(R.string.create), fontSize = 13.sp)
@@ -800,7 +799,7 @@ private fun EditingToolbar(
     onSave: (GeoFence) -> Unit
 ) {
     if (fence == null) return
-    GlassCard(Modifier.fillMaxWidth()) {
+    com.trackmaster.app.ui.design.SurfaceCard(Modifier.fillMaxWidth()) {
         Column {
             Row(Modifier.fillMaxWidth().padding(8.dp)) {
                 Text(

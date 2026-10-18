@@ -13,7 +13,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.StatisticsManager
 import com.trackmaster.app.TrackMasterApplication
-import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.ui.design.currentPalette
 
 /**

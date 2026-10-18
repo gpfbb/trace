@@ -17,10 +17,10 @@ import com.trackmaster.app.SettingsPage
 import com.trackmaster.app.StatisticsScreen
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.ui.screens.*
-import com.trackmaster.app.ui.theme.backgroundColor
 import com.trackmaster.app.viewmodel.HomeViewModel
 import com.trackmaster.app.viewmodel.MapViewModel
 import org.koin.compose.koinInject
+import com.trackmaster.app.ui.design.currentPalette
 
 @Composable
 fun TrackMasterNavHost(
@@ -35,7 +35,7 @@ fun TrackMasterNavHost(
     val app: TrackMasterApplication = koinInject()
     val mapViewModel: MapViewModel = koinInject()
     val homeViewModel: HomeViewModel = koinInject()
-    val bgColor = backgroundColor()
+    val bgColor = currentPalette.background
 
     val startDestination by remember {
         derivedStateOf {

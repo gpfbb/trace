@@ -42,7 +42,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.ui.design.currentPalette
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -53,6 +52,7 @@ import com.trackmaster.app.settings.FenceRelationshipRecalculator
 import com.trackmaster.app.ui.design.AppType
 import com.trackmaster.app.R
 import com.trackmaster.app.PermissionManager
+import com.trackmaster.app.ui.design.DesignSecondaryButton
 @Composable
 fun PermissionSectionContent(
     permissionStatus: PermissionManager.PermissionStatus,
@@ -79,7 +79,7 @@ fun PermissionSectionContent(
             stringResource(R.string.permission_management),
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
-            color = primaryColor()
+            color = currentPalette.accent
         )
 
         PermissionItem(
@@ -186,12 +186,12 @@ fun PermissionItem(
                 Icon(
                     imageVector = AppIcons.checkCircle,
                     contentDescription = stringResource(R.string.granted),
-                    tint = Success,
+                    tint = currentPalette.success,
                     modifier = Modifier.size(28.dp)
                 )
             } else {
-                GlassButton(onClick = onGrantClick) {
-                    Text(stringResource(R.string.go_to_settings), color = Color.White)
+                com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onGrantClick) {
+                    Text(stringResource(R.string.go_to_settings), color = currentPalette.accent)
                 }
             }
         }
@@ -233,8 +233,8 @@ fun TrackingToggleCard(
                 checked = enabled,
                 onCheckedChange = onToggle,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = primaryColor(),
-                    checkedTrackColor = primaryColor().copy(alpha = 0.4f)
+                    checkedThumbColor = currentPalette.accent,
+                    checkedTrackColor = currentPalette.accent.copy(alpha = 0.4f)
                 )
             )
         }
@@ -251,7 +251,7 @@ fun LocationModeSection(
             stringResource(R.string.location_mode),
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
-            color = primaryColor()
+            color = currentPalette.accent
         )
 
         LocationModeItem(
@@ -290,7 +290,7 @@ fun LocationModeItem(
         elevation = CardDefaults.cardElevation(0.dp),
         border = if (isSelected) androidx.compose.foundation.BorderStroke(
             2.dp,
-            primaryColor()
+            currentPalette.accent
         ) else null
     ) {
         Row(
@@ -303,7 +303,7 @@ fun LocationModeItem(
             RadioButton(
                 selected = isSelected,
                 onClick = onClick,
-                colors = RadioButtonDefaults.colors(selectedColor = primaryColor())
+                colors = RadioButtonDefaults.colors(selectedColor = currentPalette.accent)
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(

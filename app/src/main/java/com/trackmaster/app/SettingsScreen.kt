@@ -43,7 +43,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.ui.design.currentPalette
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -54,6 +53,7 @@ import com.trackmaster.app.settings.FenceRelationshipRecalculator
 import com.trackmaster.app.settings.PermissionSectionContent
 import com.trackmaster.app.settings.TrackingToggleCard
 import com.trackmaster.app.settings.LocationModeSection
+import com.trackmaster.app.ui.design.DesignSecondaryButton
 
 // 独立的设置页面内容组件
 @Composable
@@ -177,7 +177,7 @@ fun SettingsPage(
                 ) {
                     IconTile(
                         icon = AppIcons.mapService,
-                        containerColor = primaryColor(),
+                        containerColor = currentPalette.accent,
                         tint = Color.White,
                         size = 29.dp
                         )
@@ -219,7 +219,7 @@ fun SettingsPage(
                             Text(
                                 stringResource(R.string.map_switch_hint),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = NeonAmber
+                                color = currentPalette.warning
                             )
                         }
                     },
@@ -259,7 +259,7 @@ fun SettingsPage(
                 ) {
                     IconTile(
                         icon = AppIcons.language,
-                        containerColor = primaryColor(),
+                        containerColor = currentPalette.accent,
                         tint = Color.White,
                         size = 29.dp
                         )
@@ -302,7 +302,7 @@ fun SettingsPage(
                     ) {
                         IconTile(
                             icon = AppIcons.palette,
-                            containerColor = primaryColor(),
+                            containerColor = currentPalette.accent,
                             tint = Color.White,
                             size = 29.dp
                             )
@@ -346,7 +346,7 @@ fun SettingsPage(
                     icon = AppIcons.folder,
                     title = stringResource(R.string.data_import_export),
                     description = stringResource(R.string.data_import_export_desc),
-                    tint = primaryColor(),
+                    tint = currentPalette.accent,
                     onClick = onOpenDataImportExport
                 )
                 HorizontalDivider(color = currentPalette.separator)
@@ -362,7 +362,7 @@ fun SettingsPage(
                 icon = AppIcons.hierarchy,
                 title = stringResource(R.string.recalculate_relationships),
                 description = stringResource(R.string.recalculate_desc),
-                tint = NeonBlue,
+                tint = currentPalette.accent,
                 onClick = {
                     // 每次打开对话框都清掉上一次的结果，避免显示陈旧的成功/失败提示
                     recalculateResult = null
@@ -408,7 +408,7 @@ fun SettingsPage(
                         Icon(
                             imageVector = AppIcons.tune,
                             contentDescription = stringResource(R.string.advanced_settings),
-                            tint = primaryColor(),
+                            tint = currentPalette.accent,
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.width(16.dp))
@@ -496,14 +496,14 @@ fun SettingsPage(
                             Icon(
                                 imageVector = if (currentLanguage == lang) AppIcons.checkCircle else AppIcons.checkCircleOutline,
                                 contentDescription = null,
-                                tint = if (currentLanguage == lang) primaryColor() else Color.Gray,
+                                tint = if (currentLanguage == lang) currentPalette.accent else Color.Gray,
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
                                 stringResource(labelRes),
                                 fontSize = 16.sp,
-                                color = Color.White
+                                color = currentPalette.label
                             )
                         }
                     }
@@ -579,18 +579,18 @@ fun SettingsScreen(
     onDismiss: () -> Unit,
     onOpenDataImportExport: (() -> Unit)? = null
 ) {
-    GlassDialog(
+    com.trackmaster.app.ui.design.AppDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = AppIcons.settings,
                     contentDescription = stringResource(R.string.settings),
-                    tint = primaryColor(),
+                    tint = currentPalette.accent,
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(stringResource(R.string.app_settings), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = primaryColor())
+                Text(stringResource(R.string.app_settings), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = currentPalette.accent)
             }
         },
         text = {
@@ -601,8 +601,8 @@ fun SettingsScreen(
             )
         },
         confirmButton = {
-            GlassButton(onClick = onDismiss) {
-                Text(stringResource(R.string.close), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onDismiss) {
+                Text(stringResource(R.string.close), color = currentPalette.accent)
             }
         }
     )
@@ -675,7 +675,7 @@ fun AdvancedSettingsSection(
         }
 
         // 重置按钮
-        GlassButton(
+        com.trackmaster.app.ui.design.DesignSecondaryButton(
             onClick = {
                 onStationaryThresholdChange(30.0)
                 onBoundaryBufferChange(10.0)
@@ -683,7 +683,7 @@ fun AdvancedSettingsSection(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(stringResource(R.string.reset_defaults), color = Color.White)
+            Text(stringResource(R.string.reset_defaults), color = currentPalette.accent)
         }
 
         // 静止判定阈值
@@ -702,7 +702,7 @@ fun AdvancedSettingsSection(
                     "${stationaryThreshold.toInt()}m",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = primaryColor()
+                    color = currentPalette.accent
                 )
             }
             Slider(
@@ -711,8 +711,8 @@ fun AdvancedSettingsSection(
                 valueRange = 10f..80f,
                 steps = 11,
                 colors = SliderDefaults.colors(
-                    thumbColor = primaryColor(),
-                    activeTrackColor = primaryColor(),
+                    thumbColor = currentPalette.accent,
+                    activeTrackColor = currentPalette.accent,
                     inactiveTrackColor = Color(0x4DFFFFFF)
                 )
             )
@@ -739,7 +739,7 @@ fun AdvancedSettingsSection(
                     "${boundaryBuffer.toInt()}m",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = primaryColor()
+                    color = currentPalette.accent
                 )
             }
             Slider(
@@ -748,8 +748,8 @@ fun AdvancedSettingsSection(
                 valueRange = 3f..100f,
                 steps = 9,
                 colors = SliderDefaults.colors(
-                    thumbColor = primaryColor(),
-                    activeTrackColor = primaryColor(),
+                    thumbColor = currentPalette.accent,
+                    activeTrackColor = currentPalette.accent,
                     inactiveTrackColor = Color(0x4DFFFFFF)
                 )
             )
@@ -776,7 +776,7 @@ fun AdvancedSettingsSection(
                     "${driftThreshold.toInt()}m",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = primaryColor()
+                    color = currentPalette.accent
                 )
             }
             Slider(
@@ -785,8 +785,8 @@ fun AdvancedSettingsSection(
                 valueRange = 10f..50f,
                 steps = 7,
                 colors = SliderDefaults.colors(
-                    thumbColor = primaryColor(),
-                    activeTrackColor = primaryColor(),
+                    thumbColor = currentPalette.accent,
+                    activeTrackColor = currentPalette.accent,
                     inactiveTrackColor = Color(0x4DFFFFFF)
                 )
             )

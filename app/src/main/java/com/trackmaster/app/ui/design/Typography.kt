@@ -1,16 +1,16 @@
-package com.trackmaster.app.ui.theme
+package com.trackmaster.app.ui.design
 
 import androidx.compose.material3.Typography
-import com.trackmaster.app.ui.design.AppType
 
 /**
- * Material 3 排版映射。
+ * 把 [AppType] 的字号阶梯映射到 Material 3 的排版槽位。
  *
- * 字号阶梯的真实定义在 [com.trackmaster.app.ui.design.AppType]。
- * 这里把它映射到 Material 的槽位，让 Material 原生组件（Dialog 标题、
- * TextField 标签等）与新设计保持一致。
+ * 屏幕代码直接用 `AppType.body` 这类语义字号；这里的映射是为了让
+ * Material 原生组件（TextField 标签、Dialog 标题、Snackbar 等）
+ * 也跟随同一套字号，不会出现"自己写的文字 17sp、Material 的文字 14sp"
+ * 这种不一致。
  */
-val Typography = Typography(
+val MaterialTypography = Typography(
     displayLarge = AppType.displayLarge,
     displayMedium = AppType.displayMedium,
     displaySmall = AppType.displaySmall,

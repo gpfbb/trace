@@ -375,16 +375,24 @@ fun DesignSecondaryButton(
     content: @Composable RowScope.() -> Unit
 ) {
     val palette = currentPalette
-    Row(
-        modifier = modifier
-            .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(Radius.pill))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = Space.md, vertical = Space.sm),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-        content = content
-    )
+    // 提供默认内容色。旧代码从 GlassButton 迁移过来时，调用方普遍显式写了
+    // `color = Color.White`——那是给暗色主题的，在新主题的白卡片上等于隐形。
+    // 这里给出 LocalContentColor 只是兜底；显式写死的颜色仍需逐个清理，
+    // 不然会出现"按钮在、字看不见"。
+    CompositionLocalProvider(
+        LocalContentColor provides if (enabled) palette.accent else palette.labelTertiary
+    ) {
+        Row(
+            modifier = modifier
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(Radius.pill))
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = Space.md, vertical = Space.sm),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            content = content
+        )
+    }
 }
 
 // ============================================================

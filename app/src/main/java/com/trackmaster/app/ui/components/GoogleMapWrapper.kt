@@ -33,7 +33,6 @@ import com.trackmaster.app.mapstraction.MapMarker
 import com.trackmaster.app.mapstraction.MarkerIcon
 import com.trackmaster.app.mapstraction.MapPresenter
 import com.trackmaster.app.mapstraction.google.GoogleMapPresenter
-import com.trackmaster.app.ui.theme.NeonAmber
 
 private const val TAG = "GoogleMapWrapper"
 
@@ -463,7 +462,7 @@ fun GoogleMapWrapper(
 
 @Composable
 private fun CrosshairOverlay() {
-    val primaryColor = NeonAmber
+    val primaryColor = com.trackmaster.app.ui.design.currentPalette.accent
     Canvas(Modifier.fillMaxSize()) {
         val centerX = size.width / 2
         val centerY = size.height / 2

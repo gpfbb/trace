@@ -29,12 +29,12 @@ import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.*
 import com.trackmaster.app.R
-import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.ui.design.currentPalette
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.trackmaster.app.ui.design.DesignSecondaryButton
 
 @Composable
 fun DataManagementScreen(
@@ -109,14 +109,14 @@ fun DataManagementScreen(
     LaunchedEffect(Unit) {
         refreshData()
     }
-    GlassDialog(
+    com.trackmaster.app.ui.design.AppDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
                 stringResource(R.string.data_import_export),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = NeonCoral
+                color = currentPalette.accent
             )
         },
         text = {
@@ -262,8 +262,8 @@ fun DataManagementScreen(
             }
         },
         confirmButton = {
-            GlassButton(onClick = onDismiss) {
-                Text(stringResource(R.string.close), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onDismiss) {
+                Text(stringResource(R.string.close), color = currentPalette.accent)
             }
         }
     )
@@ -297,11 +297,11 @@ fun DataManagementScreen(
         )
     }
 
-    // Success/Failure Dialog
+    // currentPalette.success/Failure Dialog
     if (showSuccessDialog) {
-        GlassDialog(
+        com.trackmaster.app.ui.design.AppDialog(
             onDismissRequest = { showSuccessDialog = false },
-            title = { Text(stringResource(R.string.operation_complete), color = NeonCoral) },
+            title = { Text(stringResource(R.string.operation_complete), color = currentPalette.accent) },
             text = {
                 Text(
                     successMessage,
@@ -310,8 +310,8 @@ fun DataManagementScreen(
                 )
             },
             confirmButton = {
-                GlassButton(onClick = { showSuccessDialog = false }) {
-                    Text(stringResource(R.string.confirm), color = Color.White)
+                com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = { showSuccessDialog = false }) {
+                    Text(stringResource(R.string.confirm), color = currentPalette.accent)
                 }
             }
         )
@@ -336,7 +336,7 @@ private fun StorageInfoCard(storageInfo: StorageInfo) {
                 stringResource(R.string.storage_status),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = NeonCoral
+                color = currentPalette.accent
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -363,7 +363,7 @@ private fun StorageStatItem(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = NeonCoral
+            color = currentPalette.accent
         )
         Text(
             text = label,
@@ -388,7 +388,7 @@ private fun ExportImportSection(
             stringResource(R.string.export_import),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = NeonCoral
+            color = currentPalette.accent
         )
 
         if (isExporting) {
@@ -403,7 +403,7 @@ private fun ExportImportSection(
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth(),
-                        color = NeonCoral
+                        color = currentPalette.accent
                     )
                     Text(text = exportMessage, style = MaterialTheme.typography.bodySmall, color = currentPalette.label)
                 }
@@ -418,7 +418,7 @@ private fun ExportImportSection(
                 elevation = CardDefaults.cardElevation(0.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = NeonAmber)
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = currentPalette.warning)
                     Text(text = importMessage, style = MaterialTheme.typography.bodySmall, color = currentPalette.label)
                 }
             }
@@ -505,7 +505,7 @@ private fun AutoCleanupSection(
             stringResource(R.string.auto_cleanup_section),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = NeonCoral
+            color = currentPalette.accent
         )
 
         Row(
@@ -526,17 +526,17 @@ private fun AutoCleanupSection(
                 )
             }
             TextButton(onClick = onOpenSettings) {
-                Text(stringResource(R.string.settings_button), color = NeonCoral, fontSize = 13.sp)
+                Text(stringResource(R.string.settings_button), color = currentPalette.accent, fontSize = 13.sp)
             }
         }
 
-        GlassButton(
+        com.trackmaster.app.ui.design.DesignSecondaryButton(
             onClick = onCleanupNow,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(imageVector = Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = Danger)
+            Icon(imageVector = Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = currentPalette.danger)
             Spacer(modifier = Modifier.width(4.dp))
-            Text(stringResource(R.string.cleanup_now), color = Danger, fontSize = 13.sp)
+            Text(stringResource(R.string.cleanup_now), color = currentPalette.danger, fontSize = 13.sp)
         }
 
         Text(
@@ -557,9 +557,9 @@ private fun AutoCleanupDialog(
     val options = listOf(3, 7, 14, 30, 90)
     var selected by remember { mutableStateOf(if (options.contains(currentDays)) currentDays else 7) }
 
-    GlassDialog(
+    com.trackmaster.app.ui.design.AppDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.auto_cleanup_dialog_title), color = NeonCoral) },
+        title = { Text(stringResource(R.string.auto_cleanup_dialog_title), color = currentPalette.accent) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.auto_cleanup_dialog_desc), style = MaterialTheme.typography.bodyMedium, color = currentPalette.label)
@@ -575,7 +575,7 @@ private fun AutoCleanupDialog(
                         RadioButton(
                             selected = selected == days,
                             onClick = { selected = days },
-                            colors = RadioButtonDefaults.colors(selectedColor = NeonCoral)
+                            colors = RadioButtonDefaults.colors(selectedColor = currentPalette.accent)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(stringResource(R.string.days_option, days), color = currentPalette.label)
@@ -584,13 +584,13 @@ private fun AutoCleanupDialog(
             }
         },
         confirmButton = {
-            GlassButton(onClick = { onConfirm(selected) }) {
-                Text(stringResource(R.string.save), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = { onConfirm(selected) }) {
+                Text(stringResource(R.string.save), color = currentPalette.accent)
             }
         },
         dismissButton = {
-            GlassButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel), color = currentPalette.accent)
             }
         }
     )
@@ -603,20 +603,20 @@ private fun DeleteSection(onDeleteAll: () -> Unit) {
             stringResource(R.string.delete_section),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = NeonCoral
+            color = currentPalette.accent
         )
         Text(
             stringResource(R.string.delete_data_desc),
             style = MaterialTheme.typography.bodySmall,
             color = currentPalette.labelSecondary
         )
-        GlassButton(
+        com.trackmaster.app.ui.design.DesignSecondaryButton(
             onClick = onDeleteAll,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(imageVector = Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = Danger)
+            Icon(imageVector = Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = currentPalette.danger)
             Spacer(modifier = Modifier.width(4.dp))
-            Text(stringResource(R.string.delete_data_button), color = Danger)
+            Text(stringResource(R.string.delete_data_button), color = currentPalette.danger)
         }
     }
 }
@@ -632,7 +632,7 @@ private fun ExportedFilesSection(
             stringResource(R.string.exported_files_section),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = NeonCoral
+            color = currentPalette.accent
         )
         if (files.isEmpty()) {
             Text(stringResource(R.string.no_exported_files), style = MaterialTheme.typography.bodySmall, color = currentPalette.labelSecondary)
@@ -669,10 +669,10 @@ private fun FileItem(file: File, onDelete: () -> Unit, onImport: () -> Unit) {
                     style = MaterialTheme.typography.labelSmall,
                     color = currentPalette.labelSecondary
                 )
-                Text(text = stringResource(R.string.click_to_import), style = MaterialTheme.typography.labelSmall, color = NeonCoral)
+                Text(text = stringResource(R.string.click_to_import), style = MaterialTheme.typography.labelSmall, color = currentPalette.accent)
             }
             IconButton(onClick = onDelete) {
-                Icon(imageVector = Icons.Default.Delete, contentDescription = stringResource(R.string.delete), tint = Danger)
+                Icon(imageVector = Icons.Default.Delete, contentDescription = stringResource(R.string.delete), tint = currentPalette.danger)
             }
         }
     }
@@ -686,24 +686,24 @@ private fun DeleteOptionsDialog(onDismiss: () -> Unit, onConfirm: (Date?) -> Uni
     calendar.add(Calendar.MONTH, -1)
     val oneMonthAgo = calendar.time
 
-    GlassDialog(
+    com.trackmaster.app.ui.design.AppDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.delete_options_title), color = NeonCoral) },
+        title = { Text(stringResource(R.string.delete_options_title), color = currentPalette.accent) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.delete_warning), color = Danger, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.delete_warning), color = currentPalette.danger, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = deleteAll, onCheckedChange = { deleteAll = it; if (it) deleteBefore = false }, colors = CheckboxDefaults.colors(checkedColor = NeonCoral))
+                    Checkbox(checked = deleteAll, onCheckedChange = { deleteAll = it; if (it) deleteBefore = false }, colors = CheckboxDefaults.colors(checkedColor = currentPalette.accent))
                     Text(stringResource(R.string.delete_all_data), color = currentPalette.label)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = deleteBefore, onCheckedChange = { deleteBefore = it; if (it) deleteAll = false }, colors = CheckboxDefaults.colors(checkedColor = NeonCoral))
+                    Checkbox(checked = deleteBefore, onCheckedChange = { deleteBefore = it; if (it) deleteAll = false }, colors = CheckboxDefaults.colors(checkedColor = currentPalette.accent))
                     Text(stringResource(R.string.delete_before_date), color = currentPalette.label)
                 }
             }
         },
         confirmButton = {
-            GlassButton(onClick = {
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = {
                 val before = when {
                     deleteAll -> null
                     deleteBefore -> oneMonthAgo
@@ -711,12 +711,12 @@ private fun DeleteOptionsDialog(onDismiss: () -> Unit, onConfirm: (Date?) -> Uni
                 }
                 onConfirm(before)
             }) {
-                Text(stringResource(R.string.confirm_delete_button), color = Color.White)
+                Text(stringResource(R.string.confirm_delete_button), color = currentPalette.accent)
             }
         },
         dismissButton = {
-            GlassButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel), color = currentPalette.accent)
             }
         }
     )

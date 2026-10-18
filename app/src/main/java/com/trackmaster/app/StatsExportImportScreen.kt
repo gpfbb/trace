@@ -26,10 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
-import com.trackmaster.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.io.File
 import com.trackmaster.app.ui.design.currentPalette
+import com.trackmaster.app.ui.design.DesignSecondaryButton
 
 @Composable
 fun StatsExportImportScreen(
@@ -147,7 +147,7 @@ fun StatsExportImportScreen(
         }
     }
 
-    GlassDialog(
+    com.trackmaster.app.ui.design.AppDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(
@@ -156,7 +156,7 @@ fun StatsExportImportScreen(
                 Icon(
                     imageVector = Icons.Default.Timeline,
                     contentDescription = null,
-                    tint = NeonCoral,
+                    tint = currentPalette.accent,
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -164,7 +164,7 @@ fun StatsExportImportScreen(
                     stringResource(R.string.stay_record_import_export),
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
-                    color = NeonCoral
+                    color = currentPalette.accent
                 )
             }
         },
@@ -188,7 +188,7 @@ fun StatsExportImportScreen(
                         Text(
                             stringResource(R.string.current_data_statistics),
                             fontWeight = FontWeight.Bold,
-                            color = NeonCoral
+                            color = currentPalette.accent
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
@@ -197,7 +197,7 @@ fun StatsExportImportScreen(
                         ) {
                             Column {
                                 Text(stringResource(R.string.stay_record), fontSize = 12.sp, color = currentPalette.labelSecondary)
-                                Text(stringResource(R.string.stay_record_count, storageInfo.stayCount), fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.stay_record_count, storageInfo.stayCount), fontWeight = FontWeight.Bold, color = currentPalette.label)
                             }
                             Column {
                                 Text(stringResource(R.string.daily_summary), fontSize = 12.sp, color = currentPalette.labelSecondary)
@@ -205,12 +205,12 @@ fun StatsExportImportScreen(
                                     stringResource(R.string.daily_summary_count,
                                         try { dataManager.getAllDailyStayRecords().size } catch (e: Exception) { 0 }),
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = currentPalette.label
                                 )
                             }
                             Column {
                                 Text(stringResource(R.string.event_log), fontSize = 12.sp, color = currentPalette.labelSecondary)
-                                Text(stringResource(R.string.event_log_count, storageInfo.eventCount), fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.event_log_count, storageInfo.eventCount), fontWeight = FontWeight.Bold, color = currentPalette.label)
                             }
                         }
                     }
@@ -231,11 +231,11 @@ fun StatsExportImportScreen(
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = null,
-                                tint = Success,
+                                tint = currentPalette.success,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.about_data_export), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                            Text(stringResource(R.string.about_data_export), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = currentPalette.label)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
@@ -251,12 +251,12 @@ fun StatsExportImportScreen(
                     onClick = { doExport() },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isExporting && !isImporting,
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonCoral)
+                    colors = ButtonDefaults.buttonColors(containerColor = currentPalette.accent)
                 ) {
                     if (isExporting) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
-                            color = Color.White,
+                            color = currentPalette.onAccent,
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -273,12 +273,12 @@ fun StatsExportImportScreen(
                     onClick = { filePickerLauncher.launch("application/json") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isExporting && !isImporting,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonAmber)
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = currentPalette.warning)
                 ) {
                     if (isImporting) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
-                            color = NeonAmber,
+                            color = currentPalette.warning,
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -303,11 +303,11 @@ fun StatsExportImportScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.MergeType,
                                 contentDescription = null,
-                                tint = NeonAmber,
+                                tint = currentPalette.warning,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.merge_rules), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                            Text(stringResource(R.string.merge_rules), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = currentPalette.label)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(                            stringResource(R.string.merge_rules_desc),
@@ -318,8 +318,8 @@ fun StatsExportImportScreen(
             }
         },
         confirmButton = {
-            GlassButton(onClick = onDismiss) {
-                Text(stringResource(R.string.close), color = Color.White)
+            com.trackmaster.app.ui.design.DesignSecondaryButton(onClick = onDismiss) {
+                Text(stringResource(R.string.close), color = currentPalette.accent)
             }
         }
     )
@@ -331,14 +331,14 @@ fun StatsExportImportScreen(
             title = {
                 Text(
                     if (importResult?.success == true || exportResult?.success == true) stringResource(R.string.operation_success) else stringResource(R.string.operation_failed),
-                    color = if (importResult?.success == true || exportResult?.success == true) Success else Danger
+                    color = if (importResult?.success == true || exportResult?.success == true) currentPalette.success else currentPalette.danger
                 )
             },
-            text = { Text(resultMessage, color = Color.White) },
+            text = { Text(resultMessage, color = currentPalette.label) },
             confirmButton = {
                 Button(
                     onClick = { showResultDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonCoral)
+                    colors = ButtonDefaults.buttonColors(containerColor = currentPalette.accent)
                 ) {
                     Text(stringResource(R.string.ok))
                 }
