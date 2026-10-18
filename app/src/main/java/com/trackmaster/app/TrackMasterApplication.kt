@@ -15,9 +15,7 @@ import com.trackmaster.app.core.ManagersHolder
 import com.trackmaster.app.core.RepositoryHolder
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.di.appModule
-import com.trackmaster.app.services.Aggregator
 import com.trackmaster.app.ui.theme.ThemeManager
-import com.trackmaster.app.throttle.ThrottleConfig
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,9 +60,6 @@ class TrackMasterApplication : Application() {
     val stayDurationManager get() = managersHolder.stayDurationManager
     val persistentStateManager get() = managersHolder.persistentStateManager
     val appPreferences get() = managersHolder.appPreferences
-
-    lateinit var aggregator: Aggregator
-        private set
 
     private val repositoryHolder: RepositoryHolder by lazy { getKoin().get<RepositoryHolder>() }
     private val engineHolder: EngineHolder by lazy { getKoin().get<EngineHolder>() }
@@ -155,7 +150,6 @@ class TrackMasterApplication : Application() {
 
         val coreFences = fenceTreeManager.loadFenceTree(geoFences)
         engineHolder.initialize(coreFences)
-        aggregator = Aggregator(coreFences, repository)
         AppLog.d(TAG, "引擎初始化完成: ${coreFences.size} 个核心围栏")
 
         fenceProcessingHolder = FenceProcessingHolder(
@@ -241,11 +235,8 @@ class TrackMasterApplication : Application() {
         // 否则统计页仍会读到旧围栏结构下的 Segment/日汇总数据（README 要求的两步刷新，此前只做了第一步）
         // clearCache() 是普通函数（非 suspend），可直接在同步函数中调用
         repository.clearCache()
-        // 【P0修复】必须等待 engine.init() 完成后再创建新 Aggregator
-        // 否则新 Aggregator 可能在 Engine 未完全初始化时就开始使用，导致数据不一致
         appScope.launch {
             engine.init()
-            aggregator = Aggregator(coreFences, repository)
         }
         repositoryHolder.notifyFenceStateChanged()
     }
@@ -253,12 +244,19 @@ class TrackMasterApplication : Application() {
     fun checkAndUpdateFenceState() = fenceProcessingHolder.checkAndUpdateFenceState()
 
     fun updateEngineConfig() {
-        val newConfig = ThrottleConfig(
+        // 【P1修复】基于当前生效的 config 做 copy 修改，而不是用全新默认值重建。
+        // 原实现只填 3 个字段，其余字段（stationaryAccuracyMultiplier、
+        // stationaryAccelVariance、stationarySpeedThreshold、stationaryWindowSize、
+        // stationaryMinPoints、throttleSteps、resetDistanceM、slcDriftM、
+        // baseIntervalMs、consecutiveMovementThreshold）会被静默重置成默认值。
+        val scheduler = engineHolder.engine.getScheduler()
+        val newConfig = scheduler.config.copy(
             driftThresholdM = appPreferences.driftThreshold,
             stationaryMinDistanceM = appPreferences.stationaryThreshold,
             boundaryBufferM = appPreferences.boundaryBuffer
         )
-        engineHolder.engine.getScheduler().updateConfig(newConfig)
+        // 同步给 EngineHolder，避免后续 refresh() 重建 Engine 时退回旧配置
+        engineHolder.updateThrottleConfig(newConfig)
     }
 
     // ============================================================

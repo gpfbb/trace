@@ -109,6 +109,12 @@ class Engine(
 
     /** 初始化：恢复未关闭的 Segment */
     suspend fun init() {
+        // 刷新场景下 EngineHolder 会把旧 Engine 的活动围栏状态迁移到新实例，
+        // 内存中的实时状态比数据库里的 open segment 更新，不能被后者覆盖。
+        if (currentLeafIdRef.get() != null) {
+            AppLog.d(TAG, "已有活动围栏状态，跳过 open segment 恢复")
+            return
+        }
         val open = repo.getOpenSegments()
         if (open.isNotEmpty()) {
             val latest = open.last()
@@ -240,9 +246,16 @@ class Engine(
         AppLog.d(TAG, "Engine恢复状态: currentLeafId=$fenceId, enterTs=$enterTs")
     }
 
-    /** 资源释放（不释放共享的 Repository，只清理调度器） */
-    suspend fun dispose() {
-        if (currentLeafIdRef.get() != null) {
+    /**
+     * 资源释放（不释放共享的 Repository，只清理调度器）
+     *
+     * @param closeActiveSegment 是否在释放时关闭当前停留。
+     *   刷新围栏（EngineHolder.refresh）场景必须传 false：此时活动状态会迁移到
+     *   新 Engine 继续计时，若这里先 transition(null) 会主动写出一条错误的已结束
+     *   segment，用户仍在围栏内的这段停留就被截断了。
+     */
+    suspend fun dispose(closeActiveSegment: Boolean = true) {
+        if (closeActiveSegment && currentLeafIdRef.get() != null) {
             transition(null, System.currentTimeMillis())
         }
         scheduler.dispose()
@@ -391,6 +404,7 @@ class Engine(
         val closedSeg = StaySegment(
             id = "seg_${segCounter.incrementAndGet()}_$oldEnterTs",
             leafGeofenceId = oldLeafId,
+            leafGeofenceName = fenceMap[oldLeafId]?.name,
             startTs = oldEnterTs,
             endTs = ts,
             status = if (enterDateKey != exitDateKey) SegmentStatus.CROSSED_DAY else SegmentStatus.COMPLETED,
@@ -486,6 +500,7 @@ class Engine(
             val closedSeg = StaySegment(
                 id = "seg_${segCounter.incrementAndGet()}_${latest.startTs}",
                 leafGeofenceId = latest.leafGeofenceId,
+                leafGeofenceName = fenceMap[latest.leafGeofenceId]?.name ?: latest.leafGeofenceName,
                 startTs = latest.startTs,
                 endTs = exitTs,
                 status = SegmentStatus.COMPLETED,

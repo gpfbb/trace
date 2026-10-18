@@ -39,18 +39,6 @@ class EngineLocationPipelineTest {
 
         override suspend fun queryOpenSegments(): List<StaySegment> = openSegments.toList()
 
-        override suspend fun updateSegments(segments: List<StaySegment>) {
-            segments.forEach { updated ->
-                val idx = this.segments.indexOfFirst { it.id == updated.id }
-                if (idx >= 0) this.segments[idx] = updated
-            }
-        }
-
-        override suspend fun saveDailySummaries(summaries: List<com.trackmaster.app.core.DailySummary>) = Unit
-
-        override suspend fun queryDailySummary(dateKey: String): List<com.trackmaster.app.core.DailySummary> =
-            emptyList()
-
         override suspend fun beginTransaction() { depth++ }
 
         override suspend fun commitTransaction() { depth-- }
@@ -115,6 +103,10 @@ class EngineLocationPipelineTest {
         assertEquals("home", exited!!.leafGeofenceId)
         assertEquals(t1, exited.startTs)
         assertEquals(t3, exited.endTs)
+        assertEquals(
+            "segment 必须携带围栏名称快照（历史记录不能在改名后失去名字）",
+            "home", exited.leafGeofenceName
+        )
         repo.flush()
         assertEquals(1, adapter.segments.size)
         assertNull("离开后 currentLeafId 应为 null", engine.currentLeafId)
@@ -195,9 +187,6 @@ class EngineLocationPipelineTest {
                 throw IllegalStateException("disk full")
             override suspend fun querySegmentsByDate(dateKey: String) = emptyList<StaySegment>()
             override suspend fun queryOpenSegments() = emptyList<StaySegment>()
-            override suspend fun updateSegments(segments: List<StaySegment>) = Unit
-            override suspend fun saveDailySummaries(summaries: List<com.trackmaster.app.core.DailySummary>) = Unit
-            override suspend fun queryDailySummary(dateKey: String) = emptyList<com.trackmaster.app.core.DailySummary>()
             override suspend fun beginTransaction() = Unit
             override suspend fun commitTransaction() = Unit
             override suspend fun rollbackTransaction() = Unit
