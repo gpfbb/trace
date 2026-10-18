@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Doing UI work?** Read [`UI_REDESIGN_PLAN.md`](UI_REDESIGN_PLAN.md) first — it covers the
-> current UI layer's exact state, the three structural problems that must be solved before
-> any redesign, a recommended phase order, and the backend invariants UI work must not break.
+> **Doing UI work?** Read [`UI_REDESIGN_PLAN.md`](UI_REDESIGN_PLAN.md) first. The UI 重做
+> 已完成（33 个提交）：里面写了设计系统怎么用、新代码结构、验证方式（含模拟器与取色技巧）、
+> 七个踩过的坑与排查方法，以及还剩什么。本文档描述的后端架构与不变量仍然准确。
 
 ## Build / Test / Lint
 
@@ -80,13 +80,19 @@ JAVA_HOME=/d/javajdk ./gradlew testDebugUnitTest    # JVM unit tests
 
 - **Never call `SmartScheduler.evaluate()` twice for the same fix** — see "Scheduler is called exactly once per fix" above.
 - **`Engine.transition()` writes to repo BEFORE updating `currentLeafId`** — if repo write fails, both `currentLeafId` and `currentEnterTs` are rolled back. Don't invert this order, and don't roll back only one of them.
-- **Repository cache invalidation**: `repo.clearCache()` exists but has **no caller**. After deleting/updating fences, both `clearCache()` and `app.refreshEngineFences()` are needed — currently only the latter happens, so segment/summary caches go stale.
+- **Repository cache invalidation**: 删改围栏后需要同时调 `repository.clearCache()` 和
+  `app.refreshEngineFences()`。`TrackMasterApplication.refreshEngineFences()` 内部已经
+  调了 `clearCache()`，**不要在它之外另写一套刷新逻辑**。
 - **`setCurrentMatchedFenceIds`**: External code should NOT call this on Engine (it's used internally by `processApprovedLocation`). Use `checkFenceMatch()` or `checkFenceMatchWithDynamicBuffer()` instead.
 - **LaunchedEffect stale closures**: When setting up listeners inside `LaunchedEffect` that read `State` variables, those state vars MUST be in the effect's key list. `AMapViewWrapper`/`GoogleMapWrapper` read `currentMatchedFenceIds` and `highlightedFenceId` inside a `LaunchedEffect` whose keys are `(displayedFenceId, fences, isMapReady)` — the green "inside fence" highlight does not refresh on location updates.
 - **AMap privacy consent**: Must call `updatePrivacyShow()` and `updatePrivacyAgree()` before any map/location SDK call. Currently `MainActivity` only does it when `mapProvider == AMAP`, and `LocationProviderManager.initAmap()` does it *after* constructing `AMapLocationClient`.
 - **dateKey format**: Written with `Locale.US` (`StayDurationManager`, `Repository.formatDateKey`). Any query-side formatting must also use `Locale.US` or the `daily_stays` composite key won't match.
-- **`daily_stays` date columns are local-time strings** (`yyyy-MM-dd`, lexicographically ordered). `StayDao.getDailyStats` still uses SQLite `DATE(...,'unixepoch')` which is **UTC** — an 8-hour skew for UTC+8.
-- **Two `FenceActiveSession` classes exist**: `StayDurationManager.kt` (7 fields, has `accumulatedDuration`/`lastSaveTime`/`gapStartTime`) and `FenceProcessingHolder.kt` (4-field stub). The stub is what gets stored, so restart gap accounting is wrong.
+- **`daily_stays` date columns are local-time strings** (`yyyy-MM-dd`, lexicographically ordered)。
+  `StayDao` 里的日期查询已经加了 `'localtime'` 修饰符（只写 `'unixepoch'` 返回 UTC，
+  UTC+8 会差 8 小时）。新增查询照此办理。
+- **`FenceActiveSession` 只有一个定义**（`StayDurationManager.kt`，7 字段，含
+  `accumulatedDuration`/`lastSaveTime`/`gapStartTime`）。`FenceProcessingHolder`
+  直接 import 这个版本——历史上曾有一份 4 字段的副本，导致重启后的间隙计算错误，已删除。
 - **Google provider throttling**: `GoogleLocationProvider.setInterval()` requires explicit calls. `Engine.lastComputedIntervalMs` is written by `evaluateLocation()` and read by `GeoFenceLocationService` to apply.
 
 ## Module Map
@@ -94,26 +100,31 @@ JAVA_HOME=/d/javajdk ./gradlew testDebugUnitTest    # JVM unit tests
 | Package | Purpose |
 |---|---|
 | `core/` | Engine, GeofenceModels, FenceProcessingHolder, FenceTreeBuilder/Manager, SpatialIndex, EngineHolder, RepositoryHolder, ManagersHolder, FenceMapper |
-| `locationservice/` | LocationProviderManager, PowerSaveController, LocationProvider (+ amap/, google/) |
-| `mapstraction/` | MapPresenter + platform models (amap/, google/). **The `MapProvider` interface and its two impls are dead code** — `MapScreen` branches on `MapProvider` (the enum in `AppPreferences`) and instantiates wrappers directly |
+| `locationservice/` | LocationProviderManager, PowerSaveController, LocationProvider (+ google/) |
+| `mapstraction/` | MapPresenter + platform models (amap/, google/). `MapScreen` branches on `MapProvider` (the enum in `AppPreferences`) and instantiates wrappers directly |
 | `data/dao/` | Hand-written SQLite query helpers (FenceDao, EventDao, StayDao, DailyStayDao, CategoryDao) |
 | `data/database/` | DatabaseManager (SQLiteOpenHelper), DatabaseFacade, FenceExporter |
-| `data/repository/` | FenceRepository + SessionRepository interfaces and App impls |
+| `data/repository/` | FenceRepository / SessionRepository / CategoryRepository 接口与 App 实现（都是薄委托） |
 | `storage/` | Repository (write buffer), StorageAdapter, SqliteStorageAdapter |
-| `viewmodel/` | **Only** HomeViewModel and MapViewModel. The five large screens have no ViewModel |
+| `viewmodel/` | **Only** HomeViewModel and MapViewModel. The remaining screens have no ViewModel |
+| `ui/design/` | **设计系统唯一真源**：Tokens（颜色/间距/圆角/字号）、Theme、Components、Surfaces、AppIcons、Typography、ThemePicker |
 | `ui/screens/` | HomeScreen, MapScreen, HistoryScreen, OnboardingScreen |
-| `ui/` | CategorizedFenceListScreen, VacuumPeriodInfo (siblings of `screens/`) |
-| `ui/navigation/` | NavHost, Screen routes, 3× BottomNavBar (only `SimpleBottomNavBar` is used) |
-| `ui/theme/` | ThemeManager (object singleton, own SharedPreferences), ColorScheme, GlassComponents |
-| `ui/components/` | AMapViewWrapper, GoogleMapWrapper, ThemePicker, LoadingAnimations (dead) |
+| `ui/map/` | 地图页拆分产物：MapEditorState（绘制/编辑三态状态机）、MapToolsPopup、FenceDialogs |
+| `ui/settings/` | 设置页拆分产物：AdvancedSettingsSection、RecalculateRelationshipsDialog、SettingsComponents |
+| `ui/statistics/` | 统计页拆分产物：DatePickers、DurationDonutChart、FenceTreeSection、TimeDimensionSelector |
+| `ui/navigation/` | NavHost, Screen routes, SimpleBottomNavBar |
+| `ui/components/` | AMapViewWrapper, GoogleMapWrapper |
+| `settings/` | FenceRelationshipRecalculator（父子关系重算算法） |
 | `utils/` | AppLog, SmartScheduler, DynamicBufferManager, LanguageManager |
 | `utils/geometry/` | GeoCalculator, FenceStateMachine, CirclePolygonCache, FenceAnalyzer |
 | `utils/scheduler/` | StationaryDetector |
 | `throttle/` | ThrottleConfig |
-| `services/` | Aggregator (**never called** — `aggregate()` has no callers) |
 | `model/` | Category, GeoFenceEvent, GeoPoint (mostly unused; `GeoPoint` duplicates `core.GeoPoint`) |
 
-Empty leftover dirs: `service/`, `data/entity/`.
+### 已删除的包（别再去这些路径找）
+
+`ui/theme/`（ThemeManager / ColorScheme / GlassComponents）、`services/`（Aggregator）、
+`service/`、`data/entity/`、`locationservice/amap/`。详见 `UI_REDESIGN_PLAN.md`。
 
 ## Map & Location Providers
 
@@ -135,6 +146,12 @@ The app supports both AMap and Google Maps, but the abstraction is thin:
 - `build.gradle.kts` includes `kotlinx-coroutines-test` and sets
   `testOptions.unitTests.isReturnDefaultValues = true` (required — `AppLog` calls
   `android.util.Log`, which throws in JVM tests otherwise).
-- Meaningful tests live in `app/src/test/`: `EngineLocationPipelineTest`,
-  `RepositoryFlushTest`, `StayDurationManagerTest`,
-  `StayDurationManagerConcurrencyTest`, `LocationProviderTest`.
+- 测试共 **113 个**，全部是 JVM 单测（`app/src/test/`）。当前 `lintDebug` 为 0 错误，
+  改动后保持这一点。
+- 后端相关：`EngineLocationPipelineTest`、`RepositoryFlushTest`、`StayDurationManagerTest`、
+  `StayDurationManagerConcurrencyTest`、`LocationProviderTest`、`EngineRefreshStateTest`、
+  `AppScopeSupervisionTest`、`TrackingPreferenceTest`、`FenceTreeFlattenerTest`、
+  `FenceAreaTest`、`FenceRelationshipGeometryTest`、`StayRecordNameResolverTest`、
+  `MapRegionDetectorTest`
+- UI 相关：`DesignSystemTest`（对比度）、`MapEditorStateTest`、`MapEditorStateSaverTest`、
+  `DurationDonutChartTest`
