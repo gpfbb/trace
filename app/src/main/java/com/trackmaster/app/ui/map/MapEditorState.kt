@@ -150,6 +150,91 @@ class MapEditorState {
     companion object {
         const val DEFAULT_COLOR = "#FF0000"
         const val DEFAULT_ALPHA = 0.3f
+
+        /**
+         * 保存/恢复用。
+         *
+         * 进程被系统杀掉后重建时，用户画到一半的围栏不该消失——
+         * 安卓上这在切到别的 app 再回来时很常见。
+         *
+         * 只存**必要**的字段：
+         * - 模式类型（Idle / Drawing / Editing）
+         * - 绘制的围栏类型
+         * - 编辑中围栏的 id（恢复时按 id 从内存里找回来，不序列化整个对象）
+         * - 颜色、透明度、两个精度开关
+         * - 点集（扁平化成 [lat, lng, lat, lng, …]）
+         *
+         * 编辑中的围栏如果已经不在了（用户删了它），恢复后回到 Idle。
+         */
+        val Saver: androidx.compose.runtime.saveable.Saver<MapEditorState, Any> =
+            androidx.compose.runtime.saveable.listSaver(
+                save = { state ->
+                    val points = ArrayList<Double>(state.activePoints.size * 2)
+                    for (p in state.activePoints) {
+                        points.add(p.latitude)
+                        points.add(p.longitude)
+                    }
+                    listOf(
+                        when (state.mode) {
+                            is MapEditMode.Idle -> MODE_IDLE
+                            is MapEditMode.Drawing -> MODE_DRAWING
+                            is MapEditMode.Editing -> MODE_EDITING
+                        },
+                        (state.mode as? MapEditMode.Drawing)?.fenceType?.name.orEmpty(),
+                        (state.mode as? MapEditMode.Editing)?.fence?.id.orEmpty(),
+                        state.drawingColor,
+                        state.drawingAlpha,
+                        state.drawingPrecision,
+                        state.editingPrecision,
+                        points
+                    )
+                },
+                restore = { saved ->
+                    @Suppress("UNCHECKED_CAST")
+                    val pointsRaw = saved[7] as? List<Double> ?: emptyList()
+                    val points = pointsRaw.chunked(2)
+                        .filter { it.size == 2 }
+                        .map { GeoFencePoint(it[0], it[1]) }
+
+                    val restoredMode = when (saved[0] as Int) {
+                        MODE_DRAWING -> MapEditMode.Drawing(
+                            fenceType = runCatching {
+                                GeoFenceType.valueOf(saved[1] as String)
+                            }.getOrDefault(GeoFenceType.CIRCLE),
+                            points = points
+                        )
+
+                        MODE_EDITING -> {
+                            // 按 id 找回围栏。找不到说明它已被删除，退回 Idle。
+                            // runCatching 兜住 Application 尚未初始化的极端情况。
+                            val fenceId = saved[2] as String
+                            val fence = runCatching {
+                                com.trackmaster.app.TrackMasterApplication
+                                    .instance.geoFences.firstOrNull { it.id == fenceId }
+                            }.getOrNull()
+                            if (fence != null) {
+                                MapEditMode.Editing(fence = fence, points = points)
+                            } else {
+                                MapEditMode.Idle
+                            }
+                        }
+
+                        else -> MapEditMode.Idle
+                    }
+
+                    MapEditorState().apply {
+                        mode = restoredMode
+                        drawingColor = saved[3] as String
+                        drawingAlpha = saved[4] as Float
+                        drawingPrecision = saved[5] as Boolean
+                        editingPrecision = saved[6] as Boolean
+                    }
+                }
+            )
+
+        private const val MODE_IDLE = 0
+        private const val MODE_DRAWING = 1
+        private const val MODE_EDITING = 2
     }
 }
 

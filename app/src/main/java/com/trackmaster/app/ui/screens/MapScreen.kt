@@ -102,7 +102,12 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
 
     // 绘制/编辑的状态机。原来这里是 8 个独立状态变量，
     // 现在收成三态（Idle / Drawing / Editing），互斥关系由类型保证。
-    val editor = remember { com.trackmaster.app.ui.map.MapEditorState() }
+    // 用 rememberSaveable：进程被系统杀掉后重建时，画到一半的围栏不会丢
+    val editor = androidx.compose.runtime.saveable.rememberSaveable(
+        saver = com.trackmaster.app.ui.map.MapEditorState.Saver
+    ) {
+        com.trackmaster.app.ui.map.MapEditorState()
+    }
     var mapType by remember { mutableStateOf(app.appPreferences.mapType) }
 
     var showFenceList by remember { mutableStateOf(false) }
