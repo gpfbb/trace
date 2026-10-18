@@ -1,6 +1,5 @@
 package com.trackmaster.app.storage
 
-import com.trackmaster.app.core.DailySummary
 import com.trackmaster.app.core.StaySegment
 
 /**
@@ -18,15 +17,6 @@ interface StorageAdapter {
 
     /** 查询未关闭的 Segment（endTs === null） */
     suspend fun queryOpenSegments(): List<StaySegment>
-
-    /** 批量更新 Segment */
-    suspend fun updateSegments(segments: List<StaySegment>)
-
-    /** 保存日汇总 */
-    suspend fun saveDailySummaries(summaries: List<DailySummary>)
-
-    /** 查询日汇总 */
-    suspend fun queryDailySummary(dateKey: String): List<DailySummary>
 
     suspend fun beginTransaction()
     suspend fun commitTransaction()

@@ -33,13 +33,6 @@ class RepositoryFlushTest {
 
         override suspend fun queryOpenSegments(): List<StaySegment> = stored.filter { it.endTs == null }
 
-        override suspend fun updateSegments(segments: List<StaySegment>) = Unit
-
-        override suspend fun saveDailySummaries(summaries: List<com.trackmaster.app.core.DailySummary>) = Unit
-
-        override suspend fun queryDailySummary(dateKey: String): List<com.trackmaster.app.core.DailySummary> =
-            emptyList()
-
         override suspend fun beginTransaction() = Unit
         override suspend fun commitTransaction() = Unit
         override suspend fun rollbackTransaction() = Unit

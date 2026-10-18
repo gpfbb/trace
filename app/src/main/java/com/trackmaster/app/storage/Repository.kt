@@ -1,6 +1,5 @@
 package com.trackmaster.app.storage
 
-import com.trackmaster.app.core.DailySummary
 import com.trackmaster.app.core.StaySegment
 import com.trackmaster.app.utils.AppLog
 import kotlinx.coroutines.CancellationException
@@ -23,7 +22,6 @@ class Repository(
 ) {
     private val writeBuffer = CopyOnWriteArrayList<StaySegment>()
     private val segmentCache = ConcurrentHashMap<String, List<StaySegment>>()
-    private val summaryCache = ConcurrentHashMap<String, List<DailySummary>>()
 
     // flush 连续失败次数，用于指数退避；成功后归零
     private val flushRetryCount = AtomicInteger(0)
@@ -106,34 +104,11 @@ class Repository(
     }
 
     /** 获取未关闭的 Segment */
-    suspend fun getOpenSegments(): List<StaySegment> =
-        adapter.queryOpenSegments() ?: emptyList()
-
-    /** 保存日汇总（T+1 聚合产物） */
-    suspend fun saveDailySummaries(dateKey: String, summaries: List<DailySummary>) {
-        adapter.beginTransaction()
-        try {
-            adapter.saveDailySummaries(summaries)
-            adapter.commitTransaction()
-        } catch (e: Exception) {
-            adapter.rollbackTransaction()
-            throw e
-        }
-        summaryCache[dateKey] = summaries
-    }
-
-    /** 读取日汇总 */
-    suspend fun getDailySummaries(dateKey: String): List<DailySummary> {
-        summaryCache[dateKey]?.let { return it }
-        val s = adapter.queryDailySummary(dateKey)
-        summaryCache[dateKey] = s
-        return s
-    }
+    suspend fun getOpenSegments(): List<StaySegment> = adapter.queryOpenSegments()
 
     /** 清除所有缓存 */
     fun clearCache() {
         segmentCache.clear()
-        summaryCache.clear()
     }
 
     /** 资源释放 */

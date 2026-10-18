@@ -98,33 +98,17 @@ data class StaySegment(
     val id: String = UUID.randomUUID().toString(),
     /** 命中的叶子围栏 ID */
     val leafGeofenceId: String,
+    /**
+     * 叶子围栏名称（写入时快照）。
+     *
+     * 围栏可能被改名或删除，历史记录必须保留当时的名称，
+     * 因此在这里冗余存一份，而不是查询时再 join。
+     * 为空时回落到 [leafGeofenceId]。
+     */
+    val leafGeofenceName: String? = null,
     /** 进入时间戳（Unix ms） */
     val startTs: Long,
     /** 离开时间戳（null = 仍在停留） */
     val endTs: Long? = null,
     val status: SegmentStatus = SegmentStatus.ACTIVE,
-)
-
-// ============================================================
-// 汇总 / 可视化
-// ============================================================
-
-/** 每日汇总 */
-data class DailySummary(
-    val date: String,
-    val geofenceId: String,
-    val name: String,
-    /** 该围栏总停留分钟数（含子级空间累加） */
-    val spatialDurationMin: Int,
-    /** 叶子分类时长 { categoryId: minutes }，父级为空 Map */
-    val leafCategoryMap: Map<String, Int> = emptyMap(),
-    val isLeaf: Boolean,
-    val depth: Int,
-)
-
-/** 可视化节点（Sunburst / TreeMap） */
-data class VizNode(
-    val name: String,
-    val value: Int? = null,
-    val children: List<VizNode>? = null,
 )

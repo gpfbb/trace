@@ -11,7 +11,6 @@ import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.data.GeoFenceEvent
 import com.trackmaster.app.data.FenceStayRecord
 import com.trackmaster.app.model.Category
-import com.trackmaster.app.services.Aggregator
 import com.trackmaster.app.throttle.ThrottleConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

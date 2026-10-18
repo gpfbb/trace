@@ -4,7 +4,6 @@ import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.trackmaster.app.utils.AppLog
-import com.trackmaster.app.core.DailySummary
 import com.trackmaster.app.core.SegmentStatus
 import com.trackmaster.app.core.StaySegment
 
@@ -13,7 +12,6 @@ import com.trackmaster.app.core.StaySegment
  *
  * 映射关系：
  * - StaySegment → stays 表（stay_id, fence_id, fence_name, enter_time, exit_time, duration）
- * - DailySummary → daily_stays 表（daily_date, daily_fence_id, daily_fence_name, daily_duration, daily_last_updated）
  *
  * 不修改现有 DB schema，通过字段映射实现零侵入对接。
  */
@@ -24,7 +22,6 @@ class SqliteStorageAdapter(
     companion object {
         private const val TAG = "SqliteStorageAdapter"
         private const val TABLE_STAYS = "stays"
-        private const val TABLE_DAILY_STAYS = "daily_stays"
 
         // stays 表列
         private const val COL_STAY_ID = "stay_id"
@@ -33,13 +30,6 @@ class SqliteStorageAdapter(
         private const val COL_ENTER_TIME = "enter_time"
         private const val COL_EXIT_TIME = "exit_time"
         private const val COL_DURATION = "duration"
-
-        // daily_stays 表列
-        private const val COL_DAILY_DATE = "daily_date"
-        private const val COL_DAILY_FENCE_ID = "daily_fence_id"
-        private const val COL_DAILY_FENCE_NAME = "daily_fence_name"
-        private const val COL_DAILY_DURATION = "daily_duration"
-        private const val COL_DAILY_LAST_UPDATED = "daily_last_updated"
     }
 
     private var inTransaction = false
@@ -58,7 +48,10 @@ class SqliteStorageAdapter(
                 val values = ContentValues().apply {
                     put(COL_STAY_ID, seg.id)
                     put(COL_FENCE_ID, seg.leafGeofenceId)
-                    put(COL_FENCE_NAME, seg.leafGeofenceId) // 名称由后续 join 补全
+                    // 名称取 segment 里快照的值；缺失时才回落到 id（历史上这里直接把
+                    // id 写进 fence_name，注释声称"后续 join 补全"，但全工程并没有 join，
+                    // 导致导出的备份和 stays 表里全是围栏 ID 而非名称）
+                    put(COL_FENCE_NAME, seg.leafGeofenceName ?: seg.leafGeofenceId)
                     put(COL_ENTER_TIME, seg.startTs)
                     put(COL_EXIT_TIME, seg.endTs)
                     put(COL_DURATION, seg.endTs?.let { (it - seg.startTs) / 1000 })
@@ -121,76 +114,6 @@ class SqliteStorageAdapter(
         return result
     }
 
-    override suspend fun updateSegments(segments: List<StaySegment>) {
-        val db = dbHelper.writableDatabase
-        db.beginTransaction()
-        try {
-            for (seg in segments) {
-                val values = ContentValues().apply {
-                    put(COL_EXIT_TIME, seg.endTs)
-                    put(COL_DURATION, seg.endTs?.let { (it - seg.startTs) / 1000 })
-                }
-                db.update(TABLE_STAYS, values, "$COL_STAY_ID = ?", arrayOf(seg.id))
-            }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
-        }
-    }
-
-    // ============================================================
-    // DailySummary 操作
-    // ============================================================
-
-    override suspend fun saveDailySummaries(summaries: List<DailySummary>) {
-        val db = dbHelper.writableDatabase
-        for (s in summaries) {
-            // Aggregator 计算的是当日最终总时长，应直接设置而非累加
-            db.execSQL("""
-                INSERT INTO $TABLE_DAILY_STAYS ($COL_DAILY_DATE, $COL_DAILY_FENCE_ID, $COL_DAILY_FENCE_NAME, $COL_DAILY_DURATION, $COL_DAILY_LAST_UPDATED)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT($COL_DAILY_DATE, $COL_DAILY_FENCE_ID) DO UPDATE SET
-                    $COL_DAILY_DURATION = excluded.$COL_DAILY_DURATION,
-                    $COL_DAILY_FENCE_NAME = excluded.$COL_DAILY_FENCE_NAME,
-                    $COL_DAILY_LAST_UPDATED = excluded.$COL_DAILY_LAST_UPDATED
-            """, arrayOf(s.date, s.geofenceId, s.name, s.spatialDurationMin * 60, System.currentTimeMillis()))
-        }
-    }
-
-    override suspend fun queryDailySummary(dateKey: String): List<DailySummary> {
-        val db = dbHelper.readableDatabase
-        val cursor = db.query(
-            TABLE_DAILY_STAYS, null,
-            "$COL_DAILY_DATE = ?",
-            arrayOf(dateKey),
-            null, null,
-            "$COL_DAILY_DURATION DESC"
-        )
-
-        val result = mutableListOf<DailySummary>()
-        try {
-            while (cursor.moveToNext()) {
-                val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(COL_DAILY_FENCE_ID))
-                val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(COL_DAILY_FENCE_NAME))
-                val durationSec = cursor.getLong(cursor.getColumnIndexOrThrow(COL_DAILY_DURATION))
-                val durationMin = (durationSec / 60).toInt()
-
-                result.add(DailySummary(
-                    date = dateKey,
-                    geofenceId = fenceId,
-                    name = fenceName,
-                    spatialDurationMin = durationMin,
-                    leafCategoryMap = emptyMap(),
-                    isLeaf = true, // 从 DB 读取时默认为叶子，Phase 6 可补全
-                    depth = 0,
-                ))
-            }
-        } finally {
-            cursor.close()
-        }
-        return result
-    }
-
     // ============================================================
     // 事务
     // ============================================================
@@ -224,6 +147,7 @@ class SqliteStorageAdapter(
     private fun cursorToSegment(cursor: android.database.Cursor): StaySegment {
         val id = cursor.getString(cursor.getColumnIndexOrThrow(COL_STAY_ID))
         val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(COL_FENCE_ID))
+        val fenceName = cursor.getString(cursor.getColumnIndexOrThrow(COL_FENCE_NAME))
         val enterTime = cursor.getLong(cursor.getColumnIndexOrThrow(COL_ENTER_TIME))
         val exitTime = if (cursor.isNull(cursor.getColumnIndexOrThrow(COL_EXIT_TIME))) {
             null
@@ -242,6 +166,7 @@ class SqliteStorageAdapter(
         return StaySegment(
             id = id,
             leafGeofenceId = fenceId,
+            leafGeofenceName = fenceName,
             startTs = enterTime,
             endTs = exitTime,
             status = status,
