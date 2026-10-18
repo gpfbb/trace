@@ -1074,39 +1074,8 @@ private fun FenceListDialog(
         allFences: List<GeoFence>,
         pMap: Map<String, String>,
         expanded: Set<String>
-    ): List<Pair<GeoFence, Int>> {
-        if (allFences.isEmpty()) return emptyList()
-
-        val fenceById = allFences.associateBy { it.id }
-
-        // 构建 parentId -> children 映射
-        val childrenMap = mutableMapOf<String?, MutableList<String>>()
-        for (fence in allFences) {
-            val parentId = pMap[fence.id]
-            childrenMap.getOrPut(parentId) { mutableListOf() }.add(fence.id)
-        }
-
-        val result = mutableListOf<Pair<GeoFence, Int>>()
-
-        // 递归添加可见围栏
-        fun addVisible(parentId: String?, depth: Int) {
-            val children = childrenMap[parentId] ?: return
-            for (childId in children) {
-                val child = fenceById[childId]
-                if (child != null) {
-                    result.add(child to depth)
-                    // 如果这个围栏被展开了，递归添加子围栏
-                    if (childId in expanded) {
-                        addVisible(childId, depth + 1)
-                    }
-                }
-            }
-        }
-
-        // 从顶级围栏开始（parentId 为 null）
-        addVisible(null, 0)
-        return result
-    }
+    ): List<Pair<GeoFence, Int>> =
+        com.trackmaster.app.core.FenceTreeFlattener.flatten(allFences, pMap, expanded)
 
     // 根据 expandedFenceIds 过滤可见围栏，构建扁平化列表
     val visibleFences by remember(expandedFenceIds, fences, parentMap) {
