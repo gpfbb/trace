@@ -275,6 +275,30 @@ fun StatisticsScreen(
                     Column(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        // 占比环形图：先说"时间都花在哪"，下面是逐条明细
+                        val donutSegments = remember(statisticsTree) {
+                            com.trackmaster.app.ui.statistics.buildDonutSegments(
+                                statisticsTree.map { node ->
+                                    com.trackmaster.app.ui.statistics.DonutEntry(
+                                        fenceId = node.fenceId,
+                                        label = node.fenceName,
+                                        color = runCatching {
+                                            androidx.compose.ui.graphics.Color(
+                                                android.graphics.Color.parseColor(node.color)
+                                            )
+                                        }.getOrNull(),
+                                        durationSeconds = node.totalDurationSeconds
+                                    )
+                                }
+                            )
+                        }
+                        if (donutSegments.isNotEmpty()) {
+                            com.trackmaster.app.ui.statistics.DurationDonutChart(
+                                segments = donutSegments,
+                                totalDurationSeconds = donutSegments.sumOf { it.durationSeconds }
+                            )
+                        }
+
                         FenceTreeSection(
                             tree = statisticsTree,
                             expandedIds = expandedFenceIds,

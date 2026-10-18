@@ -392,4 +392,6 @@ File location: %5$s</string>
     <string name="times_count">%d times</string>
     <string name="loading">Loading…</string>
     <string name="staying_duration">Staying for %s</string>
+    <string name="total_label">Total</string>
+    <string name="other_fences">Other fences</string>
 </resources>
