@@ -468,7 +468,13 @@ class GoogleMapPresenter(
     }
 
     fun hideMyLocation() {
-        googleMap?.isMyLocationEnabled = false
+        // 这个 setter 在缺定位权限时会抛 SecurityException（Google Maps SDK 的
+        // 契约如此，即使写的是 false）。这里只是关掉蓝点，失败不影响其他功能。
+        try {
+            googleMap?.isMyLocationEnabled = false
+        } catch (e: SecurityException) {
+            AppLog.w(TAG, "hideMyLocation: 缺少定位权限，跳过: ${e.message}")
+        }
     }
 
     fun configureMap(mapType: Int) {

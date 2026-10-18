@@ -244,28 +244,59 @@ class FenceExporter(private val dbManager: DatabaseManager) {
         val db = dbManager.readableDatabase
         val cursor = db.query(DatabaseManager.TABLE_FENCES, null, null, null, null, null, "${DatabaseManager.KEY_CREATED_AT} DESC")
         try {
+            // 列索引只在第一行解析一次，后续行复用。原实现每个字段都调
+            // 2-3 次 getColumnIndex，行数多时是白白的开销。
             if (cursor.moveToFirst()) {
+                val indices = HashMap<String, Int>(16)
+                fun col(name: String): Int = indices.getOrPut(name) { cursor.getColumnIndex(name) }
+                fun <T> optional(name: String, read: (Int) -> T, fallback: T): T {
+                    val index = col(name)
+                    return if (index >= 0 && !cursor.isNull(index)) read(index) else fallback
+                }
+
                 do {
-                    val id = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_ID))
-                    val name = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_NAME))
-                    val type = GeoFenceType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_TYPE)))
-                    val pointsJson = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_POINTS))
-                    val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CREATED_AT)))
-                    val categoryId = if (cursor.getColumnIndex(DatabaseManager.KEY_CATEGORY_ID) >= 0)
-                        cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CATEGORY_ID)) else Category.UNASSIGNED_ID
-                    val color = if (cursor.getColumnIndex(DatabaseManager.KEY_COLOR) >= 0 && !cursor.isNull(cursor.getColumnIndex(DatabaseManager.KEY_COLOR)))
-                        cursor.getString(cursor.getColumnIndex(DatabaseManager.KEY_COLOR)) else "#FF0000"
-                    val alpha = if (cursor.getColumnIndex(DatabaseManager.KEY_ALPHA) >= 0 && !cursor.isNull(cursor.getColumnIndex(DatabaseManager.KEY_ALPHA)))
-                        cursor.getFloat(cursor.getColumnIndex(DatabaseManager.KEY_ALPHA)) else 0.3f
-                    fences.add(GeoFence(
-                        id = id, name = name, type = type,
-                        center = if (cursor.getColumnIndex(DatabaseManager.KEY_CENTER_LAT) >= 0 && !cursor.isNull(cursor.getColumnIndex(DatabaseManager.KEY_CENTER_LAT)))
-                            GeoFencePoint(cursor.getDouble(cursor.getColumnIndex(DatabaseManager.KEY_CENTER_LAT)), cursor.getDouble(cursor.getColumnIndex(DatabaseManager.KEY_CENTER_LNG))) else null,
-                        radius = if (cursor.getColumnIndex(DatabaseManager.KEY_RADIUS) >= 0 && !cursor.isNull(cursor.getColumnIndex(DatabaseManager.KEY_RADIUS)))
-                            cursor.getFloat(cursor.getColumnIndex(DatabaseManager.KEY_RADIUS)) else null,
-                        points = if (!pointsJson.isNullOrEmpty()) jsonToPoints(pointsJson) else null,
-                        categoryId = categoryId, createdAt = createdAt, color = color, alpha = alpha
-                    ))
+                    val pointsJson = cursor.getString(col(DatabaseManager.KEY_POINTS))
+                    fences.add(
+                        GeoFence(
+                            id = cursor.getString(col(DatabaseManager.KEY_ID)),
+                            name = cursor.getString(col(DatabaseManager.KEY_NAME)),
+                            type = GeoFenceType.valueOf(
+                                cursor.getString(col(DatabaseManager.KEY_TYPE))
+                            ),
+                            center = optional<GeoFencePoint?>(
+                                DatabaseManager.KEY_CENTER_LAT,
+                                {
+                                    GeoFencePoint(
+                                        cursor.getDouble(it),
+                                        cursor.getDouble(col(DatabaseManager.KEY_CENTER_LNG))
+                                    )
+                                },
+                                null
+                            ),
+                            radius = optional<Float?>(
+                                DatabaseManager.KEY_RADIUS,
+                                { cursor.getFloat(it) },
+                                null
+                            ),
+                            points = if (!pointsJson.isNullOrEmpty()) jsonToPoints(pointsJson) else null,
+                            categoryId = optional(
+                                DatabaseManager.KEY_CATEGORY_ID,
+                                { cursor.getString(it) },
+                                Category.UNASSIGNED_ID
+                            ),
+                            createdAt = Date(cursor.getLong(col(DatabaseManager.KEY_CREATED_AT))),
+                            color = optional(
+                                DatabaseManager.KEY_COLOR,
+                                { cursor.getString(it) },
+                                "#FF0000"
+                            ),
+                            alpha = optional(
+                                DatabaseManager.KEY_ALPHA,
+                                { cursor.getFloat(it) },
+                                0.3f
+                            )
+                        )
+                    )
                 } while (cursor.moveToNext())
             }
         } finally {

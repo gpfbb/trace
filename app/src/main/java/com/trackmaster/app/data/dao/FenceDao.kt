@@ -55,29 +55,60 @@ class FenceDao(private val dbManager: DatabaseManager) {
     }
 
     private fun cursorToFence(cursor: android.database.Cursor): GeoFence {
+        // 列索引查一次就够。
+        //
+        // 原实现每个可空字段都写 `getColumnIndex(X) >= 0 && !isNull(getColumnIndex(X))`
+        // 再 getString(getColumnIndex(X))——同一个列名查三次，而且这种
+        // "先判断再取值"的写法 lint 跟踪不到，会误报 Range 错误。
+        val indices = HashMap<String, Int>(16)
+        fun col(name: String): Int = indices.getOrPut(name) { cursor.getColumnIndex(name) }
+
+        /** 列存在且非 NULL 时读取，否则用默认值。 */
+        fun <T> optional(name: String, read: (Int) -> T, fallback: T): T {
+            val index = col(name)
+            return if (index >= 0 && !cursor.isNull(index)) read(index) else fallback
+        }
+
         val id = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_ID))
         val name = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_NAME))
-        val type = GeoFenceType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_TYPE)))
+        val type = GeoFenceType.valueOf(
+            cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_TYPE))
+        )
         val pointsJson = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_POINTS))
         val createdAt = Date(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CREATED_AT)))
-        val categoryId = if (cursor.getColumnIndex(DatabaseManager.KEY_CATEGORY_ID) >= 0) {
-            cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_CATEGORY_ID))
-        } else Category.UNASSIGNED_ID
-        val color = if (cursor.getColumnIndex(DatabaseManager.KEY_COLOR) >= 0 && !cursor.isNull(cursor.getColumnIndex(DatabaseManager.KEY_COLOR))) {
-            cursor.getString(cursor.getColumnIndex(DatabaseManager.KEY_COLOR))
-        } else "#FF0000"
-        val alpha = if (cursor.getColumnIndex(DatabaseManager.KEY_ALPHA) >= 0 && !cursor.isNull(cursor.getColumnIndex(DatabaseManager.KEY_ALPHA))) {
-            cursor.getFloat(cursor.getColumnIndex(DatabaseManager.KEY_ALPHA))
-        } else 0.3f
-        val center = if (cursor.getColumnIndex(DatabaseManager.KEY_CENTER_LAT) >= 0 && !cursor.isNull(cursor.getColumnIndex(DatabaseManager.KEY_CENTER_LAT))) {
+
+        val categoryId = optional(
+            DatabaseManager.KEY_CATEGORY_ID,
+            { cursor.getString(it) },
+            Category.UNASSIGNED_ID
+        )
+        val color = optional(
+            DatabaseManager.KEY_COLOR,
+            { cursor.getString(it) },
+            "#FF0000"
+        )
+        val alpha = optional(
+            DatabaseManager.KEY_ALPHA,
+            { cursor.getFloat(it) },
+            0.3f
+        )
+        // 中心点由两列组成，纬度存在时才读经度
+        val center = if (col(DatabaseManager.KEY_CENTER_LAT) >= 0 &&
+            !cursor.isNull(col(DatabaseManager.KEY_CENTER_LAT))
+        ) {
             GeoFencePoint(
-                cursor.getDouble(cursor.getColumnIndex(DatabaseManager.KEY_CENTER_LAT)),
-                cursor.getDouble(cursor.getColumnIndex(DatabaseManager.KEY_CENTER_LNG))
+                cursor.getDouble(col(DatabaseManager.KEY_CENTER_LAT)),
+                cursor.getDouble(col(DatabaseManager.KEY_CENTER_LNG))
             )
-        } else null
-        val radius = if (cursor.getColumnIndex(DatabaseManager.KEY_RADIUS) >= 0 && !cursor.isNull(cursor.getColumnIndex(DatabaseManager.KEY_RADIUS))) {
-            cursor.getFloat(cursor.getColumnIndex(DatabaseManager.KEY_RADIUS))
-        } else null
+        } else {
+            null
+        }
+        val radius = optional(
+            DatabaseManager.KEY_RADIUS,
+            { cursor.getFloat(it) },
+            null as Float?
+        )
+
         val points = if (!pointsJson.isNullOrEmpty()) jsonToPoints(pointsJson) else null
         return GeoFence(
             id = id, name = name, type = type,
