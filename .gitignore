@@ -93,3 +93,27 @@ lint-results*.html
 # Gradle distribution and wrapper files
 gradle.zip
 gradle-9.0.0/
+
+# 编辑器/IDE 备份文件
+*.bak
+*.orig
+*~
+
+# 一次性修补脚本与临时输出
+s.js
+update.js
+fix_*.js
+write_strings.js
+run_build.ps1
+build_out.txt
+build_err.txt
+compile_out.txt
+compile_err.txt
+compile_output.txt
+compile_log.txt
+build_log.txt
+test.txt
+
+# JVM 崩溃日志与 replay 日志（可达数十 MB）
+hs_err_pid*.log
+replay_pid*.log
