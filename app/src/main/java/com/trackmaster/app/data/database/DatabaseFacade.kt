@@ -89,6 +89,8 @@ class DatabaseFacade(
     fun saveDailyStayRecord(record: DailyStayRecord) = dailyStayDao.saveDailyStayRecord(record)
     fun getDailyStayRecord(dateKey: String, fenceId: String): DailyStayRecord? = dailyStayDao.getDailyStayRecord(dateKey, fenceId)
     fun getDailyStayRecordsByDate(dateKey: String): List<DailyStayRecord> = dailyStayDao.getDailyStayRecordsByDate(dateKey)
+    fun getDailyStayRecordsByDateRange(startDateKey: String, endDateKey: String): List<DailyStayRecord> =
+        dailyStayDao.getDailyStayRecordsByDateRange(startDateKey, endDateKey)
     fun getAllDailyStayRecords(): List<DailyStayRecord> = dailyStayDao.getAllDailyStayRecords()
     fun upsertDailyStayRecords(records: List<DailyStayRecord>) = dailyStayDao.upsertDailyStayRecords(records)
 

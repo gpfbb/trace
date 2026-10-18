@@ -71,27 +71,19 @@ class StatisticsManager(private val context: Context) {
         AppLog.d("StatisticsManager", "getStatistics called: dimension=$timeDimension, range=${timeRange.startTime}-${timeRange.endTime}")
 
         // 1. 从 daily_stays 表获取已完成的分天时长数据
-        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        // dateKey 口径必须与写入方一致：StayDurationManager 用 Locale.US，
+        // 这里原来用 Locale.getDefault()，在非拉丁语系 locale 下会生成
+        // 不同格式的 key，导致 daily_stays 主键匹配不上、统计为空。
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val rangeStartDate = dateFormat.format(timeRange.startTime)
         val rangeEndDate = dateFormat.format(timeRange.endTime)
 
-        // 获取时间范围内的所有 daily_stays 记录
+        // 获取时间范围内的所有 daily_stays 记录。
+        // 月/年视图用单次范围查询，避免逐日查询（年视图原本要查 365 次）。
         val allDailyRecords = when (timeDimension) {
             TimeDimension.DAY -> dbHelper.getDailyStayRecordsByDate(rangeStartDate)
-            TimeDimension.MONTH, TimeDimension.YEAR -> {
-                // 收集范围内所有日期的 daily_stays
-                val allRecords = mutableListOf<DailyStayRecord>()
-                val cal = Calendar.getInstance()
-                cal.time = timeRange.startTime
-                val endCal = Calendar.getInstance()
-                endCal.time = timeRange.endTime
-                while (!cal.after(endCal)) {
-                    val dateKey = dateFormat.format(cal.time)
-                    allRecords.addAll(dbHelper.getDailyStayRecordsByDate(dateKey))
-                    cal.add(Calendar.DAY_OF_MONTH, 1)
-                }
-                allRecords
-            }
+            TimeDimension.MONTH, TimeDimension.YEAR ->
+                dbHelper.getDailyStayRecordsByDateRange(rangeStartDate, rangeEndDate)
         }
         AppLog.d("StatisticsManager", "Daily records: ${allDailyRecords.size}")
 

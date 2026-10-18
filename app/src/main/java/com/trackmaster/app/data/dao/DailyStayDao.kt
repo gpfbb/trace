@@ -84,6 +84,40 @@ class DailyStayDao(private val dbManager: DatabaseManager) {
         return records
     }
 
+    /**
+     * 按日期范围查询停留记录（含端点）。
+     *
+     * dateKey 为 yyyy-MM-dd 格式，字典序与时间序一致，可直接用字符串比较，
+     * 走 daily_date 索引。月/年视图应使用本方法，避免逐日查询造成 N+1。
+     */
+    fun getDailyStayRecordsByDateRange(startDateKey: String, endDateKey: String): List<DailyStayRecord> {
+        val records = mutableListOf<DailyStayRecord>()
+        val db = dbManager.readableDatabase
+        val cursor = db.query(
+            DatabaseManager.TABLE_DAILY_STAYS, null,
+            "${DatabaseManager.KEY_DAILY_DATE} BETWEEN ? AND ?",
+            arrayOf(startDateKey, endDateKey),
+            null, null,
+            "${DatabaseManager.KEY_DAILY_DATE} ASC, ${DatabaseManager.KEY_DAILY_DURATION} DESC"
+        )
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    records.add(DailyStayRecord(
+                        date = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_DAILY_DATE)),
+                        fenceId = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_DAILY_FENCE_ID)),
+                        fenceName = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_DAILY_FENCE_NAME)),
+                        totalDurationSeconds = cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_DAILY_DURATION)),
+                        lastUpdated = Date(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_DAILY_LAST_UPDATED)))
+                    ))
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
+        }
+        return records
+    }
+
     fun getAllDailyStayRecords(): List<DailyStayRecord> {
         val records = mutableListOf<DailyStayRecord>()
         val db = dbManager.readableDatabase
