@@ -3,6 +3,9 @@ package com.trackmaster.app.core
 import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.data.database.DatabaseFacade
 import com.trackmaster.app.locationservice.Location
+// 【Bug修复】统一使用 StayDurationManager.kt 中的 7 字段版本 FenceActiveSession
+// （原 core 包下有一个只有 4 个字段的同名 data class，因本地声明优先而遮蔽了本 import，
+//  导致 accumulatedDuration / lastSaveTime / gapStartTime 在 put 进 activeSessions 时全部丢失）
 import com.trackmaster.app.FenceActiveSession
 import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.data.GeoFenceEvent

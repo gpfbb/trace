@@ -7,6 +7,7 @@ import com.trackmaster.app.DataManager
 import com.trackmaster.app.PersistentStateManager
 import com.trackmaster.app.StatisticsManager
 import com.trackmaster.app.StayDurationManager
+import org.koin.core.context.GlobalContext
 
 /**
  * Application 级别管理器的容器
@@ -39,7 +40,12 @@ class ManagersHolder {
         // stayDurationManager.init{} 中 loadActiveSessionsFromDatabase() 需要访问 persistentStateManager
         // 调换顺序后 lazy 字段访问在 persistentStateManager 已初始化时求值
         persistentStateManager = PersistentStateManager(context)
-        appPreferences = AppPreferences(context)
+        // 【P1修复】AppPreferences 必须复用 Koin 注册的单例，不能再 new 一个
+        // AppPreferences.incrementLocations() 的 synchronized(prefs) 锁在具体实例上；
+        // 两个实例虽然读同一个 SharedPreferences 文件，但锁的是不同对象 → read-modify-write
+        // （读旧值+1、写回）没有互斥，totalLocations/processedLocations 计数会丢失。
+        // 取 Koin 单例后，EngineHolder（写计数）与 appPreferences（读统计）共用同一实例。
+        appPreferences = GlobalContext.get().get()
         stayDurationManager = StayDurationManager(context)
     }
 }

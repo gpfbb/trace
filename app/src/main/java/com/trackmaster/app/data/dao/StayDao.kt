@@ -197,7 +197,10 @@ class StayDao(private val dbManager: DatabaseManager) {
         val cursor = db.query(
             DatabaseManager.TABLE_STAYS,
             arrayOf(DatabaseManager.KEY_FENCE_ID, "SUM(${DatabaseManager.KEY_DURATION}) as total"),
-            "DATE(${DatabaseManager.KEY_ENTER_TIME}/1000, 'unixepoch') = ?",
+            // 【P1修复】加 'localtime' 修饰符：SQLite 的 'unixepoch' 单独使用返回 UTC 日期，
+            // 东八区下凌晨 0:00-8:00 的停留记录会被算到前一天。
+            // 与 Repository.formatDateKey / StayDurationManager.formatDate 的本地时区口径对齐
+            "DATE(${DatabaseManager.KEY_ENTER_TIME}/1000, 'unixepoch', 'localtime') = ?",
             arrayOf(date), DatabaseManager.KEY_FENCE_ID, null, null
         )
         try {
@@ -219,7 +222,8 @@ class StayDao(private val dbManager: DatabaseManager) {
                 "SUM(${DatabaseManager.KEY_DURATION}) as total_duration",
                 "COUNT(*) as enter_count", "COUNT(${DatabaseManager.KEY_EXIT_TIME}) as exit_count"
             ),
-            "${DatabaseManager.KEY_FENCE_ID} = ? AND DATE(${DatabaseManager.KEY_ENTER_TIME}/1000, 'unixepoch') = ?",
+            // 【P1修复】同上：使用本地时区日期，避免凌晨记录被算到前一天
+            "${DatabaseManager.KEY_FENCE_ID} = ? AND DATE(${DatabaseManager.KEY_ENTER_TIME}/1000, 'unixepoch', 'localtime') = ?",
             arrayOf(fenceId, date), null, null, null
         )
         var stats: DailyFenceStats? = null

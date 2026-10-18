@@ -102,20 +102,25 @@ class StayDurationManagerConcurrencyTest {
         }
 
         private fun addDailyDuration(dateKey: String, fenceId: String, fenceName: String, durationSeconds: Long) {
-            val dateRecords = dailyRecords.getOrPut(dateKey) { mutableMapOf() }
-            val existing = dateRecords[fenceId]
-            val newDuration = if (existing != null) {
-                existing.totalDurationSeconds + durationSeconds
-            } else {
-                durationSeconds
+            // 与真实实现一致：addDailyDuration 的调用方都在 enterLock 临界区内。
+            // 这里也必须持锁，否则读-改-写在并发下会丢更新，测试会偶发失败
+            // （表现为某个 fence 的 daily record 凭空消失）。
+            synchronized(enterLock) {
+                val dateRecords = dailyRecords.getOrPut(dateKey) { java.util.concurrent.ConcurrentHashMap() }
+                val existing = dateRecords[fenceId]
+                val newDuration = if (existing != null) {
+                    existing.totalDurationSeconds + durationSeconds
+                } else {
+                    durationSeconds
+                }
+                dateRecords[fenceId] = DailyStayRecordData(
+                    date = dateKey,
+                    fenceId = fenceId,
+                    fenceName = fenceName,
+                    totalDurationSeconds = newDuration,
+                    lastUpdated = java.util.Date()
+                )
             }
-            dateRecords[fenceId] = DailyStayRecordData(
-                date = dateKey,
-                fenceId = fenceId,
-                fenceName = fenceName,
-                totalDurationSeconds = newDuration,
-                lastUpdated = java.util.Date()
-            )
         }
 
         fun getTotalDailyDuration(dateKey: String): Long {

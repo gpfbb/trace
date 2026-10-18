@@ -217,6 +217,10 @@ class TrackMasterApplication : Application() {
     fun refreshEngineFences() {
         val coreFences = fenceTreeManager.loadFenceTree(geoFences)
         engineHolder.refresh(coreFences)
+        // 【P1修复】围栏数据已变更，必须同时清除 Repository 的 segmentCache/summaryCache
+        // 否则统计页仍会读到旧围栏结构下的 Segment/日汇总数据（README 要求的两步刷新，此前只做了第一步）
+        // clearCache() 是普通函数（非 suspend），可直接在同步函数中调用
+        repository.clearCache()
         // 【P0修复】必须等待 engine.init() 完成后再创建新 Aggregator
         // 否则新 Aggregator 可能在 Engine 未完全初始化时就开始使用，导致数据不一致
         appScope.launch {
