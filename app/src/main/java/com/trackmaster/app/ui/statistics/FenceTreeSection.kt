@@ -23,18 +23,10 @@ import androidx.compose.ui.unit.sp
 import com.trackmaster.app.R
 import com.trackmaster.app.FenceStatisticTree
 import com.trackmaster.app.StatisticsManager
+import com.trackmaster.app.ui.design.categoricalColors
 import com.trackmaster.app.ui.design.currentPalette
 
-val chartColors = listOf(
-    Color(0xFF6366F1),
-    Color(0xFFEC4899),
-    Color(0xFF10B981),
-    Color(0xFFF59E0B),
-    Color(0xFFEF4444),
-    Color(0xFF8B5CF6),
-    Color(0xFF06B6D4),
-    Color(0xFF84CC16)
-)
+// 分类配色回退表已移到 ui/design/Tokens.kt（见 categoricalColors）
 
 @Composable
 private fun formatDuration(seconds: Long): String {
@@ -162,7 +154,7 @@ private fun FenceTreeItem(
                                 Color(AndroidColor.parseColor(node.color))
                             } catch (e: Exception) {
                                 // 使用 fenceId 生成稳定的颜色索引，解决递归子节点 index=0 颜色相同问题
-                                chartColors[ kotlin.math.abs(node.fenceId.hashCode()) % chartColors.size ]
+                                categoricalColors[ kotlin.math.abs(node.fenceId.hashCode()) % categoricalColors.size ]
                             }
                         )
                 )
@@ -222,7 +214,7 @@ private fun FenceTreeItem(
                                 try {
                                     Color(AndroidColor.parseColor(node.color))
                                 } catch (e: Exception) {
-                                    chartColors[ kotlin.math.abs(node.fenceId.hashCode()) % chartColors.size ]
+                                    categoricalColors[ kotlin.math.abs(node.fenceId.hashCode()) % categoricalColors.size ]
                                 }
                             )
                     )

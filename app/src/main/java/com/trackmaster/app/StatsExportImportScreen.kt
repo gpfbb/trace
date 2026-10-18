@@ -222,7 +222,7 @@ fun StatsExportImportScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0x3300FF00)
+                        containerColor = currentPalette.success.copy(alpha = 0.12f)
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {

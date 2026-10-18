@@ -395,7 +395,7 @@ private fun ExportImportSection(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0x33FF7F50)
+                    containerColor = currentPalette.accentSubtle
                 ),
                 shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(0.dp)
@@ -412,7 +412,7 @@ private fun ExportImportSection(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0x33FFBF00)
+                    containerColor = currentPalette.warning.copy(alpha = 0.12f)
                 ),
                 shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(0.dp)
