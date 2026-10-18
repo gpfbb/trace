@@ -124,6 +124,29 @@ class EventDao(private val dbManager: DatabaseManager) {
         return result
     }
 
+    /**
+     * 统计时间范围内指定动作的事件数。
+     *
+     * 首页的"今日/本周进出次数"原先靠把全量 event 读进内存再 filter 计数，
+     * 现在改为 SQL 直接 COUNT。
+     */
+    fun countEventsByAction(action: GeoFenceAction, startTime: Date, endTime: Date): Int {
+        val db = dbManager.readableDatabase
+        val cursor = db.query(
+            DatabaseManager.TABLE_EVENTS,
+            arrayOf("COUNT(*) AS cnt"),
+            "${DatabaseManager.KEY_TIMESTAMP} >= ? AND ${DatabaseManager.KEY_TIMESTAMP} <= ? " +
+                "AND ${DatabaseManager.KEY_ACTION} = ?",
+            arrayOf(startTime.time.toString(), endTime.time.toString(), action.name),
+            null, null, null
+        )
+        return try {
+            if (cursor.moveToFirst()) cursor.getInt(cursor.getColumnIndexOrThrow("cnt")) else 0
+        } finally {
+            cursor.close()
+        }
+    }
+
     fun getAllEvents(limit: Int = 10000): List<GeoFenceEvent> {
         return getEvents(null, emptyArray(), limit)
     }

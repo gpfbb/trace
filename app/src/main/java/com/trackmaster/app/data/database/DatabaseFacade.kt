@@ -6,6 +6,7 @@ import com.trackmaster.app.data.FenceStayRecord
 import com.trackmaster.app.data.DailyFenceStats
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFenceEvent
+import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.data.dao.CategoryDao
 import com.trackmaster.app.data.dao.DailyStayDao
 import com.trackmaster.app.data.dao.EventDao
@@ -64,6 +65,8 @@ class DatabaseFacade(
     fun getEventsByTimeRange(startTime: Date, endTime: Date): List<GeoFenceEvent> = eventDao.getEventsByTimeRange(startTime, endTime)
     fun countEnterEventsByFence(startTime: Date, endTime: Date): Map<String, Int> =
         eventDao.countEnterEventsByFence(startTime, endTime)
+    fun countEventsByAction(action: GeoFenceAction, startTime: Date, endTime: Date): Int =
+        eventDao.countEventsByAction(action, startTime, endTime)
     fun getAllEvents(limit: Int = 10000): List<GeoFenceEvent> = eventDao.getAllEvents(limit)
     fun deleteEventsBefore(beforeDate: Date?): Int = eventDao.deleteEventsBefore(beforeDate)
 

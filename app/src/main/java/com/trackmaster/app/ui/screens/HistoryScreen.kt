@@ -34,6 +34,8 @@ import com.trackmaster.app.ui.theme.backgroundColor
 import com.trackmaster.app.ui.theme.glassPanel
 import androidx.compose.ui.res.stringResource
 import com.trackmaster.app.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -52,8 +54,17 @@ fun HistoryScreen(
     var selectedFilter by remember { mutableStateOf<EventFilter>(EventFilter.ALL) }
 
     LaunchedEffect(Unit) {
-        events.value = application.geoFenceEvents
-            .sortedByDescending { it.time }
+        // 按需查询最近 90 天事件，不再依赖启动时预载的内存列表
+        // （主线程全表预载是启动 ANR 的根源，已移除）
+        withContext(Dispatchers.IO) {
+            val end = Date()
+            val start = Calendar.getInstance().apply {
+                time = end
+                add(Calendar.DAY_OF_YEAR, -90)
+            }.time
+            events.value = application.dbHelper.getEventsByTimeRange(start, end)
+                .sortedByDescending { it.time }
+        }
     }
 
     val filteredEvents = when (selectedFilter) {

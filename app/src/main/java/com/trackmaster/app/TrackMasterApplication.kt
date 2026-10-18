@@ -78,7 +78,6 @@ class TrackMasterApplication : Application() {
     val geoFences get() = repositoryHolder.geoFences
     val categories get() = repositoryHolder.categories
     val fenceEnterTimes get() = repositoryHolder.fenceEnterTimes
-    val fenceStayRecords get() = repositoryHolder.fenceStayRecords
     val geoFenceEvents get() = repositoryHolder.geoFenceEvents
     val currentMatchedFences get() = repositoryHolder.currentMatchedFences
     val fenceStateVersion get() = repositoryHolder.fenceStateVersion
@@ -159,16 +158,19 @@ class TrackMasterApplication : Application() {
         restorePersistentState()
     }
 
+    /**
+     * 从数据库加载启动必需的数据。
+     *
+     * 只加载 Engine 初始化直接依赖的围栏与分类。事件列表由 UI 层按需加载
+     * （HistoryScreen / HomeViewModel 各自查询），不在这里全量预载：
+     * onCreate 跑在主线程，全表读取会直接转化为启动 ANR。
+     */
     private fun loadDataFromDatabase() {
         try {
             categories.clear()
             categories.addAll(dbHelper.getAllCategories())
             geoFences.clear()
             geoFences.addAll(dbHelper.getAllFences())
-            geoFenceEvents.clear()
-            geoFenceEvents.addAll(dbHelper.getEventsByTimeRange(Date(0), Date()))
-            fenceStayRecords.clear()
-            fenceStayRecords.addAll(dbHelper.getAllStayRecords())
         } catch (e: Exception) {
             AppLog.e(TAG, "加载数据失败", e)
         }

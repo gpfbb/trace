@@ -14,6 +14,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import com.trackmaster.app.utils.AppLog
 
@@ -94,27 +95,44 @@ class HomeViewModel(
 
     private fun updateTodayStats() {
         val today = Calendar.getInstance()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val todayStr = dateFormat.format(today.time)
 
         val todayDailyRecords = sessionRepo.getDailyStayRecordsByDate(todayStr)
         _todayTotalDuration.value = todayDailyRecords.sumOf { it.totalDurationSeconds }
 
-        val todayEvents = sessionRepo.geoFenceEvents.filter { event ->
-            dateFormat.format(event.time).startsWith(todayStr)
-        }
-        _todayEnterCount.value = todayEvents.count { it.action == GeoFenceAction.ENTER }
-        _todayExitCount.value = todayEvents.count { it.action == GeoFenceAction.EXIT }
+        // 进出次数用 SQL COUNT，不再依赖启动时预载的 geoFenceEvents 内存列表
+        // （该列表已移除：主线程全表预载是启动 ANR 的根源）
+        val dayStart = today.clone() as Calendar
+        dayStart.set(Calendar.HOUR_OF_DAY, 0)
+        dayStart.set(Calendar.MINUTE, 0)
+        dayStart.set(Calendar.SECOND, 0)
+        dayStart.set(Calendar.MILLISECOND, 0)
+        val dayEnd = today.clone() as Calendar
+        dayEnd.set(Calendar.HOUR_OF_DAY, 23)
+        dayEnd.set(Calendar.MINUTE, 59)
+        dayEnd.set(Calendar.SECOND, 59)
+        dayEnd.set(Calendar.MILLISECOND, 999)
+
+        _todayEnterCount.value =
+            sessionRepo.countEventsByAction(GeoFenceAction.ENTER, dayStart.time, dayEnd.time)
+        _todayExitCount.value =
+            sessionRepo.countEventsByAction(GeoFenceAction.EXIT, dayStart.time, dayEnd.time)
     }
 
     private fun updateWeekStats() {
         val calendar = Calendar.getInstance()
         calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
         val weekStart = calendar.time
 
-        val events = sessionRepo.geoFenceEvents.filter { it.time >= weekStart }
-        _weekEnterCount.value = events.count { it.action == GeoFenceAction.ENTER }
-        _weekExitCount.value = events.count { it.action == GeoFenceAction.EXIT }
+        _weekEnterCount.value =
+            sessionRepo.countEventsByAction(GeoFenceAction.ENTER, weekStart, Date())
+        _weekExitCount.value =
+            sessionRepo.countEventsByAction(GeoFenceAction.EXIT, weekStart, Date())
     }
 
     private fun updateMonthTopFences() {

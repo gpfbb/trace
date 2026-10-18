@@ -38,7 +38,6 @@ class RepositoryHolder(
     val geoFences = CopyOnWriteArrayList<GeoFence>()
     val categories = CopyOnWriteArrayList<Category>()
     val fenceEnterTimes = ConcurrentHashMap<String, Date>()
-    val fenceStayRecords = CopyOnWriteArrayList<FenceStayRecord>()
     val geoFenceEvents = CopyOnWriteArrayList<GeoFenceEvent>()
 
     /**

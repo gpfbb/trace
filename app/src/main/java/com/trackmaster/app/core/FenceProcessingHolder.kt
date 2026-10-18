@@ -434,11 +434,3 @@ class FenceProcessingHolder(
         AppLog.d(TAG, "记录围栏事件: ${action.name} - $fenceName")
     }
 }
-
-// 用于 StayDurationManager.activeSessions 类型
-data class FenceActiveSession(
-    val fenceId: String,
-    val fenceName: String,
-    val enterTime: Date,
-    val dateKey: String
-)

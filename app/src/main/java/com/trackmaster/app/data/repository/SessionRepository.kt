@@ -4,6 +4,7 @@ import com.trackmaster.app.DailyStayRecord
 import com.trackmaster.app.StayDurationManager
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.data.GeoFence
+import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.data.GeoFenceEvent
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Date
@@ -15,6 +16,9 @@ interface SessionRepository {
     val fenceStateVersion: StateFlow<Int>
     val stayDurationManager: StayDurationManager
     fun getDailyStayRecordsByDate(dateKey: String): List<DailyStayRecord>
+
+    /** 统计时间范围内指定动作的事件数（进入/离开次数） */
+    fun countEventsByAction(action: GeoFenceAction, startTime: Date, endTime: Date): Int
 }
 
 class AppSessionRepository(
@@ -27,4 +31,6 @@ class AppSessionRepository(
     override val stayDurationManager: StayDurationManager get() = app.stayDurationManager
     override fun getDailyStayRecordsByDate(dateKey: String): List<DailyStayRecord> =
         app.dbHelper.getDailyStayRecordsByDate(dateKey)
+    override fun countEventsByAction(action: GeoFenceAction, startTime: Date, endTime: Date): Int =
+        app.dbHelper.countEventsByAction(action, startTime, endTime)
 }
