@@ -37,49 +37,44 @@ JAVA_HOME=/d/javajdk ./gradlew assembleRelease      # R8，约 2 分钟
 
 - 当前在 `feat/ui-redesign`，起点标签 `ui-baseline`（可随时 `git reset --hard ui-baseline`）
 - **已推送到 GitHub**：<https://github.com/gpfbb/trace/tree/feat/ui-redesign>
+- **`main` 也已更新为本分支的内容**（用户要求覆盖，见下一节）
 - 远程仓库地址已迁移：`trae_project` → **`trace`**。本地 origin 已更新为
   `https://github.com/gpfbb/trace.git`；旧地址会 302 重定向，但别再用
-- **用户要求：不要自动合并到 main。** 合并前先问。
 
-### ⚠️ 与 origin/main 已分叉（接手第一件事）
+### ⚠️ main 已被本分支覆盖（重要，先读完再动手）
 
-```
-feat/ui-redesign  领先 origin/main  55 个提交
-                  落后 origin/main   2 个提交
-```
+**`main` 现在和 `feat/ui-redesign` 是同一个提交**（`2aba7d1`）。
+是用户明确要求「用我们的直接覆盖」后用 `--force-with-lease` 强推的。
 
-落后的两个提交是别人在另一条线上做的 **52 个 bug 修复**：
+被覆盖掉的 `origin/main` 上有 2 个提交、共 **52 个 bug 修复**：
 
 - `e42e304` 第四轮 — 24 个 P1/P2/P3
 - `39a6fb1` 第五轮 — 20+ 个 P0/P1/P2（最终审查）
 
-**它们和本次改动大量重叠**——同样改了 `MapScreen`、`HomeViewModel`、`MapViewModel`、
-`FenceProcessingHolder`、`StatisticsManager`、`DataManager`、`FenceDao`、
-`FenceExporter`、`SettingsScreen`、`HistoryScreen`。
+**这些修复目前不在代码里。** 但它们**没有丢**——覆盖前打了标签：
 
-实测合并（`git merge-tree`，未落盘）**会有 8 个文件冲突**：
-
-```
-AppPreferences.kt            EngineHolder.kt
-SettingsScreen.kt            SqliteStorageAdapter.kt
-AMapViewWrapper.kt           HistoryScreen.kt
-MapScreen.kt                 HomeViewModel.kt
+```bash
+git fetch origin
+git show backup/pre-overwrite-main          # 原 main 的最后一个提交
+git log backup/pre-overwrite-main --oneline # 查看那 52 条修复
+git cherry-pick <hash>                      # 需要哪条就挑哪条
 ```
 
-而且**两边都在修同一批 bug**，不能简单取一边。已核实的例子：
+远程也有这个标签，所以换台机器也能取回。
+
+### 已知两边重叠的地方（挑修复时注意）
+
+覆盖前做过核对：
 
 - **两边独立修了同一个 bug**：`FenceProcessingHolder` 里重复的
-  `FenceActiveSession`——我们在 `d680fc8` 统一到了 7 字段版本，
-  main 在 `39a6fb1`（P0）也做了同样的事
-- **只有 main 有、我们没有**：`DataManager` 的 `Locale.getDefault()→Locale.US`
-  （我们的同名修复在 `HomeViewModel` 里，不是同一处）
-- **只有我们有、main 没有**：`StayDao` 日期查询的 `'localtime'` 修饰符
+  `FenceActiveSession`——我们在 `d680fc8` 统一到 7 字段版本，
+  main 在 `39a6fb1`（P0）也做了同样的事。**这条不用再挑**
+- **只有 main 有、当前代码没有**：`DataManager` 的 `Locale.getDefault()→Locale.US`
+  （我们的同名修复在 `HomeViewModel` 里，不是同一处）。**这条值得挑回来**
+- **只有我们有**：`StayDao` 日期查询的 `'localtime'` 修饰符
 
-所以合并前需要**逐条对照那 52 条修复**，判断哪些已经在新分支覆盖、
-哪些还缺失、哪些两边做法不同。
-
-**建议**：先看那 52 条修复里哪些是本次分支还没有的（尤其 P0/P1），
-把它们的能力补进来，再决定是否合并。不要盲目 `git merge`。
+其他修复还没逐条比对。如果之后发现某个行为不对，先查
+`backup/pre-overwrite-main` 上是不是已经有现成的修复，别从零开始查。
 
 ### 模拟器（可用）
 
