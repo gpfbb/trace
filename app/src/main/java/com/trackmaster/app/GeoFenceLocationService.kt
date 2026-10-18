@@ -377,7 +377,6 @@ class GeoFenceLocationService : Service() {
             powerSaveController.updatePowerSavingState(
                 shouldProcess = shouldProcess,
                 engineIntervalMs = engineInterval,
-                isInFence = isInFence,
             )
         } else {
             AppLog.d(TAG, "Throttled回调（不更新UI）: shouldProcess=$shouldProcess, isStopped=${powerSaveController.isLocationClientStopped}")
@@ -385,7 +384,6 @@ class GeoFenceLocationService : Service() {
             powerSaveController.updatePowerSavingState(
                 shouldProcess = false,
                 engineIntervalMs = engineInterval,
-                isInFence = isInFence,
             )
         }
 

@@ -113,12 +113,12 @@ class PowerSaveController(
      * 省电状态机主入口
      * @param shouldProcess 引擎是否处理了此次定位
      * @param engineIntervalMs 引擎计算的下次定位间隔
-     * @param isInFence 是否在围栏内
+     * @param engineIntervalMs 引擎计算的下次定位间隔（保留以便调用方统一传参，
+     *   间隔的应用已移至 GeoFenceLocationService）
      */
     fun updatePowerSavingState(
         shouldProcess: Boolean,
         engineIntervalMs: Long = 60_000L,
-        isInFence: Boolean,
     ) {
         val now = System.currentTimeMillis()
 
@@ -130,7 +130,7 @@ class PowerSaveController(
         if (isLocationClientStopped) {
             handleStoppedState(now)
         } else {
-            handleRunningState(shouldProcess, engineIntervalMs, isInFence)
+            handleRunningState(shouldProcess)
         }
     }
 
@@ -165,7 +165,9 @@ class PowerSaveController(
         }
     }
 
-    private fun handleRunningState(shouldProcess: Boolean, engineIntervalMs: Long, isInFence: Boolean) {
+    // 降频分支已移除，间隔决策统一由 GeoFenceLocationService 负责；
+    // 这里只根据"引擎是否处理了本次定位"决定计数与停止/唤醒。
+    private fun handleRunningState(shouldProcess: Boolean) {
         if (shouldProcess) {
             consecutiveNotProcessCount = 0
             cancelWakeupAlarm()

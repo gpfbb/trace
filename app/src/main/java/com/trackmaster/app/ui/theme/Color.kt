@@ -66,11 +66,7 @@ val EspressoBlack = Color(0xFF0D0D0D)
 
 // 玻璃面板色 - 更高级的液态玻璃质感
 val GlassPanelRich = Color(0xB31C1612) // rgba(28, 22, 18, 0.7)
-val GlassPanelRichDark = Color(0xCC0F0C0A) // rgba(15, 12, 10, 0.8)
 val GlassPanelLightRich = Color(0x992A221C) // rgba(42, 34, 28, 0.6)
-val GlassInnerCard = Color(0x800A0806) // rgba(10, 8, 6, 0.5) - 嵌套内部卡片，更深一点
-val GlassPanel = Color(0x402C1810)
-val GlassPanelLight = Color(0x303D281A)
 
 // 边框色
 val GlassBorder = Color(0x1AFFFFFF)
@@ -87,7 +83,6 @@ val TextDisabled = Color(0xFF757575) // 禁用文字 (对比度 ~5:1)
 val Success = Color(0xFF4CAF50)
 val Warning = NeonAmber
 val Danger = Color(0xFFFF5252)
-val Info = Color(0xFF00BCD4)
 
 // 标准Material 3颜色映射（基于新复古液态玻璃拟态 + WCAG 2.1 AA对比度）
 val md_theme_light_primary = NeonCoral
