@@ -134,9 +134,13 @@ fun TrackMasterDesignTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // 状态栏透明，内容从状态栏下方开始绘制由 Scaffold 的 insets 处理
+            // 状态栏透明，内容从状态栏下方开始绘制由各屏的 statusBarsPadding 处理
             window.statusBarColor = Color.Transparent.toArgb()
             window.navigationBarColor = Color.Transparent.toArgb()
+            // 窗口背景也要跟着主题走。否则内容没有铺到的地方（状态栏那条、
+            // 导航栏那条）会露出 Activity 主题的默认白底——深色模式下
+            // 顶部会有一条突兀的白边。
+            window.decorView.setBackgroundColor(palette.background.toArgb())
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !dark
                 isAppearanceLightNavigationBars = !dark
