@@ -83,7 +83,9 @@ class FenceProcessingHolder(
         // 统一由 handleAllMatchedFences 在 appScope.launch 中更新，onNotifyFenceStateChanged 触发 UI 刷新
 
         appScope.launch {
-            val (closedSeg, _) = engine.onLocationUpdate(fix)
+            // 调度决策已在上面由 evaluateLocation 完成，这里只做位置处理，
+            // 不再重复调用 SmartScheduler（详见 Engine.processApprovedLocation 注释）
+            val closedSeg = engine.processApprovedLocation(fix)
             // 【Bug修复】handleFenceExit 需要使用检测到exit时的matched fence状态，
             // 而不是 onLocationUpdate 之后的最新状态（可能导致TOCTOU竞态）
             // 使用上面捕获的快照

@@ -123,30 +123,25 @@ class Engine(
     // ============================================================
 
     /**
-     * 接收位置更新
+     * 处理一个**已通过调度决策**的定位点。
      *
      * 流程：
-     * 1. SmartScheduler 评估是否应处理
-     * 2. 漂移过滤
-     * 3. BBox 快速排除 → 精确命中所有围栏（包括嵌套的父级和子级）
-     * 4. 更新当前命中的所有围栏列表
+     * 1. 计算动态缓冲区大小
+     * 2. BBox 快速排除 → 精确命中所有围栏（包括嵌套的父级和子级）
+     * 3. 更新当前命中的所有围栏列表（按深度降序）
+     * 4. 找出最深的叶子围栏
      * 5. 状态转移 → 生成 StaySegment
      *
-     * @return Pair(生成的 StaySegment（如有）, 是否应该处理定位)
+     * 调度决策（是否处理、降频等级、下次定位间隔）由 [evaluateLocation] 单独完成，
+     * 本方法不再调用 SmartScheduler：`SmartScheduler.evaluate` 带有副作用（写入
+     * lastProcessedTs、位置历史、静止累计），对同一个 fix 调用两次时，第二次会因
+     * 时间闸门（ts - lastProcessedTs == 0 < interval）被判为"已处理过"而直接返回
+     * false，导致 transition() 永不执行、StaySegment 永不生成、stays 表永远为空。
+     *
+     * @return 本次发生围栏切换时生成的 StaySegment，否则 null
      */
-    suspend fun onLocationUpdate(
-        fix: LocationFix,
-        accel: AccelerometerData? = null,
-    ): Pair<StaySegment?, Boolean> {
-        // 1. SmartScheduler 评估
-        val decision = scheduler.evaluate(fix, accel)
-        // 记录结果供外部查询
-        lastShouldProcess = decision.shouldProcess
-        // 统计回调：传递是否应处理 + 下次定位间隔（用于Google provider节流）
-        onLocationProcessed?.invoke(decision.shouldProcess, decision.nextIntervalMs)
-        if (!decision.shouldProcess) return Pair(null, false)
-
-        // 2. 获取动态缓冲区大小
+    suspend fun processApprovedLocation(fix: LocationFix): StaySegment? {
+        // 1. 获取动态缓冲区大小
         var currentBufferSize = 0.0
         if (bufferManager != null) {
             val speedMps = fix.speed?.toDouble()
@@ -159,22 +154,22 @@ class Engine(
             AppLog.d(TAG, "动态缓冲区: ${"%.1f".format(currentBufferSize)}m")
         }
 
-        // 3. 查找所有命中的围栏（包括嵌套的父级和子级）
+        // 2. 查找所有命中的围栏（包括嵌套的父级和子级）
         val allMatched = findAllMatchedFences(fix, currentBufferSize, true)
 
-        // 4. 更新当前命中的所有围栏列表（按深度降序排列）
+        // 3. 更新当前命中的所有围栏列表（按深度降序排列）
         currentMatchedFenceIds = allMatched
             .sortedByDescending { it.depth }
             .map { it.id }
 
-        // 5. 找出最深的叶子围栏用于计时
+        // 4. 找出最深的叶子围栏用于计时
         val deepest = allMatched.maxByOrNull { it.depth }
 
-        // 6. 状态转移
+        // 5. 状态转移
         if (deepest?.id != currentLeafId) {
-            return Pair(transition(deepest?.id, fix.timestamp), true)
+            return transition(deepest?.id, fix.timestamp)
         }
-        return Pair(null, true)
+        return null
     }
 
     /**
@@ -182,10 +177,22 @@ class Engine(
      * 不执行完整的围栏检测逻辑，返回是否应该处理
      * 【Bug修复】接受 accel 参数，使静止判定能使用加速度数据
      */
+    /**
+     * 仅评估位置是否应该处理（用于省电控制与 GPS 节流）
+     *
+     * 这是 SmartScheduler 的唯一入口：对每个定位点只允许调用一次。
+     * SmartScheduler.evaluate 带有副作用（写 lastProcessedTs、位置历史、静止累计），
+     * 重复调用会导致时间闸门误判为"已处理过"。
+     *
+     * @return 是否应处理该定位点
+     */
     fun evaluateLocation(fix: LocationFix, accel: AccelerometerData? = null): Boolean {
         val decision = scheduler.evaluate(fix, accel)
         lastShouldProcess = decision.shouldProcess
         lastComputedIntervalMs = decision.nextIntervalMs
+        // 统计回调：是否处理 + 下次定位间隔（用于 Google provider 节流）
+        // 放在这里而非位置处理阶段，确保无论是否处理都会计数
+        onLocationProcessed?.invoke(decision.shouldProcess, decision.nextIntervalMs)
         return decision.shouldProcess
     }
 
@@ -395,7 +402,10 @@ class Engine(
             AppLog.d(TAG, "Segment 写入成功: $oldLeafId -> $newLeafId")
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            currentLeafIdRef.set(oldLeafId) // 回滚
+            // 回滚必须同时恢复 leafId 和 enterTs，否则下次 transition 会用错误的
+            // 进入时间生成一段超长/错位的 segment
+            currentLeafIdRef.set(oldLeafId)
+            currentEnterTs = oldEnterTs
             AppLog.e(TAG, "Segment 写入失败，状态回滚: $oldLeafId", e)
             return null
         }

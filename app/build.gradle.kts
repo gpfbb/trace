@@ -20,6 +20,13 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            // AppLog 走 android.util.Log，JVM 测试里未实现；返回默认值让日志调用变为空操作
+            isReturnDefaultValues = true
+        }
+    }
+
     signingConfigs {
         create("release") {
             storeFile = file("../trackmaster.jks")
@@ -102,6 +109,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     testImplementation("junit:junit:4.13.2")
+    // 协程测试支持：Engine 的位置处理是 suspend 函数，需要 runTest 驱动
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.01"))
