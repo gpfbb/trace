@@ -87,6 +87,43 @@ class EventDao(private val dbManager: DatabaseManager) {
         )
     }
 
+    /**
+     * 统计时间范围内各围栏的进入次数。
+     *
+     * 用 SQL COUNT 直接聚合，避免为了计数把整段时间的 event 全查进内存
+     * （原先 getEventsByTimeRange 有 1000 条硬上限，跨月/年的进入次数会被
+     * 静默截断）。
+     */
+    fun countEnterEventsByFence(startTime: Date, endTime: Date): Map<String, Int> {
+        val result = mutableMapOf<String, Int>()
+        val db = dbManager.readableDatabase
+        val cursor = db.query(
+            DatabaseManager.TABLE_EVENTS,
+            arrayOf(
+                DatabaseManager.KEY_FENCE_ID,
+                "COUNT(*) AS cnt"
+            ),
+            "${DatabaseManager.KEY_TIMESTAMP} >= ? AND ${DatabaseManager.KEY_TIMESTAMP} <= ? " +
+                "AND ${DatabaseManager.KEY_ACTION} = ?",
+            arrayOf(startTime.time.toString(), endTime.time.toString(), GeoFenceAction.ENTER.name),
+            DatabaseManager.KEY_FENCE_ID,
+            null,
+            "cnt DESC"
+        )
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    val fenceId = cursor.getString(cursor.getColumnIndexOrThrow(DatabaseManager.KEY_FENCE_ID))
+                    val count = cursor.getInt(cursor.getColumnIndexOrThrow("cnt"))
+                    result[fenceId] = count
+                } while (cursor.moveToNext())
+            }
+        } finally {
+            cursor.close()
+        }
+        return result
+    }
+
     fun getAllEvents(limit: Int = 10000): List<GeoFenceEvent> {
         return getEvents(null, emptyArray(), limit)
     }

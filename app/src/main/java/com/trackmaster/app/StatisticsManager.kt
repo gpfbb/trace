@@ -2,7 +2,6 @@ package com.trackmaster.app
 
 import android.content.Context
 import android.graphics.Color
-import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.utils.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -102,11 +101,9 @@ class StatisticsManager(private val context: Context) {
         }
 
         // 2. 从 events 表统计进入次数
-        val events = dbHelper.getEventsByTimeRange(timeRange.startTime, timeRange.endTime)
-        val enterCounts = events
-            .filter { it.action == GeoFenceAction.ENTER }
-            .groupBy { it.fenceId }
-            .mapValues { it.value.size }
+        // 用 SQL COUNT 聚合：原先为了计数把整段时间的 event 全查进内存，
+        // 且 getEventsByTimeRange 有 1000 条硬上限，跨月/年的进入次数会被静默截断
+        val enterCounts = dbHelper.countEnterEventsByFence(timeRange.startTime, timeRange.endTime)
 
         // 将进入次数合并到 statsMap
         for ((fenceId, count) in enterCounts) {

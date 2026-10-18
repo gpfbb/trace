@@ -62,6 +62,8 @@ class DatabaseFacade(
     fun insertEventsWithId(events: List<GeoFenceEvent>) = eventDao.insertEventsWithId(events)
     fun getEventsByFence(fenceId: String, limit: Int = 100): List<GeoFenceEvent> = eventDao.getEventsByFence(fenceId, limit)
     fun getEventsByTimeRange(startTime: Date, endTime: Date): List<GeoFenceEvent> = eventDao.getEventsByTimeRange(startTime, endTime)
+    fun countEnterEventsByFence(startTime: Date, endTime: Date): Map<String, Int> =
+        eventDao.countEnterEventsByFence(startTime, endTime)
     fun getAllEvents(limit: Int = 10000): List<GeoFenceEvent> = eventDao.getAllEvents(limit)
     fun deleteEventsBefore(beforeDate: Date?): Int = eventDao.deleteEventsBefore(beforeDate)
 
