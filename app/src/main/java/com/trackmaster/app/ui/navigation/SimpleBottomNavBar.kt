@@ -35,6 +35,7 @@ import com.trackmaster.app.R
 import com.trackmaster.app.ui.design.AppType
 import com.trackmaster.app.ui.design.Space
 import com.trackmaster.app.ui.design.currentPalette
+import com.trackmaster.app.ui.design.AppIcons
 
 /**
  * 底部标签栏。
@@ -115,25 +116,25 @@ private enum class SimpleNavItem(
     HOME(
         Screen.Home,
         R.string.nav_home,
-        Icons.Filled.Home,
-        Icons.Outlined.Home
+        AppIcons.navHomeSelected,
+        AppIcons.navHomeUnselected
     ),
     MAP(
         Screen.Map,
         R.string.nav_map,
-        Icons.Filled.Map,
-        Icons.Outlined.Map
+        AppIcons.navMapSelected,
+        AppIcons.navMapUnselected
     ),
     HISTORY(
         Screen.History,
         R.string.nav_history,
-        Icons.AutoMirrored.Filled.List,
-        Icons.AutoMirrored.Outlined.List
+        AppIcons.navHistorySelected,
+        AppIcons.navHistoryUnselected
     ),
     SETTINGS(
         Screen.Settings,
         R.string.nav_settings,
-        Icons.Filled.Settings,
-        Icons.Outlined.Settings
+        AppIcons.navSettingsSelected,
+        AppIcons.navSettingsUnselected
     )
 }

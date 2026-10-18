@@ -50,6 +50,8 @@ import com.trackmaster.app.utils.AppLog
 import com.trackmaster.app.ui.design.currentPalette
 import androidx.compose.foundation.layout.statusBarsPadding
 import com.trackmaster.app.ui.design.LargeTitle
+import com.trackmaster.app.ui.design.AppIcons
+import com.trackmaster.app.ui.design.IconTile
 
 // 独立的设置页面内容组件
 @Composable
@@ -171,12 +173,12 @@ fun SettingsPage(
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Map,
-                        contentDescription = stringResource(R.string.map_service),
-                        tint = primaryColor(),
-                        modifier = Modifier.size(28.dp)
-                    )
+                    IconTile(
+                        icon = AppIcons.mapService,
+                        containerColor = primaryColor(),
+                        tint = Color.White,
+                        size = 29.dp
+                        )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.map_service), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = currentPalette.label)
@@ -186,7 +188,7 @@ fun SettingsPage(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        imageVector = AppIcons.chevronRight,
                         contentDescription = null,
                         tint = currentPalette.labelSecondary,
                         modifier = Modifier.size(20.dp)
@@ -253,12 +255,12 @@ fun SettingsPage(
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = stringResource(R.string.language),
-                        tint = primaryColor(),
-                        modifier = Modifier.size(28.dp)
-                    )
+                    IconTile(
+                        icon = AppIcons.language,
+                        containerColor = primaryColor(),
+                        tint = Color.White,
+                        size = 29.dp
+                        )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.language), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = currentPalette.label)
@@ -272,7 +274,7 @@ fun SettingsPage(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        imageVector = AppIcons.chevronRight,
                         contentDescription = null,
                         tint = currentPalette.labelSecondary,
                         modifier = Modifier.size(20.dp)
@@ -296,12 +298,12 @@ fun SettingsPage(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = stringResource(R.string.theme),
-                            tint = primaryColor(),
-                            modifier = Modifier.size(28.dp)
-                        )
+                        IconTile(
+                            icon = AppIcons.palette,
+                            containerColor = primaryColor(),
+                            tint = Color.White,
+                            size = 29.dp
+                            )
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -326,7 +328,7 @@ fun SettingsPage(
                             )
                         }
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            imageVector = AppIcons.chevronRight,
                             contentDescription = null,
                             tint = currentPalette.labelSecondary,
                             modifier = Modifier.size(20.dp)
@@ -339,7 +341,7 @@ fun SettingsPage(
 
             if (onOpenDataImportExport != null) {
                 SettingsMenuCard(
-                    icon = Icons.Default.Folder,
+                    icon = AppIcons.folder,
                     title = stringResource(R.string.data_import_export),
                     description = stringResource(R.string.data_import_export_desc),
                     tint = primaryColor(),
@@ -353,7 +355,7 @@ fun SettingsPage(
             var recalculateMessage by remember { mutableStateOf<String?>(null) }
 
             SettingsMenuCard(
-                icon = Icons.Default.AccountTree,
+                icon = AppIcons.hierarchy,
                 title = stringResource(R.string.recalculate_relationships),
                 description = stringResource(R.string.recalculate_desc),
                 tint = NeonBlue,
@@ -495,7 +497,7 @@ fun SettingsPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Tune,
+                            imageVector = AppIcons.tune,
                             contentDescription = stringResource(R.string.advanced_settings),
                             tint = primaryColor(),
                             modifier = Modifier.size(28.dp)
@@ -515,7 +517,7 @@ fun SettingsPage(
                             )
                         }
                         Icon(
-                            imageVector = if (showAdvancedSettings) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            imageVector = AppIcons.expandChevron(showAdvancedSettings),
                             contentDescription = if (showAdvancedSettings) stringResource(R.string.collapse) else stringResource(R.string.expand),
                             tint = currentPalette.labelSecondary,
                             modifier = Modifier.size(28.dp)
@@ -583,7 +585,7 @@ fun SettingsPage(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = if (currentLanguage == lang) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                imageVector = if (currentLanguage == lang) AppIcons.checkCircle else AppIcons.checkCircleOutline,
                                 contentDescription = null,
                                 tint = if (currentLanguage == lang) primaryColor() else Color.Gray,
                                 modifier = Modifier.size(24.dp)
@@ -625,48 +627,40 @@ private fun SettingsMenuCard(
     tint: Color,
     onClick: () -> Unit
 ) {
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = currentPalette.groupedCell
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(0.dp)
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = tint,
-                modifier = Modifier.size(28.dp)
+        // 彩色圆角方块里放白色图标：分组列表视觉，比裸图标更容易扫读
+        com.trackmaster.app.ui.design.IconTile(
+            icon = icon,
+            containerColor = tint,
+            tint = Color.White,
+            size = 29.dp
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                fontWeight = FontWeight.Medium,
+                fontSize = 17.sp,
+                color = currentPalette.label
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = currentPalette.label
-                )
-                Text(
-                    description,
-                    fontSize = 13.sp,
-                    color = currentPalette.labelSecondary
-                )
-            }
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = currentPalette.labelSecondary
+            Text(
+                description,
+                fontSize = 13.sp,
+                color = currentPalette.labelSecondary
             )
         }
+        Icon(
+            imageVector = AppIcons.chevronRight,
+            contentDescription = null,
+            tint = currentPalette.labelTertiary,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
@@ -681,7 +675,7 @@ fun SettingsScreen(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.Settings,
+                    imageVector = AppIcons.settings,
                     contentDescription = stringResource(R.string.settings),
                     tint = primaryColor(),
                     modifier = Modifier.size(28.dp)
@@ -836,7 +830,7 @@ fun PermissionItem(
             Spacer(modifier = Modifier.width(12.dp))
             if (isGranted) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = AppIcons.checkCircle,
                     contentDescription = stringResource(R.string.granted),
                     tint = Success,
                     modifier = Modifier.size(28.dp)
@@ -976,17 +970,20 @@ fun LocationModeItem(
 
 @Composable
 fun InfoSection() {
+    val palette = currentPalette
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 这是说明性文字，不是可点的操作项。用次级灰而不是强调色——
+        // 强调色留给真正能点、需要吸引注意的东西。
         Text(
             stringResource(R.string.usage_instructions),
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
-            color = primaryColor()
+            color = palette.labelSecondary
         )
         Text(
             "1. ${stringResource(R.string.usage_tip_1)}\n2. ${stringResource(R.string.usage_tip_2)}\n3. ${stringResource(R.string.usage_tip_3)}\n4. ${stringResource(R.string.usage_tip_4)}",
             fontSize = 13.sp,
-            color = currentPalette.labelSecondary,
+            color = palette.labelSecondary,
             lineHeight = 18.sp
         )
     }
@@ -1014,7 +1011,7 @@ fun AdvancedSettingsSection(
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Star,
+                        imageVector = AppIcons.star,
                         contentDescription = stringResource(R.string.recommended),
                         tint = Color(0xFF81C784),
                         modifier = Modifier.size(20.dp)

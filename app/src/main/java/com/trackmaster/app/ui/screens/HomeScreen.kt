@@ -45,6 +45,7 @@ import com.trackmaster.app.ui.design.StatusBadge
 import com.trackmaster.app.ui.design.SettingsRow
 import com.trackmaster.app.ui.design.currentPalette
 import com.trackmaster.app.viewmodel.HomeViewModel
+import com.trackmaster.app.ui.design.AppIcons
 
 /**
  * 首页：当前状态 + 今日统计 + 本月常去。
@@ -181,7 +182,7 @@ private fun CurrentStatusRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = if (isInsideFence) Icons.Filled.LocationOn else Icons.Filled.LocationOff,
+            imageVector = if (isInsideFence) AppIcons.insideFence else AppIcons.outsideFence,
             contentDescription = null,
             tint = if (isInsideFence) palette.success else palette.labelTertiary,
             modifier = Modifier.size(28.dp)

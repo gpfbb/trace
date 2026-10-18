@@ -78,6 +78,7 @@ import com.trackmaster.app.viewmodel.MapViewModel
 import java.util.Random
 import java.util.UUID
 import com.trackmaster.app.ui.design.currentPalette
+import com.trackmaster.app.ui.design.AppIcons
 
 private fun AMapLocation.toLocation(): Location = Location(
     latitude = latitude,
@@ -381,8 +382,8 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
             ) {
                 Icon(
                     imageVector = when {
-                        isDrawingMode || isEditingFence -> Icons.Filled.Close
-                        else -> Icons.Filled.Add
+                        isDrawingMode || isEditingFence -> AppIcons.close
+                        else -> AppIcons.add
                     },
                     contentDescription = if (isDrawingMode || isEditingFence) stringResource(R.string.cancel) else stringResource(R.string.draw)
                 )
@@ -597,7 +598,7 @@ private fun TopStatusIsland(
 
             if (smallestFence != null) {
                 Icon(
-                    Icons.Filled.LocationOn,
+                    AppIcons.insideFence,
                     contentDescription = null,
                     tint = palette.success,
                     modifier = Modifier.size(18.dp)
@@ -612,7 +613,7 @@ private fun TopStatusIsland(
                 )
             } else {
                 Icon(
-                    Icons.Filled.LocationOff,
+                    AppIcons.outsideFence,
                     contentDescription = null,
                     tint = palette.labelSecondary,
                     modifier = Modifier.size(18.dp)
@@ -656,7 +657,7 @@ private fun TopStatusIsland(
             )
             Spacer(Modifier.width(16.dp))
             Icon(
-                Icons.Filled.Settings,
+                AppIcons.settings,
                 contentDescription = stringResource(R.string.tools),
                 tint = if (showToolsPopup) palette.accent else palette.labelSecondary,
                 modifier = Modifier
@@ -665,7 +666,7 @@ private fun TopStatusIsland(
             )
             Spacer(Modifier.width(16.dp))
             Icon(
-                Icons.AutoMirrored.Filled.List,
+                AppIcons.navHistorySelected,
                 contentDescription = stringResource(R.string.fence_list),
                 tint = palette.labelSecondary,
                 modifier = Modifier
@@ -822,7 +823,7 @@ private fun DrawingToolbar(
                         selected = isPrecisionMode,
                         onClick = { onPrecisionModeChange(!isPrecisionMode) },
                         label = { Text(stringResource(R.string.precision), fontSize = 12.sp) },
-                        leadingIcon = { Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                        leadingIcon = { Icon(AppIcons.myLocation, contentDescription = null, modifier = Modifier.size(14.dp)) },
                         modifier = Modifier.height(32.dp)
                     )
                 }
@@ -846,7 +847,7 @@ private fun DrawingToolbar(
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        Icons.Filled.Close,
+                        AppIcons.close,
                         contentDescription = stringResource(R.string.cancel),
                         tint = Color.Gray,
                         modifier = Modifier.size(20.dp)
@@ -955,7 +956,7 @@ private fun EditingToolbar(
                     selected = isPrecisionMode,
                     onClick = { onPrecisionModeChange(!isPrecisionMode) },
                     label = { Text(stringResource(R.string.precision), fontSize = 11.sp) },
-                    leadingIcon = { Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                    leadingIcon = { Icon(AppIcons.myLocation, contentDescription = null, modifier = Modifier.size(14.dp)) },
                     modifier = Modifier.height(28.dp)
                 )
                 IconButton(onClick = onUndo) {
@@ -966,7 +967,7 @@ private fun EditingToolbar(
                     )
                 }
                 IconButton(onClick = onCancel) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cancel), tint = Color.Gray)
+                    Icon(AppIcons.close, contentDescription = stringResource(R.string.cancel), tint = Color.Gray)
                 }
             }
 
@@ -1166,7 +1167,7 @@ private fun FenceListDialog(
                     }
                     IconButton(onClick = onDismiss) {
                         Icon(
-                            imageVector = Icons.Filled.Close,
+                            imageVector = AppIcons.close,
                             contentDescription = stringResource(R.string.close),
                             tint = Color.Gray
                         )
@@ -1182,7 +1183,7 @@ private fun FenceListDialog(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
-                                imageVector = Icons.Filled.LocationOff,
+                                imageVector = AppIcons.outsideFence,
                                 contentDescription = null,
                                 tint = Color.Gray,
                                 modifier = Modifier.size(48.dp)
@@ -1274,17 +1275,17 @@ private fun FenceListDialog(
                                     }
                                     if (isHighlighted) {
                                         Icon(
-                                            imageVector = Icons.Filled.LocationOn,
+                                            imageVector = AppIcons.insideFence,
                                             contentDescription = stringResource(R.string.highlighted),
                                             tint = currentPalette.accent,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
                                     IconButton(onClick = { onEditClick(fence) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.edit), tint = primaryColor(), modifier = Modifier.size(18.dp))
+                                        Icon(AppIcons.edit, contentDescription = stringResource(R.string.edit), tint = primaryColor(), modifier = Modifier.size(18.dp))
                                     }
                                     IconButton(onClick = { onDeleteClick(fence) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete), tint = Danger, modifier = Modifier.size(18.dp))
+                                        Icon(AppIcons.delete, contentDescription = stringResource(R.string.delete), tint = Danger, modifier = Modifier.size(18.dp))
                                     }
                                 }
 
