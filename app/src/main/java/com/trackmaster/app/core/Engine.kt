@@ -340,7 +340,8 @@ class Engine(
     /**
      * 使用动态 buffer 检查位置是否在围栏内（不更新状态）
      *
-     * 用于 FenceProcessingHolder 的同步围栏检测，与 onLocationUpdate 使用相同的动态 buffer 策略
+     * 用于 FenceProcessingHolder 的同步围栏检测，与 processApprovedLocation
+     * 使用相同的动态 buffer 策略
      *
      * @param fix 位置信息
      * @return 命中的围栏 ID 列表（按深度降序排列，最深在前）
