@@ -59,7 +59,8 @@ fun SettingsPage(
     var showLanguagePicker by remember { mutableStateOf(false) }
     var currentLanguage by remember { mutableStateOf(prefs.appLanguage) }
 
-    // 主题设置：强调色 + 深浅模式，走新的设计系统
+    // 主题设置：读全局唯一的控制器（由 TrackMasterDesignTheme 提供）。
+    // 不要在这里 remember 一个新的——那样改的是另一份状态，界面不会更新。
     val themeController = com.trackmaster.app.ui.design.rememberThemeController()
 
     // 高级设置状态

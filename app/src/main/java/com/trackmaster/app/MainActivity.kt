@@ -89,8 +89,7 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalConfiguration provides configuration
             ) {
-                val themeController = com.trackmaster.app.ui.design.rememberThemeController()
-                com.trackmaster.app.ui.design.TrackMasterDesignTheme(controller = themeController) {
+                com.trackmaster.app.ui.design.TrackMasterDesignTheme {
                     TrackMasterNavHost(
                         onLanguageChangeRequested = { localeVersion++ }
                     )

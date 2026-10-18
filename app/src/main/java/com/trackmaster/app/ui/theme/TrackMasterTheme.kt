@@ -1,9 +1,7 @@
 package com.trackmaster.app.ui.theme
 
-import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import com.trackmaster.app.ui.design.TrackMasterDesignTheme
-import com.trackmaster.app.ui.design.ThemeController
 
 /**
  * 兼容入口。
@@ -13,8 +11,7 @@ import com.trackmaster.app.ui.design.ThemeController
  */
 @Composable
 fun TrackMasterTheme(
-    controller: ThemeController,
     content: @Composable () -> Unit
 ) {
-    TrackMasterDesignTheme(controller = controller, content = content)
+    TrackMasterDesignTheme(content = content)
 }

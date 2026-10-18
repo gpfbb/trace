@@ -89,24 +89,41 @@ class ThemeController(
 }
 
 @Composable
-fun rememberThemeController(): ThemeController {
+fun rememberThemeController(): ThemeController = LocalThemeController.current
+
+/**
+ * 主题控制器通过 CompositionLocal 传递，而不是每个调用方各自 `remember`。
+ *
+ * 这是一个真实 bug 的来源：`MainActivity` 用 `rememberThemeController()`
+ * 建了一个实例喂给 [TrackMasterDesignTheme]，设置页又自己
+ * `rememberThemeController()` 建了第二个实例。两者互不相干——设置页改的
+ * 是它自己那份，主题源那份没动，所以运行时切换主题完全没反应
+ * （重启后才生效，因为那时重新从 SharedPreferences 读）。
+ *
+ * 现在只有一个实例，由 [TrackMasterDesignTheme] 提供，其余地方只读。
+ */
+val LocalThemeController = staticCompositionLocalOf<ThemeController> {
+    error("LocalThemeController 未提供：请把内容包在 TrackMasterDesignTheme 里")
+}
+
+/**
+ * 主题入口。替代 `TrackMasterTheme` + `ThemeManager`。
+ *
+ * 这里是主题状态的唯一持有者：内部创建 [ThemeController]，并通过
+ * [LocalThemeController] 提供给整棵子树。子页面不要自己再创建控制器。
+ */
+@Composable
+fun TrackMasterDesignTheme(
+    content: @Composable () -> Unit
+) {
     val context = LocalContext.current
     val prefs = remember(context) {
         (context.applicationContext as com.trackmaster.app.TrackMasterApplication).appPreferences
     }
-    return remember(prefs) { ThemeController(prefs, ThemeStore.load(prefs)) }
-}
+    val controller = remember(prefs) {
+        ThemeController(prefs, ThemeStore.load(prefs))
+    }
 
-/**
- * 新主题入口。替代 `TrackMasterTheme` + `ThemeManager`。
- *
- * @param controller 由 [rememberThemeController] 创建，供设置页读写
- */
-@Composable
-fun TrackMasterDesignTheme(
-    controller: ThemeController,
-    content: @Composable () -> Unit
-) {
     val settings = controller.settings
     val dark = settings.mode.resolveDark(isSystemInDarkTheme())
     val palette = remember(settings.accent, dark) { paletteFor(settings.accent, dark) }
@@ -129,7 +146,8 @@ fun TrackMasterDesignTheme(
 
     CompositionLocalProvider(
         LocalPalette provides palette,
-        LocalThemeSettings provides settings
+        LocalThemeSettings provides settings,
+        LocalThemeController provides controller
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

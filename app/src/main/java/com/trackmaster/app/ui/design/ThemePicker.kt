@@ -31,6 +31,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.trackmaster.app.R
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 
 /**
  * 主题设置对话框：深浅模式 + 强调色。
@@ -45,70 +47,93 @@ fun ThemeSettingsDialog(
     onSettingsChange: (ThemeSettings) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val palette = currentPalette
-
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(Radius.xl))
-                .background(palette.groupedCell)
-                .padding(Space.xl)
-        ) {
-            Text(
-                text = stringResource(R.string.theme),
-                style = AppType.title2,
-                color = palette.label
-            )
-            Spacer(Modifier.height(Space.xl))
-
-            // 深浅模式
-            Text(
-                text = stringResource(R.string.theme_mode),
-                style = AppType.footnote,
-                color = palette.labelSecondary
-            )
-            Spacer(Modifier.height(Space.sm))
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                ThemeMode.entries.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = settings.mode == mode,
-                        onClick = { onSettingsChange(settings.copy(mode = mode)) },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = index,
-                            count = ThemeMode.entries.size
-                        )
-                    ) {
-                        Text(
-                            text = stringResource(mode.labelRes()),
-                            style = AppType.footnote
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(Space.xl))
-
-            // 强调色
-            Text(
-                text = stringResource(R.string.accent_color),
-                style = AppType.footnote,
-                color = palette.labelSecondary
-            )
-            Spacer(Modifier.height(Space.md))
-            AccentColorGrid(
-                selected = settings.accent,
-                dark = palette.isDark,
-                onSelect = { onSettingsChange(settings.copy(accent = it)) }
-            )
-
-            Spacer(Modifier.height(Space.xl))
-
-            PrimaryButton(
-                text = stringResource(R.string.done),
-                onClick = onDismiss
+        // Dialog 是独立窗口，不会自动继承宿主 Window 的主题。
+        // 这里按"正在修改的 settings"重新提供一份调色板，
+        // 否则在弹窗里切换深浅色时弹窗自己不会变，只有背后的页面会变。
+        val previewDark = settings.mode.resolveDark(
+            androidx.compose.foundation.isSystemInDarkTheme()
+        )
+        val previewPalette = remember(settings.accent, previewDark) {
+            paletteFor(settings.accent, previewDark)
+        }
+        CompositionLocalProvider(LocalPalette provides previewPalette) {
+            ThemeDialogBody(
+                settings = settings,
+                onSettingsChange = onSettingsChange,
+                onDismiss = onDismiss
             )
         }
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun ThemeDialogBody(
+    settings: ThemeSettings,
+    onSettingsChange: (ThemeSettings) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val palette = currentPalette
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Radius.xl))
+            .background(palette.groupedCell)
+            .padding(Space.xl)
+    ) {
+        Text(
+            text = stringResource(R.string.theme),
+            style = AppType.title2,
+            color = palette.label
+        )
+        Spacer(Modifier.height(Space.xl))
+
+        Text(
+            text = stringResource(R.string.theme_mode),
+            style = AppType.footnote,
+            color = palette.labelSecondary
+        )
+        Spacer(Modifier.height(Space.sm))
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            ThemeMode.entries.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = settings.mode == mode,
+                    onClick = { onSettingsChange(settings.copy(mode = mode)) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = ThemeMode.entries.size
+                    )
+                ) {
+                    Text(
+                        text = stringResource(mode.labelRes()),
+                        style = AppType.footnote
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(Space.xl))
+
+        Text(
+            text = stringResource(R.string.accent_color),
+            style = AppType.footnote,
+            color = palette.labelSecondary
+        )
+        Spacer(Modifier.height(Space.md))
+        AccentColorGrid(
+            selected = settings.accent,
+            dark = palette.isDark,
+            onSelect = { onSettingsChange(settings.copy(accent = it)) }
+        )
+
+        Spacer(Modifier.height(Space.xl))
+
+        PrimaryButton(
+            text = stringResource(R.string.done),
+            onClick = onDismiss
+        )
     }
 }
 
