@@ -21,6 +21,7 @@ class PermissionManager(private val context: Context) {
         val hasLocationPermission: Boolean = false,
         val hasBackgroundLocationPermission: Boolean = false,
         val isIgnoringBatteryOptimizations: Boolean = false,
+        val hasNotificationPermission: Boolean = false,
         val hasAllPermissions: Boolean = false
     )
 
@@ -37,12 +38,21 @@ class PermissionManager(private val context: Context) {
 
         val isIgnoringBattery = isIgnoringBatteryOptimizations()
 
-        val hasAll = hasLocationPermission && hasBackgroundLocation && isIgnoringBattery
+        // Android 13+ 前台服务常驻通知需要 POST_NOTIFICATIONS 授权
+        // 低版本没有该运行时权限，默认为已授予
+        val hasNotification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            true
+        }
+
+        val hasAll = hasLocationPermission && hasBackgroundLocation && isIgnoringBattery && hasNotification
 
         return PermissionStatus(
             hasLocationPermission = hasLocationPermission,
             hasBackgroundLocationPermission = hasBackgroundLocation,
             isIgnoringBatteryOptimizations = isIgnoringBattery,
+            hasNotificationPermission = hasNotification,
             hasAllPermissions = hasAll
         )
     }
@@ -106,5 +116,17 @@ class PermissionManager(private val context: Context) {
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
+    }
+
+    /**
+     * 通知权限列表
+     * 仅 Android 13+ 需要运行时授权，低版本返回空数组
+     */
+    fun getNotificationPermissions(): Array<String> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            emptyArray()
+        }
     }
 }

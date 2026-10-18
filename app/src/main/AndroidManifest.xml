@@ -15,6 +15,8 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- AlarmManager 唤醒权限 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Android 13+ 前台服务通知需要运行时授权，否则常驻通知不可见 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
@@ -72,6 +74,19 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.trackmaster.app.ACTION_LOCATION_WAKEUP" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 开机自启广播接收器：重启后恢复定位服务 -->
+        <!-- BOOT_COMPLETED / QUICKBOOT_POWERON 均为系统广播，必须 exported="true" 才能收到 -->
+        <receiver
+            android:name=".BootCompletedReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- 国内部分 ROM 的快速开机广播，与 BOOT_COMPLETED 一并处理 -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 

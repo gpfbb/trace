@@ -37,6 +37,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * 通知权限申请（Android 13+）
+     * 前台服务的常驻通知依赖 POST_NOTIFICATIONS，未授权时用户看不到通知，系统也更容易杀服务
+     */
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.POST_NOTIFICATIONS] ?: false
+        if (granted) {
+            AppLog.d("MainActivity", "通知权限已授予")
+        } else {
+            AppLog.w("MainActivity", "通知权限被拒绝，前台服务通知可能不可见")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -80,6 +95,10 @@ class MainActivity : ComponentActivity() {
         }
 
         requestLocationPermission()
+        // Android 13 以下不需要运行时授权（声明权限即可），只有 13+ 才弹窗申请
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            requestNotificationPermission()
+        }
     }
 
     private fun requestLocationPermission() {
@@ -94,6 +113,15 @@ class MainActivity : ComponentActivity() {
         } else {
             AppLog.d("TrackMaster", "已有定位权限，直接启动定位")
             startLocation()
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            AppLog.d("TrackMaster", "请求通知权限")
+            notificationPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+        } else {
+            AppLog.d("TrackMaster", "已有通知权限")
         }
     }
 
