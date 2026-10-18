@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.trackmaster.app.ui.design.DesignSecondaryButton
 import kotlinx.coroutines.delay
 
 // 液态玻璃拟态卡片组件（高级质感版）
@@ -319,7 +320,14 @@ fun GlassBottomSheetCard(
     }
 }
 
-// 液态玻璃拟态按钮组件（高级质感版）
+// 兼容层：旧代码仍以 GlassButton 形式调用按钮。
+//
+// 旧实现是"半透明渐变 + 双层边框 + 发光阴影"，配色假设是暗色主题
+// （glassPanel() 是半透明深色），文字一律传 Color.White。
+// 新设计系统里 glassPanel() 映射为白色卡片色，于是变成白底白字。
+//
+// 现在把 GlassButton 重定向到设计系统的 SecondaryButton：
+// 无填充 + 强调色文字，无论调用方传什么颜色都能看清。
 @Composable
 fun GlassButton(
     onClick: () -> Unit,
@@ -327,76 +335,12 @@ fun GlassButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit
 ) {
-    var isPressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.93f else 1f,
-        animationSpec = spring(
-            dampingRatio = 0.85f,
-            stiffness = 400f
-        ),
-        label = "buttonScale"
+    DesignSecondaryButton(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 44.dp),
+        enabled = enabled,
+        content = content
     )
-
-    Box(
-        modifier = modifier
-            .scale(scale)
-            .shadow(
-                elevation = if (isPressed) 4.dp else 10.dp,
-                shape = RoundedCornerShape(20.dp),
-                ambientColor = primaryColor().copy(alpha = 0.4f),
-                spotColor = primaryColor().copy(alpha = 0.3f)
-            )
-            .clip(RoundedCornerShape(20.dp))
-            .border(
-                width = 0.5.dp,
-                color = GlassInnerGlow,
-                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-            )
-            .border(
-                width = 1.dp,
-                color = GlassBorder,
-                shape = RoundedCornerShape(20.dp)
-            )
-            .background(
-                brush = if (isPressed) {
-                    Brush.linearGradient(
-                        colors = listOf(primaryColor(), accentColor()),
-                        start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                        end = androidx.compose.ui.geometry.Offset(100f, 100f)
-                    )
-                } else {
-                    Brush.linearGradient(
-                        colors = listOf(glassPanel(), glassPanel()),
-                        start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                        end = androidx.compose.ui.geometry.Offset(100f, 100f)
-                    )
-                }
-            )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(color = primaryColor()),
-                enabled = enabled,
-                onClick = {
-                    isPressed = true
-                    onClick()
-                    isPressed = false
-                }
-            )
-            .graphicsLayer {
-                if (isPressed) {
-                    shadowElevation = 15f
-                    shape = RoundedCornerShape(20.dp)
-                    clip = true
-                }
-            }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            content = content
-        )
-    }
 }
 
 // 液态玻璃拟态浮动操作按钮（统一霓虹珊瑚橙）

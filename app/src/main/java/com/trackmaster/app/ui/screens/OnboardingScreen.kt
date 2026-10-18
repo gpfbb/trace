@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,10 +49,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.trackmaster.app.AppLanguage
 import com.trackmaster.app.AppPreferences
 import com.trackmaster.app.R
@@ -90,7 +95,7 @@ fun OnboardingScreen(
     }.let { remember(it) { it.appPreferences } }
     val scope = rememberCoroutineScope()
 
-    val pagerState = rememberPagerState(pageCount = { SLIDES.size })
+    val pagerState = rememberPagerState(pageCount = { ONBOARDING_PAGE_COUNT })
 
     // 语言状态：用 rememberSaveable 保存枚举名，转屏不丢
     var selectedLanguageName by rememberSaveable {
@@ -98,13 +103,22 @@ fun OnboardingScreen(
     }
     val selectedLanguage = AppLanguage.valueOf(selectedLanguageName)
 
-    var hasLocationPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        )
+    // 权限状态用可变状态保存，并在页面回到前台时重新检查。
+    //
+    // 不能只靠 remember 的初始值：用户可能在系统设置里授予权限再回来，
+    // 也可能在别的页面已经授予过。旧写法只在组合期查一次，
+    // 授权后按钮仍然走"申请权限"分支，看起来像点了没反应。
+    var hasLocationPermission by remember { mutableStateOf(checkLocationPermission(context)) }
+
+    // 权限页出现时重新检查一次。
+    //
+    // 这是关键：HorizontalPager 只组合当前页，权限页被滑走时整页离开组合，
+    // 它内部的 DisposableEffect / LaunchedEffect 也随之销毁。用户可能在
+    // 别的页或系统设置里授予权限，回来时只能靠这里重新读一次。
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage == PERMISSION_PAGE_INDEX) {
+            hasLocationPermission = checkLocationPermission(context)
+        }
     }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -112,19 +126,16 @@ fun OnboardingScreen(
     ) { permissions ->
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        hasLocationPermission = granted ||
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            scope.launch { pagerState.animateScrollToPage(2) }
+        hasLocationPermission = granted || checkLocationPermission(context)
+        // 无论系统回调说授没授，都以实际权限状态为准再决定是否前进
+        if (checkLocationPermission(context)) {
+            scope.launch { pagerState.animateScrollToPage(PERMISSION_PAGE_INDEX + 1) }
         }
     }
 
     fun goNext() {
         scope.launch {
-            val next = (pagerState.currentPage + 1).coerceAtMost(SLIDES.lastIndex)
+            val next = (pagerState.currentPage + 1).coerceAtMost(ONBOARDING_PAGE_COUNT - 1)
             pagerState.animateScrollToPage(next)
         }
     }
@@ -180,7 +191,32 @@ fun OnboardingScreen(
                     }
                 )
                 1 -> MapSdkPage()
-                else -> SlidePage(slide = SLIDES[page])
+                2 -> SlidePage(slide = SLIDES[0])   // 欢迎
+                3 -> {                              // 建围栏 + 申请权限
+                    SlidePageWithActions(slide = SLIDES[1]) {
+                        PrimaryButton(
+                            text = stringResource(R.string.grant_permission),
+                            onClick = {
+                                if (hasLocationPermission) {
+                                    goNext()
+                                } else {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                }
+                            }
+                        )
+                        Spacer(Modifier.height(Space.sm))
+                        SecondaryButton(
+                            text = stringResource(R.string.grant_later),
+                            onClick = { goNext() }
+                        )
+                    }
+                }
+                else -> SlidePage(slide = SLIDES[2]) // 开始追踪
             }
         }
 
@@ -192,7 +228,7 @@ fun OnboardingScreen(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            repeat(SLIDES.size) { index ->
+            repeat(ONBOARDING_PAGE_COUNT) { index ->
                 val isCurrent = pagerState.currentPage == index
                 Box(
                     modifier = Modifier
@@ -218,29 +254,8 @@ fun OnboardingScreen(
                     text = stringResource(R.string.next),
                     onClick = { goNext() }
                 )
-                2 -> {
-                    // 权限页：可以直接申请，也可以稍后再说
-                    PrimaryButton(
-                        text = stringResource(R.string.grant_permission),
-                        onClick = {
-                            if (hasLocationPermission) {
-                                goNext()
-                            } else {
-                                locationPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            }
-                        }
-                    )
-                    SecondaryButton(
-                        text = stringResource(R.string.grant_later),
-                        onClick = { goNext() }
-                    )
-                }
-                SLIDES.lastIndex -> PrimaryButton(
+                3 -> Unit  // 按钮在页内，这里不渲染底部按钮
+                ONBOARDING_PAGE_COUNT - 1 -> PrimaryButton(
                     text = stringResource(R.string.start_using),
                     onClick = { finish() }
                 )
@@ -253,6 +268,34 @@ fun OnboardingScreen(
         }
     }
 }
+
+/** 是否已授予任意一种定位权限。 */
+private fun checkLocationPermission(context: android.content.Context): Boolean {
+    val fine = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    val coarse = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    return fine || coarse
+}
+
+// ============================================================
+// 页面结构
+// ============================================================
+
+/**
+ * 引导页共 5 页：
+ * 0 语言选择 · 1 地图 SDK · 2 欢迎 · 3 建围栏（申请定位权限）· 4 开始追踪
+ *
+ * 权限申请放在第 3 页：那才是在真正要用定位之前。
+ */
+private const val ONBOARDING_PAGE_COUNT = 5
+
+/** 权限申请所在页（"建围栏"页），用于回到该页时重新检查权限状态。 */
+private const val PERMISSION_PAGE_INDEX = 3
 
 // ============================================================
 // 单页：圆角图标 + 标题 + 说明
@@ -289,6 +332,45 @@ private fun SlidePage(slide: OnboardingSlide) {
         title = stringResource(slide.titleRes),
         description = stringResource(slide.descriptionRes)
     )
+}
+
+/** 带页内操作按钮的引导页，用于"建围栏"页的权限申请。 */
+@Composable
+private fun SlidePageWithActions(
+    slide: OnboardingSlide,
+    actions: @Composable () -> Unit
+) {
+    val palette = currentPalette
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = Space.xxxl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        IconTile(
+            icon = slide.icon,
+            containerColor = palette.accent,
+            tint = palette.onAccent,
+            size = 88.dp
+        )
+        Spacer(Modifier.height(Space.xxl))
+        Text(
+            text = stringResource(slide.titleRes),
+            style = AppType.title,
+            color = palette.label,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(Space.md))
+        Text(
+            text = stringResource(slide.descriptionRes),
+            style = AppType.body,
+            color = palette.labelSecondary,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(Space.xxl))
+        actions()
+    }
 }
 
 /** 所有引导页共用的版式。 */

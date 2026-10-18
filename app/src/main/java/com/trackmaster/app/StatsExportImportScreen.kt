@@ -25,6 +25,7 @@ import androidx.core.content.FileProvider
 import com.trackmaster.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.io.File
+import com.trackmaster.app.ui.design.currentPalette
 
 @Composable
 fun StatsExportImportScreen(
@@ -175,7 +176,7 @@ fun StatsExportImportScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0x4D000000)
+                        containerColor = currentPalette.groupedCell
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -191,11 +192,11 @@ fun StatsExportImportScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column {
-                                Text(stringResource(R.string.stay_record), fontSize = 12.sp, color = Color(0xFFBDBDBD))
+                                Text(stringResource(R.string.stay_record), fontSize = 12.sp, color = currentPalette.labelSecondary)
                                 Text(stringResource(R.string.stay_record_count, storageInfo.stayCount), fontWeight = FontWeight.Bold, color = Color.White)
                             }
                             Column {
-                                Text(stringResource(R.string.daily_summary), fontSize = 12.sp, color = Color(0xFFBDBDBD))
+                                Text(stringResource(R.string.daily_summary), fontSize = 12.sp, color = currentPalette.labelSecondary)
                                 Text(
                                     stringResource(R.string.daily_summary_count,
                                         try { dataManager.getAllDailyStayRecords().size } catch (e: Exception) { 0 }),
@@ -204,14 +205,14 @@ fun StatsExportImportScreen(
                                 )
                             }
                             Column {
-                                Text(stringResource(R.string.event_log), fontSize = 12.sp, color = Color(0xFFBDBDBD))
+                                Text(stringResource(R.string.event_log), fontSize = 12.sp, color = currentPalette.labelSecondary)
                                 Text(stringResource(R.string.event_log_count, storageInfo.eventCount), fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     }
                 }
 
-                HorizontalDivider(color = Color(0x30FFFFFF))
+                HorizontalDivider(color = currentPalette.separator)
 
                 // 导出说明
                 Card(
@@ -236,7 +237,7 @@ fun StatsExportImportScreen(
                         Text(
                             stringResource(R.string.about_export_desc),
                             fontSize = 11.sp,
-                            color = Color(0xFFBDBDBD)
+                            color = currentPalette.labelSecondary
                         )
                     }
                 }
@@ -289,7 +290,7 @@ fun StatsExportImportScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0x33000000)
+                        containerColor = currentPalette.groupedCell
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -306,7 +307,7 @@ fun StatsExportImportScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(                            stringResource(R.string.merge_rules_desc),
-                            color = Color(0xFFBDBDBD)
+                            color = currentPalette.labelSecondary
                         )
                     }
                 }

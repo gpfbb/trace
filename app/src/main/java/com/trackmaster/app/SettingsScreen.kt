@@ -33,6 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.utils.AppLog
+import com.trackmaster.app.ui.design.currentPalette
+import androidx.compose.foundation.layout.statusBarsPadding
+import com.trackmaster.app.ui.design.LargeTitle
 
 // 独立的设置页面内容组件
 @Composable
@@ -88,34 +91,12 @@ fun SettingsPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(brush = Brush.verticalGradient(colors = listOf(surfaceColor(), backgroundColor())))
+            .background(currentPalette.background)
+            .statusBarsPadding()
     ) {
-        // 顶部导航栏 - 无返回按钮，作为底部Tab页面
+        // 页面大标题（分组列表风格）
         if (!hideNavBar) {
-            GlassTopCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = stringResource(R.string.settings),
-                        tint = primaryColor(),
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        stringResource(R.string.app_settings),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        color = primaryColor()
-                    )
-                }
-            }
+            LargeTitle(text = stringResource(R.string.app_settings))
         }
 
         // 内容区域
@@ -136,7 +117,7 @@ fun SettingsPage(
                 }
             )
 
-            HorizontalDivider(color = Color(0x30FFFFFF))
+            HorizontalDivider(color = currentPalette.separator)
 
             // 追踪总开关：关闭后停止后台定位并取消定时唤醒
             TrackingToggleCard(
@@ -146,7 +127,7 @@ fun SettingsPage(
                 }
             )
 
-            HorizontalDivider(color = Color(0x30FFFFFF))
+            HorizontalDivider(color = currentPalette.separator)
 
             LocationModeSection(
                 selectedMode = selectedMode,
@@ -157,7 +138,7 @@ fun SettingsPage(
                 }
             )
 
-            HorizontalDivider(color = Color(0x30FFFFFF))
+            HorizontalDivider(color = currentPalette.separator)
 
             // 地图服务切换
             var showMapProviderPicker by remember { mutableStateOf(false) }
@@ -165,7 +146,7 @@ fun SettingsPage(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { showMapProviderPicker = true },
-                colors = CardDefaults.cardColors(containerColor = Color(0x4D000000)),
+                colors = CardDefaults.cardColors(containerColor = currentPalette.groupedCell),
                 shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(0.dp)
             ) {
@@ -183,16 +164,16 @@ fun SettingsPage(
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.map_service), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFFE0E0E0))
+                        Text(stringResource(R.string.map_service), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = currentPalette.label)
                         Text(
                             if (prefs.mapProvider == MapProvider.GOOGLE) stringResource(R.string.google_card_label) else stringResource(R.string.amap_card_label),
-                            fontSize = 13.sp, color = Color(0xFFBDBDBD)
+                            fontSize = 13.sp, color = currentPalette.labelSecondary
                         )
                     }
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = null,
-                        tint = Color(0xFFBDBDBD),
+                        tint = currentPalette.labelSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -247,7 +228,7 @@ fun SettingsPage(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { showLanguagePicker = true },
-                colors = CardDefaults.cardColors(containerColor = Color(0x4D000000)),
+                colors = CardDefaults.cardColors(containerColor = currentPalette.groupedCell),
                 shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(0.dp)
             ) {
@@ -265,26 +246,26 @@ fun SettingsPage(
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.language), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFFE0E0E0))
+                        Text(stringResource(R.string.language), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = currentPalette.label)
                         Text(
                             when (currentLanguage) {
                                 AppLanguage.CHINESE -> stringResource(R.string.chinese)
                                 AppLanguage.ENGLISH -> stringResource(R.string.english)
                                 AppLanguage.MALAY -> stringResource(R.string.malay)
                             },
-                            fontSize = 13.sp, color = Color(0xFFBDBDBD)
+                            fontSize = 13.sp, color = currentPalette.labelSecondary
                         )
                     }
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = null,
-                        tint = Color(0xFFBDBDBD),
+                        tint = currentPalette.labelSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
-            HorizontalDivider(color = Color(0x30FFFFFF))
+            HorizontalDivider(color = currentPalette.separator)
 
             // 主题选择
             Card(
@@ -292,7 +273,7 @@ fun SettingsPage(
                     .fillMaxWidth()
                     .clickable { showThemePicker = true },
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0x4D000000)
+                    containerColor = currentPalette.groupedCell
                 ),
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -312,7 +293,7 @@ fun SettingsPage(
                                 stringResource(R.string.theme),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = Color(0xFFE0E0E0)
+                                color = currentPalette.label
                             )
                             Text(
                                 stringResource(
@@ -326,20 +307,20 @@ fun SettingsPage(
                                     }
                                 ),
                                 fontSize = 13.sp,
-                                color = Color(0xFFBDBDBD)
+                                color = currentPalette.labelSecondary
                             )
                         }
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = null,
-                            tint = Color(0xFFBDBDBD),
+                            tint = currentPalette.labelSecondary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                 }
             }
 
-            HorizontalDivider(color = Color(0x30FFFFFF))
+            HorizontalDivider(color = currentPalette.separator)
 
             if (onOpenDataImportExport != null) {
                 SettingsMenuCard(
@@ -349,7 +330,7 @@ fun SettingsPage(
                     tint = primaryColor(),
                     onClick = onOpenDataImportExport
                 )
-                HorizontalDivider(color = Color(0x30FFFFFF))
+                HorizontalDivider(color = currentPalette.separator)
             }
 
             // 重新计算父子关系
@@ -481,7 +462,7 @@ fun SettingsPage(
                 )
             }
 
-            HorizontalDivider(color = Color(0x30FFFFFF))
+            HorizontalDivider(color = currentPalette.separator)
 
             // 高级设置
             Card(
@@ -489,7 +470,7 @@ fun SettingsPage(
                     .fillMaxWidth()
                     .clickable { showAdvancedSettings = !showAdvancedSettings },
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0x4D000000)
+                    containerColor = currentPalette.groupedCell
                 ),
                 shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(0.dp)
@@ -510,18 +491,18 @@ fun SettingsPage(
                                 stringResource(R.string.advanced_settings),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = Color(0xFFE0E0E0)
+                                color = currentPalette.label
                             )
                             Text(
                                 stringResource(R.string.advanced_settings_desc),
                                 fontSize = 13.sp,
-                                color = Color(0xFFBDBDBD)
+                                color = currentPalette.labelSecondary
                             )
                         }
                         Icon(
                             imageVector = if (showAdvancedSettings) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                             contentDescription = if (showAdvancedSettings) stringResource(R.string.collapse) else stringResource(R.string.expand),
-                            tint = Color(0xFFBDBDBD),
+                            tint = currentPalette.labelSecondary,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -552,7 +533,7 @@ fun SettingsPage(
                 }
             }
 
-            HorizontalDivider(color = Color(0x30FFFFFF))
+            HorizontalDivider(color = currentPalette.separator)
 
             InfoSection()
 
@@ -634,7 +615,7 @@ private fun SettingsMenuCard(
             .fillMaxWidth()
             .clickable { onClick() },
         colors = CardDefaults.cardColors(
-            containerColor = Color(0x4D000000)
+            containerColor = currentPalette.groupedCell
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -657,18 +638,18 @@ private fun SettingsMenuCard(
                     title,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
-                    color = Color(0xFFE0E0E0)
+                    color = currentPalette.label
                 )
                 Text(
                     description,
                     fontSize = 13.sp,
-                    color = Color(0xFFBDBDBD)
+                    color = currentPalette.labelSecondary
                 )
             }
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = Color(0xFFBDBDBD)
+                tint = currentPalette.labelSecondary
             )
         }
     }
@@ -782,7 +763,8 @@ fun PermissionSectionContent(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0x4DFF5252)
+                    // 危险色淡底 + 危险色文字：两种模式下都能读到 4.5:1 以上
+                    containerColor = currentPalette.danger.copy(alpha = 0.12f)
                 ),
                 shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(0.dp)
@@ -791,7 +773,7 @@ fun PermissionSectionContent(
                     Text(
                         stringResource(R.string.permission_warning),
                         fontSize = 13.sp,
-                        color = Color(0xFFFFCDD2)
+                        color = currentPalette.danger
                     )
                 }
             }
@@ -812,7 +794,7 @@ fun PermissionItem(
             containerColor = if (isGranted)
                 Color(0x33FF7F50)
             else
-                Color(0x4D2A221C)
+                currentPalette.groupedCell
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -828,12 +810,12 @@ fun PermissionItem(
                 Text(
                     text = title,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFFE0E0E0)
+                    color = currentPalette.label
                 )
                 Text(
                     text = description,
                     fontSize = 12.sp,
-                    color = Color(0xFFBDBDBD)
+                    color = currentPalette.labelSecondary
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -860,7 +842,7 @@ fun TrackingToggleCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0x4D000000)),
+        colors = CardDefaults.cardColors(containerColor = currentPalette.groupedCell),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
@@ -875,12 +857,12 @@ fun TrackingToggleCard(
                 Text(
                     text = stringResource(R.string.tracking_enabled),
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFFE0E0E0)
+                    color = currentPalette.label
                 )
                 Text(
                     text = stringResource(R.string.tracking_enabled_desc),
                     fontSize = 12.sp,
-                    color = Color(0xFFBDBDBD),
+                    color = currentPalette.labelSecondary,
                     lineHeight = 16.sp
                 )
             }
@@ -939,7 +921,7 @@ fun LocationModeItem(
             containerColor = if (isSelected)
                 Color(0x4DFF7F50)
             else
-                Color(0x4D2A221C)
+                currentPalette.groupedCell
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp),
@@ -964,12 +946,12 @@ fun LocationModeItem(
                 Text(
                     text = title,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFFE0E0E0)
+                    color = currentPalette.label
                 )
                 Text(
                     text = description,
                     fontSize = 12.sp,
-                    color = Color(0xFFBDBDBD),
+                    color = currentPalette.labelSecondary,
                     lineHeight = 16.sp
                 )
             }
@@ -989,7 +971,7 @@ fun InfoSection() {
         Text(
             "1. ${stringResource(R.string.usage_tip_1)}\n2. ${stringResource(R.string.usage_tip_2)}\n3. ${stringResource(R.string.usage_tip_3)}\n4. ${stringResource(R.string.usage_tip_4)}",
             fontSize = 13.sp,
-            color = Color(0xFFBDBDBD),
+            color = currentPalette.labelSecondary,
             lineHeight = 18.sp
         )
     }
@@ -1062,7 +1044,7 @@ fun AdvancedSettingsSection(
                     stringResource(R.string.stationary_threshold),
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
-                    color = Color(0xFFE0E0E0)
+                    color = currentPalette.label
                 )
                 Text(
                     "${stationaryThreshold.toInt()}m",
@@ -1085,7 +1067,7 @@ fun AdvancedSettingsSection(
             Text(
                 stringResource(R.string.stationary_threshold_desc),
                 fontSize = 11.sp,
-                color = Color(0xFF9E9E9E)
+                color = currentPalette.labelTertiary
             )
         }
 
@@ -1099,7 +1081,7 @@ fun AdvancedSettingsSection(
                     stringResource(R.string.boundary_buffer),
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
-                    color = Color(0xFFE0E0E0)
+                    color = currentPalette.label
                 )
                 Text(
                     "${boundaryBuffer.toInt()}m",
@@ -1122,7 +1104,7 @@ fun AdvancedSettingsSection(
             Text(
                 stringResource(R.string.boundary_buffer_desc),
                 fontSize = 11.sp,
-                color = Color(0xFF9E9E9E)
+                color = currentPalette.labelTertiary
             )
         }
 
@@ -1136,7 +1118,7 @@ fun AdvancedSettingsSection(
                     stringResource(R.string.drift_threshold),
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
-                    color = Color(0xFFE0E0E0)
+                    color = currentPalette.label
                 )
                 Text(
                     "${driftThreshold.toInt()}m",
@@ -1159,7 +1141,7 @@ fun AdvancedSettingsSection(
             Text(
                 stringResource(R.string.drift_threshold_desc),
                 fontSize = 11.sp,
-                color = Color(0xFF9E9E9E)
+                color = currentPalette.labelTertiary
             )
         }
     }

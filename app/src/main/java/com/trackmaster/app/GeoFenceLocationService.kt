@@ -1,5 +1,6 @@
 package com.trackmaster.app
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,6 +9,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -17,6 +19,7 @@ import android.os.Build
 import android.os.IBinder
 import com.trackmaster.app.utils.AppLog
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.amap.api.location.AMapLocation
 import com.trackmaster.app.locationservice.Location
 import com.trackmaster.app.locationservice.LocationType
@@ -140,14 +143,75 @@ class GeoFenceLocationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         AppLog.d(TAG, "定位服务启动")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        } else {
-            startForeground(NOTIFICATION_ID, createNotification())
+
+        // 通过 startForegroundService() 拉起的服务，系统要求必须在 5 秒内
+        // 调用一次 startForeground()，否则直接抛
+        // ForegroundServiceDidNotStartInTimeException 把进程带崩。
+        // 所以"不能以定位类型常驻"的分支也必须先降级成一个普通前台服务，
+        // 再自停——只 stopSelf() 不满足这个契约。
+
+        // 没有定位权限时：Android 14 (API 34) 起，以
+        // FOREGROUND_SERVICE_TYPE_LOCATION 启动前台服务要求已授予
+        // ACCESS_FINE_LOCATION 或 ACCESS_COARSE_LOCATION，否则
+        // startForeground() 抛 SecurityException。用户首次安装后在引导页
+        // 点"稍后授权"就会走到这里。
+        if (!hasLocationPermission()) {
+            AppLog.w(TAG, "缺少定位权限，停止服务")
+            stopForegroundServiceSafely()
+            stopSelf()
+            return START_NOT_STICKY
         }
+
+        // startForeground 也可能抛 ForegroundServiceStartNotAllowedException
+        // （如在后台被 Alarm 拉起但处于受限状态）。捕获它让服务安全退出。
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    createNotification(),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, createNotification())
+            }
+        } catch (e: Exception) {
+            AppLog.e(TAG, "启动前台服务失败，停止服务", e)
+            stopForegroundServiceSafely()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         startLocationWithFastFirst()
         powerSaveController.startPeriodicCheck()
         return START_STICKY
+    }
+
+    /**
+     * 兜底满足 startForegroundService() 的"必须尽快 startForeground()"契约。
+     *
+     * 用不带类型的普通前台服务（只需要普通通知权限，不需要定位权限），
+     * 启动后立刻移除。任何异常都吞掉——这一步本身就是为了避免崩溃。
+     */
+    private fun stopForegroundServiceSafely() {
+        try {
+            startForeground(NOTIFICATION_ID, createNotification())
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (e: Exception) {
+            AppLog.w(TAG, "降级前台服务失败: ${e.message}")
+        }
+    }
+
+    /** 是否已授予任意一种定位权限。 */
+    private fun hasLocationPermission(): Boolean {
+        val fine = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        return fine || coarse
     }
 
     override fun onBind(intent: Intent?): IBinder = binder

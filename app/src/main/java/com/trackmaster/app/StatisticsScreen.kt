@@ -31,6 +31,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.utils.AppLog
+import com.trackmaster.app.ui.design.currentPalette
 
 val chartColors = listOf(
     Color(0xFF6366F1),
@@ -240,7 +241,7 @@ fun StatisticsScreen(
                         Text(
                             stringResource(R.string.no_statistics_data),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFFBDBDBD)
+                            color = currentPalette.labelSecondary
                         )
                     }
                 } else {
@@ -484,7 +485,7 @@ fun NumberPicker(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = Color(0x4D000000)
+            containerColor = currentPalette.groupedCell
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -513,7 +514,7 @@ fun NumberPicker(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFFBDBDBD)
+                color = currentPalette.labelSecondary
             )
             IconButton(
                 onClick = {
@@ -539,7 +540,7 @@ fun TimeDimensionSelector(
             .fillMaxWidth()
             .height(48.dp)
             .background(
-                color = Color(0x4D2A221C),
+                color = currentPalette.groupedCell,
                 shape = RoundedCornerShape(24.dp)
             )
     ) {
@@ -588,7 +589,7 @@ fun TimeDimensionSelector(
                         color = if (selectedDimension == dimension) 
                             Color.White 
                             else 
-                            Color(0xFFBDBDBD),
+                            currentPalette.labelSecondary,
                         fontWeight = if (selectedDimension == dimension) 
                             FontWeight.Bold 
                             else 
@@ -612,7 +613,7 @@ fun FenceTreeSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0x4D000000)
+            containerColor = currentPalette.groupedCell
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -635,7 +636,7 @@ fun FenceTreeSection(
                 Text(
                     stringResource(R.string.total_duration, formatDuration(totalDuration)),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFBDBDBD)
+                    color = currentPalette.labelSecondary
                 )
             }
 
@@ -676,7 +677,7 @@ private fun FenceTreeItem(
                 .fillMaxWidth()
                 .padding(start = indentPadding),
             colors = CardDefaults.cardColors(
-                containerColor = if (node.depth == 0) Color(0x332A221C) else Color(0x1A2A221C)
+                containerColor = if (node.depth == 0) currentPalette.groupedCell else currentPalette.groupedCell
             ),
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(0.dp)
@@ -727,7 +728,7 @@ private fun FenceTreeItem(
                             text = node.fenceName,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (node.depth == 0) FontWeight.Bold else FontWeight.Medium,
-                            color = Color(0xFFE0E0E0),
+                            color = currentPalette.label,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
@@ -752,7 +753,7 @@ private fun FenceTreeItem(
                         Text(
                             text = formatDuration(node.totalDurationSeconds),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFBDBDBD)
+                            color = currentPalette.labelSecondary
                         )
                     }
                 }
@@ -762,7 +763,7 @@ private fun FenceTreeItem(
                         .width(50.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0x332A221C))
+                        .background(currentPalette.groupedCell)
                 ) {
                     Box(
                         modifier = Modifier
@@ -806,7 +807,7 @@ fun DurationProgressSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0x4D000000)
+            containerColor = currentPalette.groupedCell
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -829,7 +830,7 @@ fun DurationProgressSection(
                 Text(
                     stringResource(R.string.total_duration, formatDuration(totalDuration)),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFBDBDBD)
+                    color = currentPalette.labelSecondary
                 )
             }
 
@@ -844,7 +845,7 @@ fun DurationProgressSection(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = Color(0x332A221C)
+                            containerColor = currentPalette.groupedCell
                         ),
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(0.dp)
@@ -865,7 +866,7 @@ fun DurationProgressSection(
                                         .fillMaxSize()
                                         .padding(4.dp)
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0x33FFFFFF))
+                                        .background(currentPalette.separator)
                                 ) {
                                     Text(
                                         text = "${index + 1}",
@@ -885,7 +886,7 @@ fun DurationProgressSection(
                                     text = stat.fenceName,
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color(0xFFE0E0E0),
+                                    color = currentPalette.label,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -901,7 +902,7 @@ fun DurationProgressSection(
                                     Text(
                                         text = formatDuration(stat.totalDurationSeconds),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFFBDBDBD)
+                                        color = currentPalette.labelSecondary
                                     )
                                 }
                             }
@@ -911,7 +912,7 @@ fun DurationProgressSection(
                                     .width(60.dp)
                                     .height(4.dp)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(Color(0x332A221C))
+                                    .background(currentPalette.groupedCell)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -939,7 +940,7 @@ fun LeaderboardSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0x4D000000)
+            containerColor = currentPalette.groupedCell
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -986,10 +987,10 @@ fun LeaderboardItem(
                     1 -> NeonCoral.copy(alpha = 0.2f)
                     2 -> NeonAmber.copy(alpha = 0.2f)
                     3 -> Color(0xFF8B5CF6).copy(alpha = 0.2f)
-                    else -> Color(0x332A221C)
+                    else -> currentPalette.groupedCell
                 }
             } else {
-                Color(0x332A221C)
+                currentPalette.groupedCell
             }
         ),
         shape = RoundedCornerShape(12.dp),
@@ -1009,7 +1010,7 @@ fun LeaderboardItem(
                             1 -> Color(0xFFFFD700)
                             2 -> Color(0xFFC0C0C0)
                             3 -> Color(0xFFCD7F32)
-                            else -> Color(0x4D2A221C)
+                            else -> currentPalette.groupedCell
                         }
                     ),
                 contentAlignment = Alignment.Center
@@ -1018,7 +1019,7 @@ fun LeaderboardItem(
                     text = rank.toString(),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (rank <= 3) Color.Black else Color(0xFFBDBDBD)
+                    color = if (rank <= 3) Color.Black else currentPalette.labelSecondary
                 )
             }
             
@@ -1026,7 +1027,7 @@ fun LeaderboardItem(
                 text = name,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFFE0E0E0),
+                color = currentPalette.label,
                 modifier = Modifier.weight(1f)
             )
             
@@ -1043,7 +1044,7 @@ fun LeaderboardItem(
                 Text(
                     text = percentage,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFBDBDBD)
+                    color = currentPalette.labelSecondary
                 )
             }
         }

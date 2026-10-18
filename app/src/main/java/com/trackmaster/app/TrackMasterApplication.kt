@@ -190,6 +190,13 @@ class TrackMasterApplication : Application() {
             AppLog.d(TAG, "用户已关闭追踪，跳过启动定位服务")
             return
         }
+        // 没有定位权限时不要启动。Android 14 起前台定位服务在缺权限时
+        // startForeground() 会抛 SecurityException 把进程带崩。
+        // 服务内部也有一道同样的检查，这里是第二道，避免无谓地起服务。
+        if (!hasLocationPermission()) {
+            AppLog.d(TAG, "缺少定位权限，跳过启动定位服务")
+            return
+        }
         if (!serviceBound) {
             val intent = Intent(this, GeoFenceLocationService::class.java)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -200,6 +207,19 @@ class TrackMasterApplication : Application() {
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
             AppLog.d(TAG, "启动定位服务")
         }
+    }
+
+    /** 是否已授予任意一种定位权限。 */
+    fun hasLocationPermission(): Boolean {
+        val fine = androidx.core.content.ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val coarse = androidx.core.content.ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        return fine || coarse
     }
 
     /**

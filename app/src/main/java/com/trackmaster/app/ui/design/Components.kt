@@ -360,6 +360,33 @@ fun SecondaryButton(
     }
 }
 
+/**
+ * 次按钮的"通用内容"版本。
+ *
+ * [SecondaryButton] 只接受字符串，无法塞图标或自定义排版。
+ * 旧代码里的 `GlassButton` 是 RowScope 内容槽，迁移期需要一个能接
+ * 任意内容的等价物，否则按钮里的图标和文字会被丢掉。
+ */
+@Composable
+fun DesignSecondaryButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit
+) {
+    val palette = currentPalette
+    Row(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(Radius.pill))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = Space.md, vertical = Space.sm),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        content = content
+    )
+}
+
 // ============================================================
 // 状态徽章
 // ============================================================

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.sp
 import com.trackmaster.app.StatisticsManager
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.ui.theme.*
+import com.trackmaster.app.ui.design.currentPalette
 
 /**
  * 真空期信息提示组件

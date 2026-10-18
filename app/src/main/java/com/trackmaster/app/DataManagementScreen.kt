@@ -30,6 +30,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import com.trackmaster.app.R
 import com.trackmaster.app.ui.theme.*
+import com.trackmaster.app.ui.design.currentPalette
 
 @Composable
 fun DataManagementScreen(
@@ -124,7 +125,7 @@ fun DataManagementScreen(
             ) {
                 StorageInfoCard(storageInfo = storageInfo)
 
-                HorizontalDivider(color = Color(0x30FFFFFF))
+                HorizontalDivider(color = currentPalette.separator)
 
                 // Export Import Section
                 ExportImportSection(
@@ -197,7 +198,7 @@ fun DataManagementScreen(
                     importMessage = importMessage
                 )
 
-                HorizontalDivider(color = Color(0x30FFFFFF))
+                HorizontalDivider(color = currentPalette.separator)
 
                 // Auto Cleanup Section
                 AutoCleanupSection(
@@ -215,14 +216,14 @@ fun DataManagementScreen(
                     }
                 )
 
-                HorizontalDivider(color = Color(0x30FFFFFF))
+                HorizontalDivider(color = currentPalette.separator)
 
                 // Delete Section
                 DeleteSection(
                     onDeleteAll = { showDeleteDialog = true }
                 )
 
-                HorizontalDivider(color = Color(0x30FFFFFF))
+                HorizontalDivider(color = currentPalette.separator)
 
                 // Exported Files Section
                 ExportedFilesSection(
@@ -301,7 +302,7 @@ fun DataManagementScreen(
                 Text(
                     successMessage,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFE0E0E0)
+                    color = currentPalette.label
                 )
             },
             confirmButton = {
@@ -318,7 +319,7 @@ private fun StorageInfoCard(storageInfo: StorageInfo) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0x4D000000)
+            containerColor = currentPalette.groupedCell
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -363,7 +364,7 @@ private fun StorageStatItem(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFBDBDBD)
+            color = currentPalette.labelSecondary
         )
     }
 }
@@ -400,7 +401,7 @@ private fun ExportImportSection(
                         modifier = Modifier.fillMaxWidth(),
                         color = NeonCoral
                     )
-                    Text(text = exportMessage, style = MaterialTheme.typography.bodySmall, color = Color(0xFFE0E0E0))
+                    Text(text = exportMessage, style = MaterialTheme.typography.bodySmall, color = currentPalette.label)
                 }
             }
         } else if (isImporting) {
@@ -414,7 +415,7 @@ private fun ExportImportSection(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = NeonAmber)
-                    Text(text = importMessage, style = MaterialTheme.typography.bodySmall, color = Color(0xFFE0E0E0))
+                    Text(text = importMessage, style = MaterialTheme.typography.bodySmall, color = currentPalette.label)
                 }
             }
         } else {
@@ -472,12 +473,12 @@ private fun AutoCleanupSection(
                 Text(
                     stringResource(R.string.auto_cleanup_desc),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFE0E0E0)
+                    color = currentPalette.label
                 )
                 Text(
                     stringResource(R.string.keep_recent_days, autoCleanupDays),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFBDBDBD)
+                    color = currentPalette.labelSecondary
                 )
             }
             TextButton(onClick = onOpenSettings) {
@@ -497,7 +498,7 @@ private fun AutoCleanupSection(
         Text(
             stringResource(R.string.cleanup_reminder),
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF9E9E9E)
+            color = currentPalette.labelTertiary
         )
     }
 }
@@ -516,7 +517,7 @@ private fun AutoCleanupDialog(
         title = { Text(stringResource(R.string.auto_cleanup_dialog_title), color = NeonCoral) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.auto_cleanup_dialog_desc), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFE0E0E0))
+                Text(stringResource(R.string.auto_cleanup_dialog_desc), style = MaterialTheme.typography.bodyMedium, color = currentPalette.label)
                 Spacer(modifier = Modifier.height(8.dp))
                 options.forEach { days ->
                     Row(
@@ -532,7 +533,7 @@ private fun AutoCleanupDialog(
                             colors = RadioButtonDefaults.colors(selectedColor = NeonCoral)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.days_option, days), color = Color(0xFFE0E0E0))
+                        Text(stringResource(R.string.days_option, days), color = currentPalette.label)
                     }
                 }
             }
@@ -562,7 +563,7 @@ private fun DeleteSection(onDeleteAll: () -> Unit) {
         Text(
             stringResource(R.string.delete_data_desc),
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFBDBDBD)
+            color = currentPalette.labelSecondary
         )
         GlassButton(
             onClick = onDeleteAll,
@@ -589,7 +590,7 @@ private fun ExportedFilesSection(
             color = NeonCoral
         )
         if (files.isEmpty()) {
-            Text(stringResource(R.string.no_exported_files), style = MaterialTheme.typography.bodySmall, color = Color(0xFFBDBDBD))
+            Text(stringResource(R.string.no_exported_files), style = MaterialTheme.typography.bodySmall, color = currentPalette.labelSecondary)
         } else {
             files.take(5).forEach { file ->
                 FileItem(
@@ -607,7 +608,7 @@ private fun FileItem(file: File, onDelete: () -> Unit, onImport: () -> Unit) {
     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onImport() },
-        colors = CardDefaults.cardColors(containerColor = Color(0x4D2A221C)),
+        colors = CardDefaults.cardColors(containerColor = currentPalette.groupedCell),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
@@ -617,11 +618,11 @@ private fun FileItem(file: File, onDelete: () -> Unit, onImport: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(text = file.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = Color(0xFFE0E0E0))
+                Text(text = file.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = currentPalette.label)
                 Text(
                     text = "${dateFormat.format(Date(file.lastModified()))} · %.1f KB".format(file.length() / 1024.0),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFBDBDBD)
+                    color = currentPalette.labelSecondary
                 )
                 Text(text = stringResource(R.string.click_to_import), style = MaterialTheme.typography.labelSmall, color = NeonCoral)
             }
@@ -648,11 +649,11 @@ private fun DeleteOptionsDialog(onDismiss: () -> Unit, onConfirm: (Date?) -> Uni
                 Text(stringResource(R.string.delete_warning), color = Danger, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = deleteAll, onCheckedChange = { deleteAll = it; if (it) deleteBefore = false }, colors = CheckboxDefaults.colors(checkedColor = NeonCoral))
-                    Text(stringResource(R.string.delete_all_data), color = Color(0xFFE0E0E0))
+                    Text(stringResource(R.string.delete_all_data), color = currentPalette.label)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = deleteBefore, onCheckedChange = { deleteBefore = it; if (it) deleteAll = false }, colors = CheckboxDefaults.colors(checkedColor = NeonCoral))
-                    Text(stringResource(R.string.delete_before_date), color = Color(0xFFE0E0E0))
+                    Text(stringResource(R.string.delete_before_date), color = currentPalette.label)
                 }
             }
         },
