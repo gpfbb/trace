@@ -93,9 +93,17 @@ class StatisticsManager(private val context: Context) {
         val statsMap = mutableMapOf<String, FenceStatisticsBuilder>()
 
         // 添加已完成的分天停留记录
+        // 旧数据里 fenceName 列存的是 fenceId（写入侧的 bug，已修），
+        // 这里做显示层兜底：确认是 id 时才回退到围栏表里的当前名字。
+        val nameById = dbHelper.getAllFences().associate { it.id to it.name }
+
         for (record in allDailyRecords) {
             val fenceId = record.fenceId
-            val fenceName = record.fenceName
+            val fenceName = com.trackmaster.app.data.StayRecordNameResolver.resolve(
+                storedName = record.fenceName,
+                fenceId = fenceId,
+                nameById = nameById
+            )
 
             val builder = statsMap.getOrPut(fenceId) {
                 FenceStatisticsBuilder(fenceId = fenceId, fenceName = fenceName)

@@ -110,6 +110,13 @@ class DataManager(private val context: Context) {
 
             onProgress?.invoke(40, "生成导出文件...")
 
+            // 旧版本把 fenceId 当成 fenceName 落库，导出时若原样写出，
+            // 用户看到的 JSON 里全是 UUID。这里按围栏表修正一次。
+            val nameById = allFences.associate { it.id to it.name }
+            fun exportName(storedName: String, fenceId: String): String =
+                com.trackmaster.app.data.StayRecordNameResolver
+                    .resolve(storedName, fenceId, nameById)
+
             val json = JSONObject()
             json.put("version", "1.0")
             json.put("exportTime", dateTimeFormat.get().format(Date()))
@@ -151,7 +158,7 @@ class DataManager(private val context: Context) {
                 val eventJson = JSONObject()
                 eventJson.put("id", event.id)
                 eventJson.put("fenceId", event.fenceId)
-                eventJson.put("fenceName", event.fenceName)
+                eventJson.put("fenceName", exportName(event.fenceName, event.fenceId))
                 eventJson.put("action", event.action.name)
                 eventJson.put("time", dateTimeFormat.get().format(event.time))
                 eventJson.put("latitude", event.latitude)
@@ -168,7 +175,7 @@ class DataManager(private val context: Context) {
             filteredStays.forEach { stay ->
                 val stayJson = JSONObject()
                 stayJson.put("fenceId", stay.fenceId)
-                stayJson.put("fenceName", stay.fenceName)
+                stayJson.put("fenceName", exportName(stay.fenceName, stay.fenceId))
                 stayJson.put("enterTime", dateTimeFormat.get().format(stay.enterTime))
                 stayJson.put("exitTime", stay.exitTime?.let { dateTimeFormat.get().format(it) })
                 stayJson.put("durationSeconds", stay.durationSeconds)
@@ -182,7 +189,7 @@ class DataManager(private val context: Context) {
                 val dailyJson = JSONObject()
                 dailyJson.put("date", daily.date)
                 dailyJson.put("fenceId", daily.fenceId)
-                dailyJson.put("fenceName", daily.fenceName)
+                dailyJson.put("fenceName", exportName(daily.fenceName, daily.fenceId))
                 dailyJson.put("duration", daily.totalDurationSeconds)
                 dailyStaysArray.put(dailyJson)
             }

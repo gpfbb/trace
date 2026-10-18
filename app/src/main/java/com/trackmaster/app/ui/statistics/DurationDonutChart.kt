@@ -131,6 +131,14 @@ data class DonutEntry(
 const val OTHER_SEGMENT_ID = "__other__"
 
 /**
+ * 相邻扇段之间留的角度缝隙。
+ *
+ * 只影响绘制，不影响 [DonutSegment.sweepAngle]——占比计算和角度累加
+ * 仍然是连续的（单测也据此校验"总和必须是 360"）。
+ */
+private const val SEGMENT_GAP_DEGREES = 1.5f
+
+/**
  * 画环形图 + 图例。
  *
  * @param segments 由 [buildDonutSegments] 算好的扇段
@@ -176,11 +184,18 @@ fun DurationDonutChart(
 
                 // Compose 的 drawArc 起始角 0 在 3 点方向，顺时针。
                 // 这里减 90 让 0 度落在 12 点方向，符合直觉。
+                //
+                // 每段之间留一条固定角度的缝。用户给多个围栏选同一个颜色
+                // 是常见情况（默认就是红色），没有缝的话环看起来是完整一圈，
+                // 分不出有几段、边界在哪。
+                val gapDegrees = if (segments.size > 1) SEGMENT_GAP_DEGREES else 0f
                 for (segment in segments) {
+                    val drawnSweep = (segment.sweepAngle - gapDegrees).coerceAtLeast(0f)
+                    if (drawnSweep <= 0f) continue
                     drawArc(
                         color = segment.color,
                         startAngle = segment.startAngle - 90f,
-                        sweepAngle = segment.sweepAngle,
+                        sweepAngle = drawnSweep,
                         useCenter = false,
                         topLeft = topLeft,
                         size = arcSize,

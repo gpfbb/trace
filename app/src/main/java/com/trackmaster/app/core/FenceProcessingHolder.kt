@@ -92,7 +92,17 @@ class FenceProcessingHolder(
             // 而不是 onLocationUpdate 之后的最新状态（可能导致TOCTOU竞态）
             // 使用上面捕获的快照
             if (closedSeg != null) {
-                handleFenceExit(closedSeg.leafGeofenceId, matchedFenceIdsSnapshot, location)
+                // 优先用 Engine 在生成 segment 时快照下来的名字；
+                // 老数据或围栏已被删除时回退到当前围栏表，最后才退回 id。
+                val exitFenceName = closedSeg.leafGeofenceName
+                    ?: geoFences.firstOrNull { it.id == closedSeg.leafGeofenceId }?.name
+                    ?: closedSeg.leafGeofenceId
+                handleFenceExit(
+                    fenceId = closedSeg.leafGeofenceId,
+                    fenceName = exitFenceName,
+                    matchedFenceIdsSnapshot = matchedFenceIdsSnapshot,
+                    location = location
+                )
             }
             handleAllMatchedFences(location, closedSeg?.leafGeofenceId, fix)
         }
@@ -187,9 +197,22 @@ class FenceProcessingHolder(
     // 内部方法
     // ============================================================
 
-    private fun handleFenceExit(fenceId: String, matchedFenceIdsSnapshot: List<String>, location: Location) {
-        recordFenceEvent(fenceId, fenceId, GeoFenceAction.EXIT, location)
-        stayDurationManager.onFenceExit(fenceId, fenceId, Date(location.timestamp))
+    /**
+     * 处理围栏退出。
+     *
+     * @param fenceName 围栏的**显示名**。这里必须传名字而不是 id——
+     *   退出事件、stays、daily_stays 三处都会把它当成"当时的围栏名"落库。
+     *   早先这里三个参数都传了 `fenceId`，导致统计页和首页的"本月常去"
+     *   直接显示一串 UUID。
+     */
+    private fun handleFenceExit(
+        fenceId: String,
+        fenceName: String,
+        matchedFenceIdsSnapshot: List<String>,
+        location: Location
+    ) {
+        recordFenceEvent(fenceId, fenceName, GeoFenceAction.EXIT, location)
+        stayDurationManager.onFenceExit(fenceId, fenceName, Date(location.timestamp))
         fenceEnterTimes.remove(fenceId)
 
         val parentId = fenceTreeManager.getParent(fenceId)
@@ -197,7 +220,7 @@ class FenceProcessingHolder(
         if (parentId != null && matchedFenceIdsSnapshot.contains(parentId)) {
             stayDurationManager.transferChildDurationToParent(fenceId, parentId, Date(location.timestamp))
         }
-        persistentStateManager.saveLastExitState(fenceId, fenceId, Date(location.timestamp))
+        persistentStateManager.saveLastExitState(fenceId, fenceName, Date(location.timestamp))
         persistentStateManager.clearCurrentFenceState()
     }
 

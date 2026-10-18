@@ -3,6 +3,7 @@ package com.trackmaster.app.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.trackmaster.app.DailyStayRecord
+import com.trackmaster.app.data.StayRecordNameResolver
 import com.trackmaster.app.data.GeoFenceAction
 import com.trackmaster.app.data.repository.SessionRepository
 import kotlinx.coroutines.Dispatchers
@@ -138,24 +139,36 @@ class HomeViewModel(
     private fun updateMonthTopFences() {
         viewModelScope.launch(Dispatchers.IO) {
             val calendar = Calendar.getInstance()
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-            val allDailyRecords = mutableListOf<DailyStayRecord>()
+            // dateKey 口径必须与写入方一致（StayDurationManager 用 Locale.US），
+            // 否则非拉丁语系设备上生成不同格式的 key，daily_stays 会查不到。
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
             calendar.set(Calendar.DAY_OF_MONTH, 1)
-            val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+            val monthStart = dateFormat.format(calendar.time)
+            calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
+            val monthEnd = dateFormat.format(calendar.time)
 
-            for (day in 1..daysInMonth) {
-                calendar.set(Calendar.DAY_OF_MONTH, day)
-                val dateKey = dateFormat.format(calendar.time)
-                allDailyRecords.addAll(sessionRepo.getDailyStayRecordsByDate(dateKey))
-            }
+            // 一次范围查询，不再按天循环 31 次
+            val allDailyRecords = sessionRepo.getDailyStayRecordsByDateRange(monthStart, monthEnd)
+            val nameById = sessionRepo.getFenceNamesById()
 
-        val fenceDurations = allDailyRecords
-            .groupBy { it.fenceName }
-            .mapValues { (_, records) -> records.sumOf { it.totalDurationSeconds } }
-            .map { FenceDurationStats(it.key, it.value) }
-            .sortedByDescending { it.totalDurationSeconds }
-            .take(3)
+            val fenceDurations = allDailyRecords
+                // 按 fenceId 聚合，显示名单独解析——旧数据里 fenceName 存的是 id
+                .groupBy { it.fenceId }
+                .map { (fenceId, records) ->
+                    val displayName = StayRecordNameResolver.resolve(
+                        storedName = records.first().fenceName,
+                        fenceId = fenceId,
+                        nameById = nameById
+                    )
+                    // 同名围栏可能对应多个 id（删了重建），显示时再按名字合并
+                    FenceDurationStats(displayName, records.sumOf { it.totalDurationSeconds })
+                }
+                .groupBy { it.fenceName }
+                .map { (name, entries) -> FenceDurationStats(name, entries.sumOf { it.totalDurationSeconds }) }
+                .sortedByDescending { it.totalDurationSeconds }
+                .take(3)
 
             _monthTopFences.value = fenceDurations
         }

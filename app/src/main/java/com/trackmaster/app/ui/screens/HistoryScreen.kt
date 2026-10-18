@@ -86,8 +86,20 @@ fun HistoryScreen(
                 time = end
                 add(Calendar.DAY_OF_YEAR, -HISTORY_DAYS)
             }.time
-            application.dbHelper.getEventsByTimeRange(start, end)
+            val raw = application.dbHelper.getEventsByTimeRange(start, end)
                 .sortedByDescending { it.time }
+
+            // 旧版本把 fenceId 当成 fenceName 写进事件表，界面上会显示一串
+            // UUID。写入侧已修，这里给已经落库的旧数据兜底。
+            val nameById = application.geoFences.associate { it.id to it.name }
+            raw.map { event ->
+                val resolved = com.trackmaster.app.data.StayRecordNameResolver.resolve(
+                    storedName = event.fenceName,
+                    fenceId = event.fenceId,
+                    nameById = nameById
+                )
+                if (resolved == event.fenceName) event else event.copy(fenceName = resolved)
+            }
         }
         isLoading = false
     }

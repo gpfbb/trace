@@ -17,6 +17,16 @@ interface SessionRepository {
     val stayDurationManager: StayDurationManager
     fun getDailyStayRecordsByDate(dateKey: String): List<DailyStayRecord>
 
+    /**
+     * 一次查出日期区间内的所有停留记录。
+     *
+     * 月度统计原来按天循环查 31 次，改成一次范围查询。
+     */
+    fun getDailyStayRecordsByDateRange(startDateKey: String, endDateKey: String): List<DailyStayRecord>
+
+    /** 围栏 id → 名称。用于修正旧数据里被写成 id 的围栏名。 */
+    fun getFenceNamesById(): Map<String, String>
+
     /** 统计时间范围内指定动作的事件数（进入/离开次数） */
     fun countEventsByAction(action: GeoFenceAction, startTime: Date, endTime: Date): Int
 }
@@ -31,6 +41,16 @@ class AppSessionRepository(
     override val stayDurationManager: StayDurationManager get() = app.stayDurationManager
     override fun getDailyStayRecordsByDate(dateKey: String): List<DailyStayRecord> =
         app.dbHelper.getDailyStayRecordsByDate(dateKey)
+
+    override fun getDailyStayRecordsByDateRange(
+        startDateKey: String,
+        endDateKey: String
+    ): List<DailyStayRecord> =
+        app.dbHelper.getDailyStayRecordsByDateRange(startDateKey, endDateKey)
+
+    override fun getFenceNamesById(): Map<String, String> =
+        app.geoFences.associate { it.id to it.name }
+
     override fun countEventsByAction(action: GeoFenceAction, startTime: Date, endTime: Date): Int =
         app.dbHelper.countEventsByAction(action, startTime, endTime)
 }
