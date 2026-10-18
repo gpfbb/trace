@@ -258,14 +258,16 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                     .statusBarsPadding()
                     .padding(top = 60.dp)
             ) {
-                ToolsPopup(
-                    fences = localFences,
-                    fenceColors = fenceColors,
-                    app = app,
-                    onDismiss = { showToolsPopup = false },
-                    onFencesUpdated = {
+                com.trackmaster.app.ui.map.MapToolsPopup(
+                    onApplyRandomColors = {
+                        mapViewModel.applyRandomColors(fenceColors)
                         localFences = app.geoFences.toList()
-                    }
+                    },
+                    onApplyGlobalAlpha = { alpha ->
+                        mapViewModel.applyGlobalAlpha(alpha)
+                        localFences = app.geoFences.toList()
+                    },
+                    onDismiss = { showToolsPopup = false }
                 )
             }
         }
@@ -659,99 +661,6 @@ private fun TopStatusIsland(
                     .size(20.dp)
                     .clickable { onFenceListClick() }
             )
-        }
-    }
-}
-
-@Composable
-private fun ToolsPopup(
-    fences: List<GeoFence>,
-    fenceColors: List<String>,
-    app: TrackMasterApplication,
-    onDismiss: () -> Unit,
-    onFencesUpdated: () -> Unit
-) {
-    var globalAlpha by remember { mutableStateOf(0.3f) }
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 40.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = glassPanel().copy(alpha = 0.95f),
-        tonalElevation = 8.dp
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    stringResource(R.string.batch_tools),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = NeonCoral
-                )
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.close), fontSize = 12.sp, color = Color.Gray)
-                }
-            }
-
-            // Random Color Button
-            GlassButton(
-                onClick = {
-                    val rng = Random()
-                    fences.forEach { fence ->
-                        val newColor = fenceColors[rng.nextInt(fenceColors.size)]
-                        app.dbHelper.updateFence(fence.copy(color = newColor))
-                    }
-                    app.geoFences.clear()
-                    app.geoFences.addAll(app.dbHelper.getAllFences())
-                    app.refreshEngineFences()
-                    onFencesUpdated()
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Palette, contentDescription = null, tint = currentPalette.accent, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.random_colors), color = NeonAmber, fontSize = 13.sp)
-            }
-
-            // Global Transparency
-            Text(stringResource(R.string.global_transparency, (globalAlpha * 100).toInt()), fontSize = 12.sp, color = Color.Gray)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("10%", fontSize = 10.sp, color = Color.Gray)
-                Slider(
-                    value = globalAlpha,
-                    onValueChange = { globalAlpha = it },
-                    modifier = Modifier.weight(1f).height(24.dp),
-                    valueRange = 0.1f..0.8f,
-                    steps = 6,
-                    colors = SliderDefaults.colors(thumbColor = NeonCoral, activeTrackColor = NeonCoral)
-                )
-                Text("80%", fontSize = 10.sp, color = Color.Gray)
-            }
-            GlassButton(
-                onClick = {
-                    app.dbHelper.updateAllFencesAlpha(globalAlpha)
-                    app.geoFences.clear()
-                    app.geoFences.addAll(app.dbHelper.getAllFences())
-                    app.refreshEngineFences()
-                    onFencesUpdated()
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Opacity, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.apply_transparency), color = NeonBlue, fontSize = 13.sp)
-            }
         }
     }
 }
