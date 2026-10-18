@@ -377,4 +377,12 @@
     <string name="random_colors">随机分配颜色</string>
     <string name="global_transparency">全局透明度: %d%%</string>
     <string name="apply_transparency">应用到全部</string>
+
+    <!-- 主题设置 -->
+    <string name="theme_mode">外观</string>
+    <string name="theme_mode_system">跟随系统</string>
+    <string name="theme_mode_light">浅色</string>
+    <string name="theme_mode_dark">深色</string>
+    <string name="accent_color">强调色</string>
+    <string name="done">完成</string>
 </resources>

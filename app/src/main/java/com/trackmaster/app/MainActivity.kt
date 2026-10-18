@@ -14,7 +14,6 @@ import com.amap.api.maps.AMap
 import com.trackmaster.app.mapstraction.amap.AMapPresenter
 import com.trackmaster.app.LocationServiceState
 import com.trackmaster.app.ui.navigation.TrackMasterNavHost
-import com.trackmaster.app.ui.theme.TrackMasterTheme
 import com.trackmaster.app.utils.LanguageManager
 
 class MainActivity : ComponentActivity() {
@@ -67,7 +66,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            TrackMasterTheme {
+            val themeController = com.trackmaster.app.ui.design.rememberThemeController()
+            com.trackmaster.app.ui.design.TrackMasterDesignTheme(controller = themeController) {
                 TrackMasterNavHost()
             }
         }

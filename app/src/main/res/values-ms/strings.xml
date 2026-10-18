@@ -370,4 +370,12 @@ Lokasi fail: %5$s</string>
     <string name="date_format_day">dd MMMM yyyy</string>
     <string name="date_format_month">MMMM yyyy</string>
     <string name="date_format_year">yyyy</string>
+
+    <!-- Tetapan tema -->
+    <string name="theme_mode">Penampilan</string>
+    <string name="theme_mode_system">Ikut sistem</string>
+    <string name="theme_mode_light">Cerah</string>
+    <string name="theme_mode_dark">Gelap</string>
+    <string name="accent_color">Warna aksen</string>
+    <string name="done">Selesai</string>
 </resources>

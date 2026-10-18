@@ -377,4 +377,12 @@ File location: %5$s</string>
     <string name="random_colors">Random Colors</string>
     <string name="global_transparency">Global Transparency: %d%%</string>
     <string name="apply_transparency">Apply to All</string>
+
+    <!-- Theme settings -->
+    <string name="theme_mode">Appearance</string>
+    <string name="theme_mode_system">System</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="accent_color">Accent color</string>
+    <string name="done">Done</string>
 </resources>

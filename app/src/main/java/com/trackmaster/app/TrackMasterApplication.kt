@@ -15,7 +15,6 @@ import com.trackmaster.app.core.ManagersHolder
 import com.trackmaster.app.core.RepositoryHolder
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.di.appModule
-import com.trackmaster.app.ui.theme.ThemeManager
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -133,8 +132,8 @@ class TrackMasterApplication : Application() {
         super.onCreate()
         instance = this
 
-        ThemeManager.init(this)
-        AppLog.d(TAG, "主题初始化完成: ${ThemeManager.getCurrentTheme()}")
+        // 主题设置由 ThemeStore 在首次组合时从 SharedPreferences 读取，
+        // 不需要在这里初始化（见 ui/design/Theme.kt）。
 
         startKoin {
             androidLogger()

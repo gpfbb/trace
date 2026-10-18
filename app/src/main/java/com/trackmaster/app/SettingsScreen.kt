@@ -31,8 +31,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.trackmaster.app.ui.components.CompactThemeSelector
-import com.trackmaster.app.ui.components.ThemePickerDialog
 import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.utils.AppLog
 
@@ -49,10 +47,12 @@ fun SettingsPage(
     val permissionManager = remember { PermissionManager(context) }
     var permissionStatus by remember { mutableStateOf(permissionManager.checkPermissions()) }
     var selectedMode by remember { mutableStateOf(prefs.powerMode) }
-    var currentTheme by remember { mutableStateOf(ThemeManager.getCurrentTheme()) }
     var showThemePicker by remember { mutableStateOf(false) }
     var showLanguagePicker by remember { mutableStateOf(false) }
     var currentLanguage by remember { mutableStateOf(prefs.appLanguage) }
+
+    // 主题设置：强调色 + 深浅模式，走新的设计系统
+    val themeController = com.trackmaster.app.ui.design.rememberThemeController()
 
     // 高级设置状态
     var showAdvancedSettings by remember { mutableStateOf(false) }
@@ -298,7 +298,7 @@ fun SettingsPage(
                         Icon(
                             imageVector = Icons.Default.Palette,
                             contentDescription = stringResource(R.string.theme),
-                            tint = ThemeManager.getPrimaryColor(),
+                            tint = primaryColor(),
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.width(16.dp))
@@ -310,7 +310,16 @@ fun SettingsPage(
                                 color = Color(0xFFE0E0E0)
                             )
                             Text(
-                                currentTheme.displayName,
+                                stringResource(
+                                    when (themeController.settings.mode) {
+                                        com.trackmaster.app.ui.design.ThemeMode.SYSTEM ->
+                                            R.string.theme_mode_system
+                                        com.trackmaster.app.ui.design.ThemeMode.LIGHT ->
+                                            R.string.theme_mode_light
+                                        com.trackmaster.app.ui.design.ThemeMode.DARK ->
+                                            R.string.theme_mode_dark
+                                    }
+                                ),
                                 fontSize = 13.sp,
                                 color = Color(0xFFBDBDBD)
                             )
@@ -596,14 +605,11 @@ fun SettingsPage(
         )
     }
 
-    // 主题选择对话框
+    // 主题设置对话框：强调色 + 深浅模式
     if (showThemePicker) {
-        ThemePickerDialog(
-            currentTheme = currentTheme,
-            onThemeSelected = { theme ->
-                currentTheme = theme
-                ThemeManager.setTheme(context, theme)
-            },
+        com.trackmaster.app.ui.design.ThemeSettingsDialog(
+            settings = themeController.settings,
+            onSettingsChange = { themeController.update(it) },
             onDismiss = { showThemePicker = false }
         )
     }

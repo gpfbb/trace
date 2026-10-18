@@ -17,8 +17,6 @@ import com.trackmaster.app.SettingsPage
 import com.trackmaster.app.StatisticsScreen
 import com.trackmaster.app.TrackMasterApplication
 import com.trackmaster.app.ui.screens.*
-import com.trackmaster.app.ui.theme.AppTheme
-import com.trackmaster.app.ui.theme.ThemeManager
 import com.trackmaster.app.ui.theme.backgroundColor
 import com.trackmaster.app.viewmodel.HomeViewModel
 import com.trackmaster.app.viewmodel.MapViewModel

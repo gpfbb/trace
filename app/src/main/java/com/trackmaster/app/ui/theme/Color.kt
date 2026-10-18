@@ -1,149 +1,154 @@
 package com.trackmaster.app.ui.theme
 
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.trackmaster.app.ui.design.AppType
+import com.trackmaster.app.ui.design.LocalPalette
 
-// ============================================
-// 主题感知颜色 - 这些颜色会根据当前主题动态变化
-// ============================================
+// ============================================================
+// 旧接口 → 新设计系统的适配层
+//
+// 屏幕代码历史上通过下面这些函数取色。现在它们全部改读
+// [LocalPalette]，于是所有调用点在切换到新主题时自动生效，
+// 不必逐个改写。
+//
+// 新代码请直接用 `currentPalette.xxx`，不要再用这里的函数。
+// 等所有屏幕迁移完，这个文件可以整体删除。
+// ============================================================
+
+/** 主色 = 新系统的强调色 */
+@Composable
+fun primaryColor(): Color = LocalPalette.current.accent
+
+/** 强调色（旧语义）→ 映射到语义状态色中更醒目的一档 */
+@Composable
+fun accentColor(): Color = LocalPalette.current.warning
+
+/** 页面底色 */
+@Composable
+fun backgroundColor(): Color = LocalPalette.current.background
+
+/** 卡片/表面色 */
+@Composable
+fun surfaceColor(): Color = LocalPalette.current.groupedCell
+
+/** 主文字 */
+@Composable
+fun textPrimary(): Color = LocalPalette.current.label
+
+/** 次要文字 */
+@Composable
+fun textSecondary(): Color = LocalPalette.current.labelSecondary
+
+/** 旧"玻璃面板"色 → 新系统的卡片底色 */
+@Composable
+fun glassPanel(): Color = LocalPalette.current.groupedCell
 
 /**
- * 主色调 - 根据当前主题返回对应颜色
- * DARK_NIGHT: 珊瑚橙, SOFT_EYE: 柔和蓝, CLASSIC_RED: 经典红, MINIMAL_GRAPHITE: 石墨蓝灰
+ * 旧的静态色值别名。
+ *
+ * 这些是 `Screen.kt` 之外的代码仍在引用的常量。它们无法随主题变化，
+ * 所以只在语义明确（成功/警告/危险）且调用方本就不该随主题变的地方保留。
+ * 配色来自新 token 的浅色档，保证在两套模式下都可读。
  */
-@Composable
-fun primaryColor(): Color = ThemeManager.primaryColor.value
+val Success: Color = Color(0xFF34C759)
+val Warning: Color = Color(0xFFFF9500)
+val Danger: Color = Color(0xFFFF3B30)
 
-/**
- * 强调色 - 根据当前主题返回对应颜色
- */
-@Composable
-fun accentColor(): Color = ThemeManager.accentColor.value
+// 旧的霓虹色别名：新设计不用霓虹色，统一映射到强调色系。
+// 保留名字是为了让尚未迁移的屏幕能编译。
+val NeonCoral: Color = Color(0xFFFF7F50)
+val NeonAmber: Color = Color(0xFFFF9F0A)
+val NeonBlue: Color = Color(0xFF0A84FF)
 
-/**
- * 背景色 - 根据当前主题返回对应颜色
- */
-@Composable
-fun backgroundColor(): Color = ThemeManager.backgroundColor.value
+val DeepChocolate: Color = Color(0xFF1C1C1E)
+val EspressoBlack: Color = Color(0xFF000000)
 
-/**
- * 表面色 - 根据当前主题返回对应颜色（卡片、面板等）
- */
-@Composable
-fun surfaceColor(): Color = ThemeManager.surfaceColor.value
+// 旧"玻璃"色值：新设计没有玻璃拟态，这些是给未迁移代码的占位。
+// 任何依赖它们做出视觉决策的地方都应该在迁移时删掉。
+val GlassPanelRich: Color = Color(0xF21C1C1E)
+val GlassPanelLightRich: Color = Color(0x992C2C2E)
+val GlassBorder: Color = Color(0xFF38383A)
+val GlassBorderLight: Color = Color(0xFF48484A)
+val GlassInnerGlow: Color = Color(0x1AFFFFFF)
 
-/**
- * 主文字色 - 根据当前主题返回对应颜色
- */
-@Composable
-fun textPrimary(): Color = ThemeManager.textPrimaryColor.value
+val TextPrimary: Color = Color(0xFFFFFFFF)
+val TextSecondary: Color = Color(0xFFEBEBF5)
+val TextTertiary: Color = Color(0xFF9B9BA1)
+val TextDisabled: Color = Color(0xFF6C6C70)
 
-/**
- * 次文字色 - 根据当前主题返回对应颜色
- */
-@Composable
-fun textSecondary(): Color = ThemeManager.textSecondaryColor.value
+// ============================================================
+// 旧 Material 色板别名
+//
+// `TrackMasterTheme.kt` 用这些名字构造 ColorScheme。新的
+// [com.trackmaster.app.ui.design.TrackMasterDesignTheme] 已经自己把
+// 调色板映射到 Material 了，这里保留常量仅为兼容尚未删除的引用。
+// ============================================================
 
-/**
- * 玻璃面板色 - 根据当前主题返回对应颜色
- */
-@Composable
-fun glassPanel(): Color = ThemeManager.glassPanelColor.value
-
-// ============================================
-// 旧版静态颜色别名 - 为了向后兼容
-// 这些直接使用 DARK_NIGHT 主题的颜色
-// ============================================
-
-// 主色调 - 霓虹珊瑚橙
-val NeonCoral = Color(0xFFFF7F50)
-val NeonAmber = Color(0xFFFFBF00)
-val NeonBlue = Color(0xFF2196F3)
-
-// 背景色 - 深巧克力棕
-val DeepChocolate = Color(0xFF1A120B)
-val EspressoBlack = Color(0xFF0D0D0D)
-
-// 玻璃面板色 - 更高级的液态玻璃质感
-val GlassPanelRich = Color(0xB31C1612) // rgba(28, 22, 18, 0.7)
-val GlassPanelLightRich = Color(0x992A221C) // rgba(42, 34, 28, 0.6)
-
-// 边框色
-val GlassBorder = Color(0x1AFFFFFF)
-val GlassBorderLight = Color(0x25FFFFFF)
-val GlassInnerGlow = Color(0x26FFFFFF) // 内发光边缘
-
-// 高级玻璃颜色（用于响应式文字）
-val TextPrimary = Color(0xFFF5F5F5) // 高对比度主文字 (对比度 ~12:1)
-val TextSecondary = Color(0xFFE0E0E0) // 次要文字 (对比度 ~10:1)
-val TextTertiary = Color(0xFFBDBDBD) // 辅助文字 (对比度 ~8:1)
-val TextDisabled = Color(0xFF757575) // 禁用文字 (对比度 ~5:1)
-
-// 状态色
-val Success = Color(0xFF4CAF50)
-val Warning = NeonAmber
-val Danger = Color(0xFFFF5252)
-
-// 标准Material 3颜色映射（基于新复古液态玻璃拟态 + WCAG 2.1 AA对比度）
-val md_theme_light_primary = NeonCoral
+val md_theme_light_primary = Color(0xFFD9461F)
 val md_theme_light_onPrimary = Color(0xFFFFFFFF)
-val md_theme_light_primaryContainer = Color(0x30FF7F50)
-val md_theme_light_onPrimaryContainer = Color(0xFFFFD4C7)
-val md_theme_light_secondary = NeonAmber
-val md_theme_light_onSecondary = Color(0xFF000000)
-val md_theme_light_secondaryContainer = Color(0x30FFBF00)
-val md_theme_light_onSecondaryContainer = Color(0xFFFFF3CD)
-val md_theme_light_tertiary = Color(0xFF00BCD4)
+val md_theme_light_primaryContainer = Color(0x1FD9461F)
+val md_theme_light_onPrimaryContainer = Color(0xFFD9461F)
+val md_theme_light_secondary = Color(0xFFD9461F)
+val md_theme_light_onSecondary = Color(0xFFFFFFFF)
+val md_theme_light_secondaryContainer = Color(0x1FD9461F)
+val md_theme_light_onSecondaryContainer = Color(0xFFD9461F)
+val md_theme_light_tertiary = Color(0xFF00838F)
 val md_theme_light_onTertiary = Color(0xFFFFFFFF)
-val md_theme_light_tertiaryContainer = Color(0x3000BCD4)
-val md_theme_light_onTertiaryContainer = Color(0xFFB2EBF2)
-val md_theme_light_error = Color(0xFFFF5252)
+val md_theme_light_tertiaryContainer = Color(0x1F00838F)
+val md_theme_light_onTertiaryContainer = Color(0xFF00838F)
+val md_theme_light_error = Color(0xFFFF3B30)
 val md_theme_light_onError = Color(0xFFFFFFFF)
-val md_theme_light_errorContainer = Color(0x30FF5252)
-val md_theme_light_onErrorContainer = Color(0xFFFFCDD2)
-val md_theme_light_outline = GlassBorder
-val md_theme_light_background = DeepChocolate
-val md_theme_light_onBackground = TextPrimary
-val md_theme_light_surface = GlassPanelRich
-val md_theme_light_onSurface = TextPrimary
-val md_theme_light_surfaceVariant = GlassPanelLightRich
-val md_theme_light_onSurfaceVariant = TextSecondary
-val md_theme_light_inverseSurface = TextPrimary
-val md_theme_light_inverseOnSurface = DeepChocolate
-val md_theme_light_inversePrimary = NeonCoral
+val md_theme_light_errorContainer = Color(0x1FFF3B30)
+val md_theme_light_onErrorContainer = Color(0xFFFF3B30)
+val md_theme_light_outline = Color(0xFFC6C6C8)
+val md_theme_light_background = Color(0xFFF2F2F7)
+val md_theme_light_onBackground = Color(0xFF000000)
+val md_theme_light_surface = Color(0xFFFFFFFF)
+val md_theme_light_onSurface = Color(0xFF000000)
+val md_theme_light_surfaceVariant = Color(0xFFFFFFFF)
+val md_theme_light_onSurfaceVariant = Color(0xFF3C3C43)
+val md_theme_light_inverseSurface = Color(0xFF1C1C1E)
+val md_theme_light_inverseOnSurface = Color(0xFFFFFFFF)
+val md_theme_light_inversePrimary = Color(0xFFFF7F50)
 val md_theme_light_shadow = Color(0x80000000)
-val md_theme_light_surfaceTint = NeonCoral
-val md_theme_light_outlineVariant = GlassBorderLight
+val md_theme_light_surfaceTint = Color(0xFFD9461F)
+val md_theme_light_outlineVariant = Color(0xFFE5E5EA)
 val md_theme_light_scrim = Color(0x80000000)
 
-// 暗色主题与亮色主题相同（因为我们采用深色背景设计）
-val md_theme_dark_primary = NeonCoral
+val md_theme_dark_primary = Color(0xFFFF7F50)
 val md_theme_dark_onPrimary = Color(0xFFFFFFFF)
-val md_theme_dark_primaryContainer = Color(0x30FF7F50)
-val md_theme_dark_onPrimaryContainer = Color(0xFFFFD4C7)
-val md_theme_dark_secondary = NeonAmber
-val md_theme_dark_onSecondary = Color(0xFF000000)
-val md_theme_dark_secondaryContainer = Color(0x30FFBF00)
-val md_theme_dark_onSecondaryContainer = Color(0xFFFFF3CD)
-val md_theme_dark_tertiary = Color(0xFF00BCD4)
-val md_theme_dark_onTertiary = Color(0xFFFFFFFF)
-val md_theme_dark_tertiaryContainer = Color(0x3000BCD4)
-val md_theme_dark_onTertiaryContainer = Color(0xFFB2EBF2)
-val md_theme_dark_error = Color(0xFFFF5252)
+val md_theme_dark_primaryContainer = Color(0x33FF7F50)
+val md_theme_dark_onPrimaryContainer = Color(0xFFFF7F50)
+val md_theme_dark_secondary = Color(0xFFFF7F50)
+val md_theme_dark_onSecondary = Color(0xFFFFFFFF)
+val md_theme_dark_secondaryContainer = Color(0x33FF7F50)
+val md_theme_dark_onSecondaryContainer = Color(0xFFFF7F50)
+val md_theme_dark_tertiary = Color(0xFF40CBE0)
+val md_theme_dark_onTertiary = Color(0xFF000000)
+val md_theme_dark_tertiaryContainer = Color(0x3340CBE0)
+val md_theme_dark_onTertiaryContainer = Color(0xFF40CBE0)
+val md_theme_dark_error = Color(0xFFFF453A)
 val md_theme_dark_onError = Color(0xFFFFFFFF)
-val md_theme_dark_errorContainer = Color(0x30FF5252)
-val md_theme_dark_onErrorContainer = Color(0xFFFFCDD2)
-val md_theme_dark_outline = GlassBorder
-val md_theme_dark_background = EspressoBlack
-val md_theme_dark_onBackground = TextPrimary
-val md_theme_dark_surface = GlassPanelRich
-val md_theme_dark_onSurface = TextPrimary
-val md_theme_dark_surfaceVariant = GlassPanelLightRich
-val md_theme_dark_onSurfaceVariant = TextSecondary
-val md_theme_dark_inverseSurface = TextPrimary
-val md_theme_dark_inverseOnSurface = EspressoBlack
-val md_theme_dark_inversePrimary = NeonCoral
+val md_theme_dark_errorContainer = Color(0x33FF453A)
+val md_theme_dark_onErrorContainer = Color(0xFFFF453A)
+val md_theme_dark_outline = Color(0xFF38383A)
+val md_theme_dark_background = Color(0xFF000000)
+val md_theme_dark_onBackground = Color(0xFFFFFFFF)
+val md_theme_dark_surface = Color(0xFF1C1C1E)
+val md_theme_dark_onSurface = Color(0xFFFFFFFF)
+val md_theme_dark_surfaceVariant = Color(0xFF2C2C2E)
+val md_theme_dark_onSurfaceVariant = Color(0xFFEBEBF5)
+val md_theme_dark_inverseSurface = Color(0xFFFFFFFF)
+val md_theme_dark_inverseOnSurface = Color(0xFF000000)
+val md_theme_dark_inversePrimary = Color(0xFFD9461F)
 val md_theme_dark_shadow = Color(0x80000000)
-val md_theme_dark_surfaceTint = NeonCoral
-val md_theme_dark_outlineVariant = GlassBorderLight
+val md_theme_dark_surfaceTint = Color(0xFFFF7F50)
+val md_theme_dark_outlineVariant = Color(0xFF38383A)
 val md_theme_dark_scrim = Color(0x80000000)
+
+/**
+ * 旧代码里的排版别名。新的排版在 [AppType]。
+ * 保留一个入口，避免迁移中的文件同时 import 两套。
+ */
+internal val legacyTypography get() = AppType
