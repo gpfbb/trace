@@ -185,6 +185,12 @@ class TrackMasterApplication : Application() {
     }
 
     fun startLocationService() {
+        // 用户已关闭追踪时不要启动。这条判断同时挡住了开机广播、
+        // WakeupService 的自恢复以及 MainActivity 每次进入时的隐式启动。
+        if (!appPreferences.isTrackingEnabled) {
+            AppLog.d(TAG, "用户已关闭追踪，跳过启动定位服务")
+            return
+        }
         if (!serviceBound) {
             val intent = Intent(this, GeoFenceLocationService::class.java)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -194,6 +200,23 @@ class TrackMasterApplication : Application() {
             }
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
             AppLog.d(TAG, "启动定位服务")
+        }
+    }
+
+    /**
+     * 切换追踪开关（设置页调用）。
+     *
+     * 统一收口"用户意图 + 服务实际状态"：
+     * - 开启：写入意图 → 启动服务
+     * - 关闭：写入意图 → 停止服务并取消 Alarm
+     */
+    fun setTrackingEnabled(enabled: Boolean) {
+        appPreferences.isTrackingEnabled = enabled
+        AppLog.d(TAG, "追踪开关: $enabled")
+        if (enabled) {
+            startLocationService()
+        } else {
+            stopLocationService()
         }
     }
 

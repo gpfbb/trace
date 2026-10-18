@@ -174,11 +174,17 @@ class WakeupService : Service() {
      *
      * 二者同时满足才认为用户开启过追踪。默认值都是 false/0，全新安装未使用的 App 不会被 Alarm 拉起。
      */
+    /**
+     * 用户是否开启了追踪。
+     *
+     * 直接读用户在设置页的显式开关。此前没有这个开关，只能用
+     * "完成过引导 && 有过正常关闭记录" 的启发式组合来猜，
+     * 崩溃后未正常关闭的场景会漏恢复。
+     */
     private fun isTrackingEnabledByUser(app: TrackMasterApplication): Boolean {
-        val onboardingCompleted = app.appPreferences.isOnboardingCompleted
-        val hasUsedApp = app.persistentStateManager.getLastAppCloseTime() != null
-        AppLog.d(TAG, "追踪开关判断: onboardingCompleted=$onboardingCompleted, hasUsedApp=$hasUsedApp")
-        return onboardingCompleted && hasUsedApp
+        val enabled = app.appPreferences.isTrackingEnabled
+        AppLog.d(TAG, "追踪开关: enabled=$enabled")
+        return enabled
     }
 
     private fun stopSelfSafely() {

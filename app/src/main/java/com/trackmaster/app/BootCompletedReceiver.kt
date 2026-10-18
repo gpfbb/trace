@@ -76,10 +76,16 @@ class BootCompletedReceiver : BroadcastReceiver() {
      *
      * 二者同时满足才认为用户开启过追踪，避免全新安装未使用的 App 被开机广播拉起。
      */
+    /**
+     * 判断用户是否开启了追踪。
+     *
+     * 直接读设置页的显式开关。全新安装默认 true，但用户没完成引导时
+     * 服务本来就不会被启动，开机广播拉起后也只会空跑一次定位，
+     * 因此这里无需再叠加引导状态的判断。
+     */
     private fun isTrackingEnabledByUser(app: TrackMasterApplication): Boolean {
-        val onboardingCompleted = app.appPreferences.isOnboardingCompleted
-        val hasUsedApp = app.persistentStateManager.getLastAppCloseTime() != null
-        AppLog.d(TAG, "追踪开关判断: onboardingCompleted=$onboardingCompleted, hasUsedApp=$hasUsedApp")
-        return onboardingCompleted && hasUsedApp
+        val enabled = app.appPreferences.isTrackingEnabled
+        AppLog.d(TAG, "追踪开关: enabled=$enabled")
+        return enabled
     }
 }

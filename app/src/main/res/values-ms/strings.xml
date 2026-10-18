@@ -34,6 +34,8 @@
     <string name="permission_warning">⚠️ Sesetengah kebenaran tidak diberikan. Ciri geofence mungkin tidak berfungsi dengan baik.</string>
 
     <string name="location_mode">Mod Lokasi</string>
+    <string name="tracking_enabled">Penjejakan Lokasi</string>
+    <string name="tracking_enabled_desc">Rakam tempoh tinggal di geofence anda secara berterusan. Mematikan akan hentikan lokasi latar belakang dan penggunaan bateri</string>
     <string name="power_save_mode">Jimak Kuasa</string>
     <string name="power_save_desc">Kuasa ultra rendah, sesuai untuk tidur/ketidakgerakan lama. Bermula 1min pegun pada 2min/selang</string>
     <string name="balanced_mode">Seimbang</string>

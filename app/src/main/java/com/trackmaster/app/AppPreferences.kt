@@ -29,6 +29,7 @@ class AppPreferences(context: Context) {
 
         // 用户体验键
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_TRACKING_ENABLED = "tracking_enabled"
         private const val KEY_AUTO_CLEANUP_DAYS = "auto_cleanup_days"
         // 地图类型：1=标准 2=卫星 3=夜景（对应 AMap.MAP_TYPE_ constants）
         private const val KEY_MAP_TYPE = "map_type"
@@ -155,6 +156,20 @@ class AppPreferences(context: Context) {
     var isOnboardingCompleted: Boolean
         get() = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
         set(value) = prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
+
+    /**
+     * 用户是否开启追踪。
+     *
+     * 这是**用户意图**，与定位服务是否正在运行是两回事：
+     * - false：用户主动关闭，服务应停止，Alarm 唤醒应取消，
+     *   开机广播与后台唤醒都不应把服务偷偷拉起来
+     * - true（默认）：正常追踪
+     *
+     * 默认 true 保持老用户升级后的行为不变。
+     */
+    var isTrackingEnabled: Boolean
+        get() = prefs.getBoolean(KEY_TRACKING_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_TRACKING_ENABLED, value).apply()
 
     /**
      * 日志自动清理天数

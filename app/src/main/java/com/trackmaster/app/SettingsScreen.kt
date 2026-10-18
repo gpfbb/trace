@@ -133,6 +133,16 @@ fun SettingsPage(
 
             HorizontalDivider(color = Color(0x30FFFFFF))
 
+            // 追踪总开关：关闭后停止后台定位并取消定时唤醒
+            TrackingToggleCard(
+                enabled = prefs.isTrackingEnabled,
+                onToggle = { enabled ->
+                    app.setTrackingEnabled(enabled)
+                }
+            )
+
+            HorizontalDivider(color = Color(0x30FFFFFF))
+
             LocationModeSection(
                 selectedMode = selectedMode,
                 onModeSelected = { mode ->
@@ -827,6 +837,49 @@ fun PermissionItem(
                     Text(stringResource(R.string.go_to_settings), color = Color.White)
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun TrackingToggleCard(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0x4D000000)),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.tracking_enabled),
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFE0E0E0)
+                )
+                Text(
+                    text = stringResource(R.string.tracking_enabled_desc),
+                    fontSize = 12.sp,
+                    color = Color(0xFFBDBDBD),
+                    lineHeight = 16.sp
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = primaryColor(),
+                    checkedTrackColor = primaryColor().copy(alpha = 0.4f)
+                )
+            )
         }
     }
 }

@@ -34,6 +34,8 @@
     <string name="permission_warning">⚠️ 部分权限未授予，地理围栏功能可能无法正常工作。</string>
 
     <string name="location_mode">定位模式</string>
+    <string name="tracking_enabled">位置追踪</string>
+    <string name="tracking_enabled_desc">持续记录你在各围栏内的停留时长。关闭后将停止后台定位，不再耗电</string>
     <string name="power_save_mode">省电模式</string>
     <string name="power_save_desc">超低功耗，适合睡觉/长时间静止。静止1分钟起2分钟/次</string>
     <string name="balanced_mode">均衡模式</string>

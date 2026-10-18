@@ -34,6 +34,8 @@
     <string name="permission_warning">⚠️ Some permissions not granted. Geofence features may not work properly.</string>
 
     <string name="location_mode">Location Mode</string>
+    <string name="tracking_enabled">Location Tracking</string>
+    <string name="tracking_enabled_desc">Continuously record stay time at your geofences. Turning off stops background location and battery use</string>
     <string name="power_save_mode">Power Save</string>
     <string name="power_save_desc">Ultra low power, suitable for sleep/long stationary. Starts at 1min stationary at 2min/interval</string>
     <string name="balanced_mode">Balanced</string>
