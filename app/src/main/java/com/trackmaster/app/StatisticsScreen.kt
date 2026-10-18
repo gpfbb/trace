@@ -182,29 +182,30 @@ fun StatisticsScreen(
                     Text(
                         displayDate,
                         style = MaterialTheme.typography.titleMedium,
-                        color = NeonCoral
+                        color = currentPalette.accent
                     )
                     Box(
                         modifier = Modifier
                             .height(32.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(NeonCoral, NeonAmber),
-                                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                    end = androidx.compose.ui.geometry.Offset(100f, 100f)
-                                )
-                            )
+                            // 实心强调色而不是渐变：渐变在浅色模式下对白字对比度不可控
+                            .background(currentPalette.accent)
                             .clickable {
                                 when (selectedTimeDimension) {
                                     TimeDimension.DAY -> showDatePicker = true
                                     TimeDimension.MONTH -> showMonthPicker = true
                                     TimeDimension.YEAR -> showYearPicker = true
                                 }
-                            },
+                            }
+                            .padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(stringResource(R.string.select_date_button), fontSize = 11.sp, color = Color.White)
+                        Text(
+                            text = stringResource(R.string.select_date_button),
+                            fontSize = 12.sp,
+                            color = currentPalette.onAccent,
+                            maxLines = 1
+                        )
                     }
                 }
             }
@@ -229,7 +230,7 @@ fun StatisticsScreen(
                             .height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = NeonCoral)
+                        CircularProgressIndicator(color = currentPalette.accent)
                     }
                 } else if (statistics.isEmpty()) {
                     Box(
@@ -335,7 +336,7 @@ fun DatePickerDialog(
     
     GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.select_date), color = NeonCoral) },
+        title = { Text(stringResource(R.string.select_date), color = currentPalette.accent) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -396,7 +397,7 @@ fun MonthPickerDialog(
     
     GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.select_month), color = NeonCoral) },
+        title = { Text(stringResource(R.string.select_month), color = currentPalette.accent) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -448,7 +449,7 @@ fun YearPickerDialog(
     
     GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.select_year), color = NeonCoral) },
+        title = { Text(stringResource(R.string.select_year), color = currentPalette.accent) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -503,13 +504,13 @@ fun NumberPicker(
                 },
                 enabled = value < range.last
             ) {
-                Text("▲", fontSize = 18.sp, color = NeonCoral)
+                Text("▲", fontSize = 18.sp, color = currentPalette.accent)
             }
             Text(
                 text = value.toString(),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = NeonCoral
+                color = currentPalette.accent
             )
             Text(
                 text = label,
@@ -524,7 +525,7 @@ fun NumberPicker(
                 },
                 enabled = value > range.first
             ) {
-                Text("▼", fontSize = 18.sp, color = NeonCoral)
+                Text("▼", fontSize = 18.sp, color = currentPalette.accent)
             }
         }
     }
@@ -558,7 +559,7 @@ fun TimeDimensionSelector(
                 .padding(2.dp)
                 .background(
                     brush = Brush.linearGradient(
-                        colors = listOf(NeonCoral, NeonAmber),
+                        colors = listOf(currentPalette.accent, currentPalette.warning),
                         start = androidx.compose.ui.geometry.Offset(0f, 0f),
                         end = androidx.compose.ui.geometry.Offset(100f, 100f)
                     ),
@@ -631,7 +632,7 @@ fun FenceTreeSection(
                     stringResource(R.string.fence_duration),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = NeonCoral
+                    color = currentPalette.accent
                 )
                 Text(
                     stringResource(R.string.total_duration, formatDuration(totalDuration)),
@@ -748,7 +749,7 @@ private fun FenceTreeItem(
                         Text(
                             text = "${"%.1f".format(percentage)}%",
                             style = MaterialTheme.typography.labelSmall,
-                            color = NeonCoral
+                            color = currentPalette.accent
                         )
                         Text(
                             text = formatDuration(node.totalDurationSeconds),
@@ -825,7 +826,7 @@ fun DurationProgressSection(
                     stringResource(R.string.duration_distribution),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = NeonCoral
+                    color = currentPalette.accent
                 )
                 Text(
                     stringResource(R.string.total_duration, formatDuration(totalDuration)),
@@ -897,7 +898,7 @@ fun DurationProgressSection(
                                     Text(
                                         text = "${"%.1f".format(percentage)}%",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = NeonCoral
+                                        color = currentPalette.accent
                                     )
                                     Text(
                                         text = formatDuration(stat.totalDurationSeconds),
@@ -953,7 +954,7 @@ fun LeaderboardSection(
                 stringResource(R.string.duration_leaderboard),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = NeonCoral
+                color = currentPalette.accent
             )
             
             statistics.take(10).forEachIndexed { index, stat ->
@@ -984,8 +985,8 @@ fun LeaderboardItem(
         colors = CardDefaults.cardColors(
             containerColor = if (isTop3) {
                 when (rank) {
-                    1 -> NeonCoral.copy(alpha = 0.2f)
-                    2 -> NeonAmber.copy(alpha = 0.2f)
+                    1 -> currentPalette.accent.copy(alpha = 0.2f)
+                    2 -> currentPalette.warning.copy(alpha = 0.2f)
                     3 -> Color(0xFF8B5CF6).copy(alpha = 0.2f)
                     else -> currentPalette.groupedCell
                 }
@@ -1039,7 +1040,7 @@ fun LeaderboardItem(
                     text = duration,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
-                    color = NeonCoral
+                    color = currentPalette.accent
                 )
                 Text(
                     text = percentage,

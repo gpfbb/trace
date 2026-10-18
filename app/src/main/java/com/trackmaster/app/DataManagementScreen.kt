@@ -31,6 +31,10 @@ import java.util.*
 import com.trackmaster.app.R
 import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.ui.design.currentPalette
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 
 @Composable
 fun DataManagementScreen(
@@ -423,30 +427,70 @@ private fun ExportImportSection(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                GlassButton(
+                // 三个按钮统一用设计系统的按钮，不再各自指定文字色
+                // （旧代码给后两个传 Color.White，在浅色卡片上等于隐形）
+                DataActionButton(
+                    text = stringResource(R.string.share_fence),
+                    icon = Icons.Default.Add,
                     onClick = onShareFences,
                     modifier = Modifier.weight(1f)
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = NeonAmber)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.share_fence), color = NeonAmber)
-                }
-                GlassButton(
+                )
+                DataActionButton(
+                    text = stringResource(R.string.export_all),
                     onClick = onExportAll,
                     modifier = Modifier.weight(1f)
-                ) {
-                    Text(stringResource(R.string.export_all), color = Color.White)
-                }
-                GlassButton(
+                )
+                DataActionButton(
+                    text = stringResource(R.string.import_action),
+                    icon = Icons.Default.Add,
                     onClick = onImportFile,
                     modifier = Modifier.weight(1f)
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.import_action), color = Color.White)
-                }
+                )
             }
         }
+    }
+}
+
+/**
+ * 数据管理页的操作按钮。
+ *
+ * 固定为"淡强调色底 + 强调色文字"，图标与文字同色，
+ * 不再依赖调用方传进来的文字色（那是旧暗色主题的遗留做法）。
+ */
+@Composable
+private fun DataActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
+) {
+    val palette = currentPalette
+    Row(
+        modifier = modifier
+            .heightIn(min = 64.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(palette.accentSubtle)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = palette.accent,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = palette.accent,
+            textAlign = TextAlign.Center,
+            maxLines = 2
+        )
     }
 }
 
@@ -498,7 +542,8 @@ private fun AutoCleanupSection(
         Text(
             stringResource(R.string.cleanup_reminder),
             style = MaterialTheme.typography.bodySmall,
-            color = currentPalette.labelTertiary
+            // 用次级灰而不是三级灰：这是需要用户读的说明，不是装饰
+            color = currentPalette.labelSecondary
         )
     }
 }
