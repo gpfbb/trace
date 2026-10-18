@@ -147,18 +147,40 @@ class StatisticsManager(private val context: Context) {
     }
 
     /**
-     * 构建围栏统计树（按父子关系）
+     * 当前是否有正在计时的停留会话。
+     *
+     * 纯内存读取（`stayDurationManager.activeSessions`），不碰数据库。
+     * 统计页用它决定刷新频率：有活跃会话时秒数每秒都在变，需要高频刷新；
+     * 没有的话数据不会自己变，刷了也白刷。
+     */
+    fun hasActiveSessions(): Boolean =
+        app.stayDurationManager.activeSessions.isNotEmpty()
+
+    /**
+     * 构建围栏统计树（按父子关系）。
+     *
+     * 内部会自己调 [getStatistics] 重新查一遍库。调用方如果已经拿到
+     * 统计数据，应该用下面的重载，避免一次刷新做两次相同的查询。
      */
     suspend fun buildFenceStatisticTree(
         timeDimension: TimeDimension,
         timeRange: TimeRange
+    ): List<FenceStatisticTree> =
+        buildFenceStatisticTree(getStatistics(timeDimension, timeRange))
+
+    /**
+     * 用已有的统计数据构建树。
+     *
+     * @param statistics 已经算好的围栏统计（自身时长），通常来自 [getStatistics]
+     */
+    suspend fun buildFenceStatisticTree(
+        statistics: List<FenceStatistics>
     ): List<FenceStatisticTree> = withContext(Dispatchers.IO) {
         // 1. 获取所有围栏
         val allFences = dbHelper.getAllFences()
         val fenceMap = allFences.associateBy { it.id }
 
-        // 2. 获取统计数据（仅自身时长）
-        val statistics = getStatistics(timeDimension, timeRange)
+        // 2. 统计数据（仅自身时长）
         val statsMap = statistics.associateBy { it.fenceId }
 
         // 3. 获取父子关系映射

@@ -391,4 +391,5 @@ Lokasi fail: %5$s</string>
     <string name="random_colors">Warna Rawak</string>
     <string name="global_transparency">Ketelusan Global: %d%%</string>
     <string name="apply_transparency">Guna untuk Semua</string>
+    <string name="staying_duration">Telah tinggal %s</string>
 </resources>

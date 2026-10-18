@@ -391,4 +391,5 @@ File location: %5$s</string>
     <string name="today_summary">Today</string>
     <string name="times_count">%d times</string>
     <string name="loading">Loading…</string>
+    <string name="staying_duration">Staying for %s</string>
 </resources>

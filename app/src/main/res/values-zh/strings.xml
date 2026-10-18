@@ -391,4 +391,5 @@
     <string name="today_summary">今日</string>
     <string name="times_count">%d 次</string>
     <string name="loading">加载中…</string>
+    <string name="staying_duration">已停留 %s</string>
 </resources>

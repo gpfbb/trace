@@ -114,37 +114,57 @@ fun StatisticsScreen(
     LaunchedEffect(selectedTimeDimension, selectedYear, selectedMonth, selectedDay) {
         isLoading = true
         statistics = statisticsManager.getStatistics(selectedTimeDimension, timeRange)
-        statisticsTree = statisticsManager.buildFenceStatisticTree(selectedTimeDimension, timeRange)
+        // 用刚算出来的统计构建树，避免再查一遍库
+        statisticsTree = statisticsManager.buildFenceStatisticTree(statistics)
         isLoading = false
 
-        var lastUpdateTime = 0L
         while (currentCoroutineContext().isActive) {
-            delay(30_000)
-            val now = System.currentTimeMillis()
-            val today = Calendar.getInstance()
-            val isTodayNow = selectedTimeDimension == TimeDimension.DAY &&
-                    selectedYear == today.get(Calendar.YEAR) &&
-                    selectedMonth == today.get(Calendar.MONTH) &&
-                    selectedDay == today.get(Calendar.DAY_OF_MONTH)
+            // 刷新节奏取决于"有没有正在计时的停留"：
+            //
+            // - 有活跃会话时，秒数每秒都在涨，30 秒才刷一次会让用户以为
+            //   界面卡死了（只能靠切维度触发重新加载）。这种时候按秒刷。
+            // - 没有活跃会话时数据不会自己变，按秒刷只是白耗电。
+            //
+            // 查询本身很轻：一次 daily_stays 范围查询 + 一次 COUNT 聚合，
+            // 而且只在统计弹窗打开期间跑。
+            val hasLiveSession = statisticsManager.hasActiveSessions()
+            delay(if (hasLiveSession) LIVE_REFRESH_INTERVAL_MS else IDLE_REFRESH_INTERVAL_MS)
 
-            val shouldUpdate = when (selectedTimeDimension) {
-                TimeDimension.DAY -> isTodayNow
-                TimeDimension.MONTH, TimeDimension.YEAR -> now - lastUpdateTime >= 10_000
+            if (!currentCoroutineContext().isActive) break
+
+            val now = Calendar.getInstance()
+            // 只有"看今天"时数据才会随秒变化；翻到历史日期就没必要刷
+            val viewingNow = when (selectedTimeDimension) {
+                TimeDimension.DAY ->
+                    selectedYear == now.get(Calendar.YEAR) &&
+                        selectedMonth == now.get(Calendar.MONTH) &&
+                        selectedDay == now.get(Calendar.DAY_OF_MONTH)
+
+                TimeDimension.MONTH ->
+                    selectedYear == now.get(Calendar.YEAR) &&
+                        selectedMonth == now.get(Calendar.MONTH)
+
+                TimeDimension.YEAR -> selectedYear == now.get(Calendar.YEAR)
             }
-            if (!shouldUpdate || !currentCoroutineContext().isActive) continue
+            // 看的不是当前这段时间，数据不会变，不用刷
+            if (!viewingNow) continue
+
             val currentTimeRange = when (selectedTimeDimension) {
-                TimeDimension.DAY -> statisticsManager.getDateRange(
-                    today.get(Calendar.YEAR), today.get(Calendar.MONTH), today.get(Calendar.DAY_OF_MONTH))
-                TimeDimension.MONTH -> statisticsManager.getMonthRange(selectedYear, selectedMonth)
+                TimeDimension.DAY ->
+                    statisticsManager.getDateRange(selectedYear, selectedMonth, selectedDay)
+
+                TimeDimension.MONTH ->
+                    statisticsManager.getMonthRange(selectedYear, selectedMonth)
+
                 TimeDimension.YEAR -> statisticsManager.getYearRange(selectedYear)
             }
             val newStats = statisticsManager.getStatistics(selectedTimeDimension, currentTimeRange)
             if (newStats.map { it.fenceId to it.totalDurationSeconds } !=
-                statistics.map { it.fenceId to it.totalDurationSeconds }) {
+                statistics.map { it.fenceId to it.totalDurationSeconds }
+            ) {
                 statistics = newStats
-                statisticsTree = statisticsManager.buildFenceStatisticTree(selectedTimeDimension, currentTimeRange)
+                statisticsTree = statisticsManager.buildFenceStatisticTree(newStats)
             }
-            lastUpdateTime = now
         }
     }
     
@@ -317,3 +337,9 @@ fun StatisticsScreen(
         )
     }
 }
+
+/** 有正在计时的停留时，按秒刷新，让时长看起来是实时的。 */
+private const val LIVE_REFRESH_INTERVAL_MS = 1_000L
+
+/** 没有活跃会话时，数据不会自己变，降低频率避免白耗电。 */
+private const val IDLE_REFRESH_INTERVAL_MS = 15_000L

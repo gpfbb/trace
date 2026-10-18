@@ -161,11 +161,20 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * 让"已停留时长"看起来是实时的。
+     *
+     * 在围栏内时每秒重算一次（纯内存减法，不查库），这样首页的时长
+     * 会像秒表一样走。不在围栏内时降到 15 秒——那时没有任何东西
+     * 会自己变化，没必要每秒唤醒一次。
+     */
     private fun startAutoRefresh() {
         viewModelScope.launch {
             try {
                 while (isActive) {
-                    delay(60_000)
+                    val inside = _isInsideFence.value
+                    delay(if (inside) LIVE_TICK_MS else IDLE_TICK_MS)
+                    // 重新读一次：睡觉期间可能已经进出围栏
                     if (_isInsideFence.value) {
                         updateCurrentFenceStatus()
                     }
@@ -174,6 +183,14 @@ class HomeViewModel(
                 AppLog.e("HomeViewModel", "autoRefresh error", e)
             }
         }
+    }
+
+    private companion object {
+        /** 在围栏内时的刷新间隔：要看起来像秒表。 */
+        const val LIVE_TICK_MS = 1_000L
+
+        /** 不在围栏内时的刷新间隔。 */
+        const val IDLE_TICK_MS = 15_000L
     }
 
     fun formatDuration(seconds: Long): String {

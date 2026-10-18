@@ -63,6 +63,7 @@ fun HomeScreen(
 
     val currentFenceName by homeViewModel.currentFenceName.collectAsState()
     val isInsideFence by homeViewModel.isInsideFence.collectAsState()
+    val currentStayDuration by homeViewModel.currentStayDuration.collectAsState()
     val todayEnterCount by homeViewModel.todayEnterCount.collectAsState()
     val todayExitCount by homeViewModel.todayExitCount.collectAsState()
     val monthTopFences by homeViewModel.monthTopFences.collectAsState()
@@ -104,7 +105,8 @@ fun HomeScreen(
             GroupedSection(title = stringResource(R.string.current_status)) {
                 CurrentStatusRow(
                     isInsideFence = isInsideFence,
-                    fenceName = currentFenceName
+                    fenceName = currentFenceName,
+                    stayDurationSeconds = currentStayDuration
                 )
             }
         }
@@ -171,7 +173,8 @@ fun HomeScreen(
 @Composable
 private fun CurrentStatusRow(
     isInsideFence: Boolean,
-    fenceName: String?
+    fenceName: String?,
+    stayDurationSeconds: Long
 ) {
     val palette = currentPalette
 
@@ -204,7 +207,12 @@ private fun CurrentStatusRow(
             Spacer(Modifier.height(Space.xs))
             Text(
                 text = if (isInsideFence) {
-                    stringResource(R.string.monitoring_active)
+                    // 显示已停留时长。它是每秒在涨的，比一句静态的
+                    // "Live monitoring active…" 有用得多。
+                    stringResource(
+                        R.string.staying_duration,
+                        formatStayDuration(stayDurationSeconds)
+                    )
                 } else {
                     stringResource(R.string.current_status)
                 },
@@ -222,6 +230,18 @@ private fun CurrentStatusRow(
                 color = palette.success
             )
         }
+    }
+}
+
+/** 停留时长格式：H:MM:SS，不足一小时用 MM:SS。够短，放在副标题里不换行。 */
+private fun formatStayDuration(seconds: Long): String {
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return if (h > 0) {
+        "%d:%02d:%02d".format(h, m, s)
+    } else {
+        "%02d:%02d".format(m, s)
     }
 }
 
