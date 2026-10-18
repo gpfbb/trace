@@ -84,7 +84,9 @@ fun CategorizedFenceListScreen(
                         onClick = {
                             val oldFence = fences.find { f -> f.id == fence.id }
                             if (oldFence != null) onFenceClick(oldFence)
-                        }
+                        },
+                        expandedFences = expandedFences,
+                        onExpandedChange = { expandedFences = it }
                     )
                 }
             }
@@ -126,7 +128,9 @@ fun CategorizedFenceListScreen(
                         onClick = {
                             val oldFence = fences.find { f -> f.id == fence.id }
                             if (oldFence != null) onFenceClick(oldFence)
-                        }
+                        },
+                        expandedFences = expandedFences,
+                        onExpandedChange = { expandedFences = it }
                     )
                 }
             }
@@ -192,6 +196,9 @@ private fun FenceTreeNode(
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     onClick: () -> Unit,
+    /** 全局展开态集合，递归子节点需要它才能各自展开/折叠 */
+    expandedFences: Set<String>,
+    onExpandedChange: (Set<String>) -> Unit,
 ) {
     val children = tree.childrenMap[fence.id] ?: emptyList()
     val hasChildren = children.isNotEmpty()
@@ -272,9 +279,16 @@ private fun FenceTreeNode(
                     fence = child,
                     tree = tree,
                     depth = depth + 1,
-                    isExpanded = false, // 子级默认折叠
-                    onToggleExpand = { /* 子级展开由 LazyColumn 管理，这里简化 */ },
-                    onClick = onClick
+                    isExpanded = child.id in expandedFences,
+                    onToggleExpand = {
+                        onExpandedChange(
+                            if (child.id in expandedFences) expandedFences - child.id
+                            else expandedFences + child.id
+                        )
+                    },
+                    onClick = onClick,
+                    expandedFences = expandedFences,
+                    onExpandedChange = onExpandedChange
                 )
             }
         }
