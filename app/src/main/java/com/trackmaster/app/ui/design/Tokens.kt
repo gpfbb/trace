@@ -58,14 +58,17 @@ enum class AccentColor(
     val onLight: Color,
     val onDark: Color
 ) {
-    CORAL(Color(0xFFD9461F), Color(0xFFFF7F50), Color.White, Color.White),
-    BLUE(Color(0xFF007AFF), Color(0xFF0A84FF), Color.White, Color.White),
-    RED(Color(0xFFD70015), Color(0xFFFF453A), Color.White, Color.White),
+    // 注意：深色档里几个偏亮的色（CORAL/BLUE/RED/PURPLE/ROSE）用黑字而不是白字。
+    // 白字在这些色上只有 2.5-3.7:1，达不到 WCAG AA；黑字能到 5.7-7.8:1。
+    // 这个取值由 DesignSystemTest 的对比度用例守住。
+    CORAL(Color(0xFFC2410C), Color(0xFFFF7F50), Color.White, Color.Black),
+    BLUE(Color(0xFF0062D6), Color(0xFF0A84FF), Color.White, Color.Black),
+    RED(Color(0xFFD70015), Color(0xFFFF453A), Color.White, Color.Black),
     EMERALD(Color(0xFF00875A), Color(0xFF30D158), Color.White, Color.Black),
-    PURPLE(Color(0xFF8944AB), Color(0xFFBF5AF2), Color.White, Color.White),
+    PURPLE(Color(0xFF8944AB), Color(0xFFBF5AF2), Color.White, Color.Black),
     ORANGE(Color(0xFFC2410C), Color(0xFFFF9F0A), Color.White, Color.Black),
     TEAL(Color(0xFF00838F), Color(0xFF40CBE0), Color.White, Color.Black),
-    ROSE(Color(0xFFD81B60), Color(0xFFFF6482), Color.White, Color.White);
+    ROSE(Color(0xFFD81B60), Color(0xFFFF6482), Color.White, Color.Black);
 
     fun tint(isDark: Boolean): Color = if (isDark) dark else light
 
@@ -131,9 +134,11 @@ fun lightPalette(accent: AccentColor): AppPalette = AppPalette(
     labelSecondary = Color(0xFF3C3C43).copy(alpha = 0.60f),
     labelTertiary = Color(0xFF3C3C43).copy(alpha = 0.30f),
     labelDisabled = Color(0xFF3C3C43).copy(alpha = 0.18f),
-    success = Color(0xFF34C759),
-    warning = Color(0xFFFF9500),
-    danger = Color(0xFFFF3B30),
+    // 语义色在浅色底上要压暗才能读清：iOS 的 systemGreen/systemOrange
+    // 直接放白底只有 2.2:1。这里用深一档的值，由对比度测试守住。
+    success = Color(0xFF1F7A33),
+    warning = Color(0xFFA85A00),
+    danger = Color(0xFFD70015),
     onDanger = Color.White
 )
 
