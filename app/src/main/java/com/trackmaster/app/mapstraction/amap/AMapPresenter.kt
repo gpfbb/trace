@@ -2,6 +2,8 @@ package com.trackmaster.app.mapstraction.amap
 
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import com.trackmaster.app.utils.AppLog
 import com.amap.api.location.AMapLocation as AMapLoc
 import com.amap.api.location.AMapLocationListener
@@ -18,6 +20,8 @@ import com.trackmaster.app.mapstraction.MapLocation
 import com.trackmaster.app.mapstraction.MapMarker
 import com.trackmaster.app.mapstraction.MapPolygon
 import com.trackmaster.app.mapstraction.MapPresenter
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 class AMapPresenter(
     private val mapView: MapView,
@@ -26,9 +30,33 @@ class AMapPresenter(
 
     companion object {
         private const val TAG = "AMapPresenter"
+
+        // 兜底超时：正常情况下 OnMapLoadedListener 会触发；
+        // 若某些 ROM/SDK 场景下监听不触发（例如监听注册时机晚于地图加载完成），
+        // 到达该时长后仍视为就绪，避免所有覆盖物永远不绘制。
+        private const val MAP_READY_FALLBACK_MS = 3000L
     }
 
     private val aMap: AMap by lazy { mapView.map }
+
+    // 【P1修复】地图渲染就绪状态。之前 AMapViewWrapper 用 delay(100) 假判断，
+    // 冷启动慢或低端机上 100ms 时地图可能还没渲染完成，addCircle/addPolygon/addMarker 静默失败。
+    // 现在由 OnMapLoadedListener 置位，与 Google 侧的 isMapReady StateFlow 行为对齐。
+    private val _isMapReady = MutableStateFlow(false)
+    val isMapReady: StateFlow<Boolean> = _isMapReady
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val readyFallback = Runnable {
+        markMapReady("fallback timeout")
+    }
+
+    // 兜底超时只在地图未就绪时生效，防止监听器不触发的极端场景
+    private fun markMapReady(source: String) {
+        if (_isMapReady.value) return
+        mainHandler.removeCallbacks(readyFallback)
+        _isMapReady.value = true
+        AppLog.d(TAG, "地图渲染就绪（来源: $source）")
+    }
 
     private val circleOverlays = mutableMapOf<String, Circle>()
     private val polygonOverlays = mutableMapOf<String, Polygon>()
@@ -438,6 +466,14 @@ class AMapPresenter(
 
     fun onCreate(savedInstanceState: Bundle?) {
         mapView.onCreate(savedInstanceState)
+        // 【P1修复】在 MapView.onCreate 之后、地图开始渲染之前注册加载完成监听，
+        // 用真实渲染回调替代 Wrapper 里 delay(100) 的假判断。
+        // 注意：aMap 是同步取得的，但地图渲染是异步的；OnMapLoadedListener 只回调一次。
+        // 若监听注册晚于加载完成（极端场景）导致不触发，由 fallback 超时兜底。
+        aMap.setOnMapLoadedListener {
+            markMapReady("OnMapLoadedListener")
+        }
+        mainHandler.postDelayed(readyFallback, MAP_READY_FALLBACK_MS)
     }
 
     fun onResume() {
@@ -458,6 +494,8 @@ class AMapPresenter(
     }
 
     private fun cleanup() {
+        // 取消未触发的兜底超时，避免 Handler 持有 Presenter 造成泄漏
+        mainHandler.removeCallbacks(readyFallback)
         clearAll()
         onMapClickListener = null
         onMarkerClickListener = null

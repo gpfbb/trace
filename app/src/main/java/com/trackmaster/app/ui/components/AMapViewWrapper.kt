@@ -34,7 +34,7 @@ private const val TAG = "AMapViewWrapper"
 
 @Composable
 fun AMapViewWrapper(
-    @Suppress("UNUSED_PARAMETER") modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier,
     currentLocation: Location? = null,
     fences: List<GeoFence> = emptyList(),
     currentMatchedFenceIds: Set<String> = emptySet(),
@@ -67,14 +67,10 @@ fun AMapViewWrapper(
     var hasCameraMoved by remember { mutableStateOf(false) }
 
     // 初始化地图
-    // 【P0修复】之前立即设置isMapReady=true，所有LaunchedEffect在地图未实际就绪时就执行
-    // AMap.onMapLoadedListener在地图加载完成时触发一次，但Compose重组时不会重触发
-    // 改用100ms延迟确保Presenter.setupMap()完成（Presenter在init时就调用setupMap）
-    var isMapReady by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(100)
-        isMapReady = true
-    }
+    // 【P1修复】不再用 delay(100) 假定地图已就绪。
+    // AMapPresenter 在 OnMapLoadedListener 回调（带 3s 兜底超时）中置位 isMapReady，
+    // 与 Google 侧使用 StateFlow 的做法保持一致，避免慢设备上覆盖物静默失败。
+    val isMapReady by mapPresenter.isMapReady.collectAsState()
 
     // 退出时保存相机位置
     DisposableEffect(Unit) {
@@ -175,7 +171,10 @@ fun AMapViewWrapper(
     }
 
     // 围栏覆盖物 - 使用 MapPresenter 管理
-    LaunchedEffect(displayedFenceId, fences, isMapReady) {
+    // 【P1修复】currentMatchedFenceIds / highlightedFenceId 在 effect 体内被读取，
+    // 必须加入 key 列表，否则用户走进/走出围栏或点击灵动岛切换高亮时不会重绘覆盖物。
+    // 注意：Set/List 的 key 用 equals 比较内容，MapScreen 传入的是内容稳定的快照，不会无限重跑。
+    LaunchedEffect(displayedFenceId, fences, currentMatchedFenceIds, highlightedFenceId, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
 
         // 清理旧的覆盖物
@@ -356,7 +355,9 @@ fun AMapViewWrapper(
         }
     }
 
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    // 【P2修复】外层 Box 使用调用方传入的 modifier，AndroidView 填满外层容器。
+    // 之前写死 fillMaxSize，调用方的 modifier 被静默忽略，API 语义不正确。
+    Box(modifier, contentAlignment = Alignment.Center) {
         AndroidView(
             factory = { ctx ->
                 mapPresenter.onCreate(null)

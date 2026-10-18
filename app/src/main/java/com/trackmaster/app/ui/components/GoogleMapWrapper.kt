@@ -262,7 +262,10 @@ fun GoogleMapWrapper(
     }
 
     // 围栏覆盖物
-    LaunchedEffect(displayedFenceId, fences, isMapReady) {
+    // 【P1修复】currentMatchedFenceIds / highlightedFenceId 在 effect 体内被读取，
+    // 必须加入 key 列表，否则用户走进/走出围栏或点击灵动岛切换高亮时不会重绘覆盖物。
+    // 注意：Set/List 的 key 用 equals 比较内容，MapScreen 传入的是内容稳定的快照，不会无限重跑。
+    LaunchedEffect(displayedFenceId, fences, currentMatchedFenceIds, highlightedFenceId, isMapReady) {
         if (!isMapReady) return@LaunchedEffect
 
         mapPresenter.clearAll()
@@ -438,7 +441,9 @@ fun GoogleMapWrapper(
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
+    // 【P2修复】外层 Box 使用调用方传入的 modifier，AndroidView 填满外层容器。
+    // 之前写死 fillMaxSize，调用方的 modifier 被静默忽略，API 语义不正确。
+    Box(modifier) {
         AndroidView(
             factory = { ctx ->
                 AppLog.d("GoogleMapWrapper", "=== AndroidView factory 被调用 ===")
