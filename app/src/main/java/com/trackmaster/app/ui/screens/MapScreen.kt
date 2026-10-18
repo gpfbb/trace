@@ -58,6 +58,7 @@ import com.trackmaster.app.ui.theme.*
 import com.trackmaster.app.viewmodel.MapViewModel
 import java.util.Random
 import java.util.UUID
+import com.trackmaster.app.ui.design.currentPalette
 
 private fun AMapLocation.toLocation(): Location = Location(
     latitude = latitude,
@@ -318,8 +319,8 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
             if (isEditingFence && editingFence != null) {
                 SmallFloatingActionButton(
                     onClick = { editingPoints = editingPoints.dropLast(1) },
-                    containerColor = NeonAmber,
-                    contentColor = Color.White
+                    containerColor = currentPalette.warning,
+                    contentColor = currentPalette.onAccent
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo))
                 }
@@ -328,8 +329,8 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
             if (isDrawingMode && drawingPoints.isNotEmpty()) {
                 SmallFloatingActionButton(
                     onClick = { drawingPoints = drawingPoints.dropLast(1) },
-                    containerColor = NeonAmber,
-                    contentColor = Color.White
+                    containerColor = currentPalette.warning,
+                    contentColor = currentPalette.onAccent
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo))
                 }
@@ -355,9 +356,9 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                 },
                 containerColor = when {
                     isDrawingMode || isEditingFence -> Danger
-                    else -> primaryColor()
+                    else -> currentPalette.accent
                 },
-                contentColor = Color.White
+                contentColor = currentPalette.onAccent
             ) {
                 Icon(
                     imageVector = when {
@@ -504,7 +505,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                         showDeleteConfirm = null
                         if (selectedFence?.id == fenceToDelete.id) selectedFence = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Danger)
+                    colors = ButtonDefaults.buttonColors(containerColor = currentPalette.danger)
                 ) {
                     Text(stringResource(R.string.delete), color = Color.White)
                 }
@@ -555,11 +556,15 @@ private fun TopStatusIsland(
         }
     }
 
+    val palette = currentPalette
+
     Box(
         modifier = modifier
             .height(48.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(glassPanel().copy(alpha = 0.9f))
+            // 地图上方是浮动控件，用不透明卡片底保证图标始终可读；
+            // 半透明在浅色地图上会糊成一片
+            .background(palette.groupedCell)
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -572,23 +577,43 @@ private fun TopStatusIsland(
             val smallestFence = matchedFences.minByOrNull { calculateFenceArea(it) }
 
             if (smallestFence != null) {
-                Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Success, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Filled.LocationOn,
+                    contentDescription = null,
+                    tint = palette.success,
+                    modifier = Modifier.size(18.dp)
+                )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = smallestFence.name,
                     fontSize = 14.sp,
-                    color = if (displayedFenceId == smallestFence.id) NeonAmber else Color.White,
+                    color = if (displayedFenceId == smallestFence.id) palette.accent else palette.label,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable { onFenceClick(smallestFence.id) }
                 )
             } else {
-                Icon(Icons.Filled.LocationOff, contentDescription = null, tint = Warning, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Filled.LocationOff,
+                    contentDescription = null,
+                    tint = palette.labelSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.fence_count, fences.size), fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                Text(
+                    text = stringResource(R.string.fence_count, fences.size),
+                    fontSize = 14.sp,
+                    color = palette.label,
+                    fontWeight = FontWeight.Medium
+                )
             }
 
             Spacer(Modifier.width(16.dp))
-            Box(Modifier.width(1.dp).height(20.dp).background(Color.White.copy(alpha = 0.3f)))
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(20.dp)
+                    .background(palette.separator)
+            )
             Spacer(Modifier.width(16.dp))
             // 地图图层切换按钮
             val nextMapType = if (mapType >= 3) 1 else mapType + 1
@@ -605,22 +630,28 @@ private fun TopStatusIsland(
             Icon(
                 mapTypeIcon,
                 contentDescription = stringResource(R.string.switch_map_layer, mapTypeDesc),
-                tint = NeonAmber,
-                modifier = Modifier.size(20.dp).clickable { onMapTypeChange(nextMapType) }
+                tint = palette.accent,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { onMapTypeChange(nextMapType) }
             )
             Spacer(Modifier.width(16.dp))
             Icon(
                 Icons.Filled.Settings,
                 contentDescription = stringResource(R.string.tools),
-                tint = if (showToolsPopup) NeonAmber else Color.White,
-                modifier = Modifier.size(20.dp).clickable { onToolsClick() }
+                tint = if (showToolsPopup) palette.accent else palette.labelSecondary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { onToolsClick() }
             )
             Spacer(Modifier.width(16.dp))
             Icon(
                 Icons.AutoMirrored.Filled.List,
                 contentDescription = stringResource(R.string.fence_list),
-                tint = Color.White,
-                modifier = Modifier.size(20.dp).clickable { onFenceListClick() }
+                tint = palette.labelSecondary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { onFenceListClick() }
             )
         }
     }
@@ -679,7 +710,7 @@ private fun ToolsPopup(
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Filled.Palette, contentDescription = null, tint = NeonAmber, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Palette, contentDescription = null, tint = currentPalette.accent, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.random_colors), color = NeonAmber, fontSize = 13.sp)
             }
@@ -1226,7 +1257,7 @@ private fun FenceListDialog(
                                         Icon(
                                             imageVector = Icons.Filled.LocationOn,
                                             contentDescription = stringResource(R.string.highlighted),
-                                            tint = NeonAmber,
+                                            tint = currentPalette.accent,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
