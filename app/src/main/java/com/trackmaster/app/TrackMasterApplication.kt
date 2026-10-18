@@ -145,6 +145,18 @@ class TrackMasterApplication : Application() {
         managersHolder.init(this)
         AppLog.d(TAG, "应用创建，初始化数据库")
 
+        // 首次启动时按设备所在地区选一个能用的地图服务商。
+        // 高德国内版 Key 在境外不可用（地图全灰），Google Maps 在国内不可用。
+        // 用户手动选过之后这里什么都不做。
+        val recommendedProvider = MapRegionDetector.recommendedProvider(this)
+        appPreferences.applyRegionalMapProviderDefault(recommendedProvider)
+        AppLog.d(
+            TAG,
+            "地图服务商: ${appPreferences.mapProvider}" +
+                "（地区建议 $recommendedProvider，" +
+                "用户${if (appPreferences.hasExplicitMapProvider) "已" else "未"}显式选择）"
+        )
+
         loadDataFromDatabase()
 
         val coreFences = fenceTreeManager.loadFenceTree(geoFences)

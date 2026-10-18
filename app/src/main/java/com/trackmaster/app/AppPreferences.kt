@@ -184,6 +184,10 @@ class AppPreferences(context: Context) {
         get() = prefs.getInt(KEY_MAP_TYPE, 1)
         set(value) = prefs.edit().putInt(KEY_MAP_TYPE, value).apply()
 
+    /** 用户是否显式选过地图服务商。没选过时由 [MapRegionDetector] 按地区推荐。 */
+    val hasExplicitMapProvider: Boolean
+        get() = prefs.getString(KEY_MAP_PROVIDER, null) != null
+
     private val _mapProviderFlow = MutableStateFlow(
         prefs.getString(KEY_MAP_PROVIDER, null)?.let { MapProvider.valueOf(it) } ?: MapProvider.AMAP
     )
@@ -195,6 +199,21 @@ class AppPreferences(context: Context) {
             prefs.edit().putString(KEY_MAP_PROVIDER, value.name).apply()
             _mapProviderFlow.value = value
         }
+
+    /**
+     * 按地区自动决定地图服务商，**只在用户没显式选过时生效**。
+     *
+     * 高德国内版 Key 在境外不可用（地图一片灰格子），Google Maps 在国内
+     * 不可用。首次启动时按设备 Locale 猜一个能用的，避免用户一打开地图
+     * 就看到失败画面。
+     *
+     * 用户一旦在设置里手动选过，这里就什么都不做——尊重用户选择。
+     */
+    fun applyRegionalMapProviderDefault(provider: MapProvider) {
+        if (hasExplicitMapProvider) return
+        prefs.edit().putString(KEY_MAP_PROVIDER, provider.name).apply()
+        _mapProviderFlow.value = provider
+    }
 
     val sharedPreferences: SharedPreferences get() = prefs
 
