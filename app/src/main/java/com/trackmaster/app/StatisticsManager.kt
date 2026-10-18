@@ -65,8 +65,12 @@ class StatisticsManager(private val context: Context) {
      *
      * 【修复】使用 daily_stays 表获取已完成的分天时长数据，
      * 而非 stays 表（会导致跨天停留的全部时长错误归入进入日）。
+     *
+     * 这个函数**是 suspend 且切到 IO 的**：它内部直接查 SQLite。
+     * 之前它是同步的，调用方在 `LaunchedEffect` 里直接调——等于在主线程
+     * 上做数据库 I/O，年视图数据多时会造成明显卡顿。
      */
-    fun getStatistics(timeDimension: TimeDimension, timeRange: TimeRange): List<FenceStatistics> {
+    suspend fun getStatistics(timeDimension: TimeDimension, timeRange: TimeRange): List<FenceStatistics> = withContext(Dispatchers.IO) {
         AppLog.d("StatisticsManager", "getStatistics called: dimension=$timeDimension, range=${timeRange.startTime}-${timeRange.endTime}")
 
         // 1. 从 daily_stays 表获取已完成的分天时长数据
@@ -139,7 +143,7 @@ class StatisticsManager(private val context: Context) {
             .map { it.build() }
             .sortedByDescending { it.totalDurationSeconds }
         AppLog.d("StatisticsManager", "getStatistics result: ${result.size} items")
-        return result
+        result
     }
 
     /**
