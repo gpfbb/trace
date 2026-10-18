@@ -1,38 +1,64 @@
 package com.trackmaster.app.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.trackmaster.app.R
 import com.trackmaster.app.TrackMasterApplication
-import com.trackmaster.app.ui.theme.*
+import com.trackmaster.app.ui.design.AppType
+import com.trackmaster.app.ui.design.Divider
+import com.trackmaster.app.ui.design.GroupedSection
+import com.trackmaster.app.ui.design.InfoRow
+import com.trackmaster.app.ui.design.LargeTitle
+import com.trackmaster.app.ui.design.Space
+import com.trackmaster.app.ui.design.StatusBadge
+import com.trackmaster.app.ui.design.SettingsRow
+import com.trackmaster.app.ui.design.currentPalette
 import com.trackmaster.app.viewmodel.HomeViewModel
 
+/**
+ * 首页：当前状态 + 今日统计 + 本月常去。
+ *
+ * 结构是三个分组卡片，每张卡片里放若干行，行之间用分割线。
+ * 所有颜色来自 [currentPalette]，不再有 `Color.White` 这类写死值。
+ */
 @Composable
 fun HomeScreen(
     onNavigateToMap: () -> Unit,
     onNavigateToStatistics: () -> Unit,
     homeViewModel: HomeViewModel
 ) {
-    val context = LocalContext.current
-    val app = remember { context.applicationContext as TrackMasterApplication }
+    val palette = currentPalette
 
     val currentFenceName by homeViewModel.currentFenceName.collectAsState()
     val isInsideFence by homeViewModel.isInsideFence.collectAsState()
@@ -40,126 +66,184 @@ fun HomeScreen(
     val todayExitCount by homeViewModel.todayExitCount.collectAsState()
     val monthTopFences by homeViewModel.monthTopFences.collectAsState()
 
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
-    val lifecycle = lifecycleOwner.lifecycle
-    DisposableEffect(lifecycle) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+    // 回到前台时刷新一次：停留时长等信息在后台会变
+    val context = LocalContext.current
+    val app = remember(context) {
+        context.applicationContext as TrackMasterApplication
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
                 app.notifyFenceStateChanged()
             }
         }
-        lifecycle.addObserver(observer)
-        onDispose {
-            lifecycle.removeObserver(observer)
-        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     LazyColumn(
-        Modifier.fillMaxSize()
-            .background(Brush.verticalGradient(listOf(surfaceColor(), backgroundColor())))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+        contentPadding = PaddingValues(
+            start = Space.screenHorizontal,
+            end = Space.screenHorizontal,
+            top = Space.xl,
+            // 给底部导航栏留出空间
+            bottom = 96.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(Space.sectionGap)
     ) {
         item {
-            Row(Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.trackmaster), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = primaryColor())
+            LargeTitle(text = stringResource(R.string.trackmaster))
+        }
+
+        item {
+            GroupedSection(title = stringResource(R.string.current_status)) {
+                CurrentStatusRow(
+                    isInsideFence = isInsideFence,
+                    fenceName = currentFenceName
+                )
             }
         }
 
         item {
-            GlassCard(Modifier.fillMaxWidth()) {
-                Column {
-                    Text(stringResource(R.string.current_status), fontSize = 14.sp, color = primaryColor())
-                    Spacer(Modifier.height(8.dp))
-                    if (isInsideFence && currentFenceName != null) {
-                        currentFenceName?.let { fenceName ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Success, modifier = Modifier.size(24.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Column {
-                                    Text(stringResource(R.string.currently_inside, fenceName), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    Text(stringResource(R.string.monitoring_active), fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f))
-                                }
-                            }
-                        }
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.LocationOff, contentDescription = null, tint = Warning, modifier = Modifier.size(24.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.not_inside_any_fence), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        }
-                    }
+            GroupedSection(title = stringResource(R.string.today_summary)) {
+                InfoRow(
+                    label = stringResource(R.string.today_enter),
+                    value = stringResource(R.string.times_count, todayEnterCount)
+                )
+                Divider()
+                InfoRow(
+                    label = stringResource(R.string.today_exit),
+                    value = stringResource(R.string.times_count, todayExitCount)
+                )
+            }
+        }
+
+        item {
+            GroupedSection(
+                title = stringResource(R.string.monthly_top_fences),
+                footer = if (monthTopFences.isEmpty()) {
+                    stringResource(R.string.no_data)
+                } else {
+                    null
                 }
-            }
-        }
-
-        item {
-            Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp)) {
-                StatsCard(title = stringResource(R.string.today_enter), value = "$todayEnterCount ${stringResource(R.string.times)}", icon = Icons.AutoMirrored.Filled.Login, color = Success, modifier = Modifier.weight(1f))
-                StatsCard(title = stringResource(R.string.today_exit), value = "$todayExitCount ${stringResource(R.string.times)}", icon = Icons.AutoMirrored.Filled.Logout, color = Danger, modifier = Modifier.weight(1f))
-            }
-        }
-
-        item {
-            GlassCard(Modifier.fillMaxWidth()) {
-                Column {
-                    Text(stringResource(R.string.monthly_top_fences), fontSize = 14.sp, color = primaryColor())
-                    Spacer(Modifier.height(12.dp))
-                    if (monthTopFences.isEmpty()) {
-                        Text(stringResource(R.string.no_data), fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
-                    } else {
-                        monthTopFences.forEachIndexed { idx, stats ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                Arrangement.SpaceBetween, Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${idx + 1}.", fontSize = 14.sp, color = if (idx == 0) NeonAmber else Color.Gray, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(stats.fenceName, fontSize = 14.sp, color = Color.White)
-                                }
-                                Text(formatDuration(stats.totalDurationSeconds), fontSize = 14.sp, color = primaryColor())
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToStatistics() }
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Filled.BarChart,
-                        contentDescription = null,
-                        tint = primaryColor(),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        stringResource(R.string.view_statistics),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
+                if (monthTopFences.isEmpty()) {
+                    EmptyRow(stringResource(R.string.no_data))
+                } else {
+                    monthTopFences.forEachIndexed { index, stats ->
+                        if (index > 0) Divider()
+                        InfoRow(
+                            label = stats.fenceName,
+                            value = formatDuration(stats.totalDurationSeconds),
+                            valueColor = palette.label
+                        )
+                    }
                 }
             }
         }
 
-        item { Spacer(Modifier.height(80.dp)) }
+        item {
+            GroupedSection {
+                SettingsRow(
+                    title = stringResource(R.string.view_statistics),
+                    showChevron = true,
+                    onClick = onNavigateToStatistics
+                )
+                Divider()
+                SettingsRow(
+                    title = stringResource(R.string.nav_map),
+                    showChevron = true,
+                    onClick = onNavigateToMap
+                )
+            }
+        }
     }
 }
 
+/**
+ * 当前状态行：在围栏内显示围栏名 + 状态徽章，否则显示"不在任何围栏内"。
+ */
+@Composable
+private fun CurrentStatusRow(
+    isInsideFence: Boolean,
+    fenceName: String?
+) {
+    val palette = currentPalette
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.lg, vertical = Space.lg),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (isInsideFence) Icons.Filled.LocationOn else Icons.Filled.LocationOff,
+            contentDescription = null,
+            tint = if (isInsideFence) palette.success else palette.labelTertiary,
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(Modifier.size(Space.md))
+
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = if (isInsideFence && fenceName != null) {
+                    fenceName
+                } else {
+                    stringResource(R.string.not_inside_any_fence)
+                },
+                style = AppType.title2,
+                color = palette.label,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(Space.xs))
+            Text(
+                text = if (isInsideFence) {
+                    stringResource(R.string.monitoring_active)
+                } else {
+                    stringResource(R.string.current_status)
+                },
+                style = AppType.footnote,
+                color = palette.labelSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (isInsideFence) {
+            Spacer(Modifier.size(Space.sm))
+            StatusBadge(
+                text = stringResource(R.string.monitoring_active),
+                color = palette.success
+            )
+        }
+    }
+}
+
+/** 分组卡片里的空状态行。 */
+@Composable
+private fun EmptyRow(text: String) {
+    val palette = currentPalette
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.lg, vertical = Space.xl),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = text, style = AppType.body, color = palette.labelSecondary)
+    }
+}
+
+/**
+ * 时长格式化。
+ *
+ * 注意：项目里另有两处同样的实现（StatisticsManager.formatDuration、
+ * CategoryManagerScreen）。阶段 3 收尾时会统一，这里先保持行为一致。
+ */
 @Composable
 private fun formatDuration(seconds: Long): String {
     val hours = seconds / 3600
@@ -168,24 +252,5 @@ private fun formatDuration(seconds: Long): String {
         hours > 0 -> stringResource(R.string.duration_hours_minutes, hours, mins)
         mins > 0 -> stringResource(R.string.duration_minutes, mins)
         else -> stringResource(R.string.duration_less_than_minute)
-    }
-}
-
-@Composable
-private fun StatsCard(
-    title: String,
-    value: String,
-    icon: ImageVector,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    GlassCard(modifier) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(28.dp))
-            Spacer(Modifier.height(8.dp))
-            Text(title, fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
-            Spacer(Modifier.height(4.dp))
-            Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
-        }
     }
 }

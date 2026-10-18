@@ -170,29 +170,22 @@ fun TrackMasterNavHost(
             }
         }
 
-        // 使用简洁版底部导航栏
+        // 底部标签栏：贴底通栏，内容区通过各自的 contentPadding 让出空间
         if (currentRoute !in hideBottomNavRoutes) {
-            var lastNavigationTime by remember { mutableStateOf(0L) }
-            val navigationCooldown = 200L
-
             SimpleBottomNavBar(
                 currentRoute = currentRoute,
                 onNavigate = { screen ->
-                    val currentTime = System.currentTimeMillis()
-                    if (currentTime - lastNavigationTime < navigationCooldown) return@SimpleBottomNavBar
-                    lastNavigationTime = currentTime
-
                     val currentDestRoute = navController.currentBackStackEntry?.destination?.route
                     if (currentDestRoute != screen.route) {
                         navController.navigate(screen.route) {
                             launchSingleTop = true
+                            // 四个 tab 之间切换不留返回栈，避免返回键在 tab 间来回跳
+                            popUpTo(Screen.Home.route) { saveState = true }
+                            restoreState = true
                         }
                     }
                 },
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.BottomCenter)
-                    .padding(bottom = 20.dp)
-                    .padding(horizontal = 32.dp)
+                modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
             )
         }
 

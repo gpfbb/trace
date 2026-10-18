@@ -378,4 +378,9 @@ Lokasi fail: %5$s</string>
     <string name="theme_mode_dark">Gelap</string>
     <string name="accent_color">Warna aksen</string>
     <string name="done">Selesai</string>
+
+    <!-- Skrin utama -->
+    <string name="today_summary">Hari ini</string>
+    <string name="times_count">%d kali</string>
+    <string name="loading">Memuatkan…</string>
 </resources>

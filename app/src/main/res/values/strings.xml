@@ -385,4 +385,9 @@ File location: %5$s</string>
     <string name="theme_mode_dark">Dark</string>
     <string name="accent_color">Accent color</string>
     <string name="done">Done</string>
+
+    <!-- Home screen -->
+    <string name="today_summary">Today</string>
+    <string name="times_count">%d times</string>
+    <string name="loading">Loading…</string>
 </resources>
