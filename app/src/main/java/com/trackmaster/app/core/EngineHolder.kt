@@ -6,6 +6,7 @@ import com.trackmaster.app.throttle.ThrottleConfig
 import com.trackmaster.app.storage.Repository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
@@ -42,7 +43,8 @@ class EngineHolder(
             }
         }
         if (oldEngine != null) {
-            CoroutineScope(Dispatchers.IO).launch {
+            // SupervisorJob：dispose 里的异常不应影响其他协程
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 runCatching { oldEngine.dispose() }
                     .onFailure { AppLog.e(TAG, "旧Engine dispose失败", it) }
             }

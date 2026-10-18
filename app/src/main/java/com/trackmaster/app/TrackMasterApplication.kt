@@ -18,8 +18,10 @@ import com.trackmaster.app.di.appModule
 import com.trackmaster.app.services.Aggregator
 import com.trackmaster.app.ui.theme.ThemeManager
 import com.trackmaster.app.throttle.ThrottleConfig
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.getKoin
 import org.koin.android.ext.koin.androidContext
@@ -94,7 +96,19 @@ class TrackMasterApplication : Application() {
 
     private lateinit var fenceProcessingHolder: FenceProcessingHolder
 
-    private val appScope = CoroutineScope(Dispatchers.IO)
+    /**
+     * 应用级协程作用域：所有围栏状态变更都在这里串行执行。
+     *
+     * 必须带 SupervisorJob：否则任何一个子协程抛出未捕获异常（例如
+     * Repository.flush 重试上限耗尽）都会连带取消整个 scope，
+     * 之后每一次定位处理都会静默失效，且没有任何日志提示。
+     * 配一个 CoroutineExceptionHandler 兜底记录，避免异常被彻底吞掉。
+     */
+    private val appScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, throwable ->
+            AppLog.e(TAG, "appScope 协程未捕获异常", throwable)
+        }
+    )
 
     // ============================================================
     // 定位服务
