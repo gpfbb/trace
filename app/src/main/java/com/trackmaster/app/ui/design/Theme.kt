@@ -175,6 +175,18 @@ private fun AppPalette.toMaterialColorScheme() = if (isDark) {
         onBackground = label,
         surface = groupedCell,
         onSurface = label,
+        // Material 3 的 AlertDialog / Surface 会叠加 tonalElevation：
+        // 它把 surfaceTint 的 **alpha 强制覆盖**成 0.1076 后压到 surface 上。
+        //
+        // 注意不能设成 Color.Transparent——Transparent 是 RGB 全黑的
+        // 0x00000000，alpha 被覆盖后就成了"10.76% 黑"压在卡片上，
+        // 白色卡片会变成 #E4E4E4 的灰。设成卡片色本身才是真正的无操作。
+        surfaceTint = groupedCell,
+        surfaceContainerHigh = groupedCell,
+        surfaceContainer = groupedCell,
+        surfaceContainerLow = groupedCell,
+        surfaceContainerLowest = groupedCell,
+        surfaceContainerHighest = elevated,
         surfaceVariant = elevated,
         onSurfaceVariant = labelSecondary,
         outline = border,
@@ -194,6 +206,18 @@ private fun AppPalette.toMaterialColorScheme() = if (isDark) {
         onBackground = label,
         surface = groupedCell,
         onSurface = label,
+        // Material 3 的 AlertDialog / Surface 会叠加 tonalElevation：
+        // 它把 surfaceTint 的 **alpha 强制覆盖**成 0.1076 后压到 surface 上。
+        //
+        // 注意不能设成 Color.Transparent——Transparent 是 RGB 全黑的
+        // 0x00000000，alpha 被覆盖后就成了"10.76% 黑"压在卡片上，
+        // 白色卡片会变成 #E4E4E4 的灰。设成卡片色本身才是真正的无操作。
+        surfaceTint = groupedCell,
+        surfaceContainerHigh = groupedCell,
+        surfaceContainer = groupedCell,
+        surfaceContainerLow = groupedCell,
+        surfaceContainerLowest = groupedCell,
+        surfaceContainerHighest = elevated,
         surfaceVariant = elevated,
         onSurfaceVariant = labelSecondary,
         outline = border,

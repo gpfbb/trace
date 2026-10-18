@@ -230,7 +230,6 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
         TopStatusIsland(
             currentMatchedFenceIds = localMatchedIds,
             fences = localFences,
-            highlightedFenceId = highlightedFenceId,
             displayedFenceId = displayedFenceId,
             mapType = mapType,
             showToolsPopup = showToolsPopup,
@@ -394,7 +393,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
     }
 
     if (showCreateDialog) {
-        CreateFenceDialog(
+        com.trackmaster.app.ui.map.CreateFenceDialog(
             fenceType = selectedFenceType,
             points = drawingPoints,
             color = selectedColor,
@@ -464,7 +463,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
     }
 
     if (showFenceList) {
-        FenceListDialog(
+        com.trackmaster.app.ui.map.FenceListDialog(
             fences = localFences,
             fenceTreeManager = app.fenceTreeManager,
             currentMatchedIds = localMatchedIds,
@@ -493,7 +492,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
 
     selectedFence?.let { fence ->
         if (showEditDialog) {
-            EditFenceDialog(
+            com.trackmaster.app.ui.map.EditFenceDialog(
                 fence = fence,
                 fenceColors = fenceColors,
             onDismiss = {
@@ -545,7 +544,6 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
 private fun TopStatusIsland(
     currentMatchedFenceIds: Set<String>,
     fences: List<GeoFence>,
-    highlightedFenceId: String?,
     displayedFenceId: String?,
     mapType: Int,
     showToolsPopup: Boolean,
@@ -894,356 +892,3 @@ private fun EditingToolbar(
     }
 }
 
-@Composable
-private fun CreateFenceDialog(
-    fenceType: GeoFenceType,
-    points: List<GeoFencePoint>,
-    color: String,
-    alpha: Float,
-    onDismiss: () -> Unit,
-    onConfirm: (name: String, color: String, alpha: Float, radius: Float) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    var radius by remember { mutableStateOf(100f) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.create_fence)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.fence_name)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                when (fenceType) {
-                    GeoFenceType.CIRCLE -> {
-                        Text(stringResource(R.string.radius_meters, radius.toInt()), fontSize = 14.sp)
-                        Slider(
-                            value = radius,
-                            onValueChange = { radius = it },
-                            valueRange = 50f..1000f,
-                            steps = 18
-                        )
-                    }
-                    GeoFenceType.POLYGON -> Text(stringResource(R.string.vertices_count, points.size), fontSize = 14.sp, color = Color.Gray)
-                }
-                Text(
-                    stringResource(R.string.fence_hint),
-                    fontSize = 11.sp,
-                    color = NeonBlue
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(name, color, alpha, radius) }, enabled = name.isNotBlank()) { Text(stringResource(R.string.create)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }
-    )
-}
-
-@Composable
-private fun FenceListDialog(
-    fences: List<GeoFence>,
-    fenceTreeManager: com.trackmaster.app.core.FenceTreeManager,
-    currentMatchedIds: Set<String>,
-    highlightedFenceId: String?,
-    onDismiss: () -> Unit,
-    onHighlightClick: (GeoFence) -> Unit,
-    onEditClick: (GeoFence) -> Unit,
-    onDeleteClick: (GeoFence) -> Unit
-) {
-    var expandedFenceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-
-    // 获取父级映射 - 使用 version 作为 key 确保重新计算后能刷新
-    val parentMap by remember(fenceTreeManager.version) {
-        mutableStateOf(fenceTreeManager.getParentMap())
-    }
-
-    // 计算围栏深度
-    fun calculateDepth(fence: GeoFence): Int {
-        var depth = 0
-        var currentId: String? = parentMap[fence.id]
-        while (currentId != null) {
-            depth++
-            currentId = parentMap[currentId]
-        }
-        return depth
-    }
-
-    // 检查是否有子围栏
-    fun hasChildren(fence: GeoFence): Boolean {
-        return parentMap.values.contains(fence.id)
-    }
-
-    // 构建可见围栏的扁平列表（用于 LazyColumn）
-    fun buildVisibleFenceList(
-        allFences: List<GeoFence>,
-        pMap: Map<String, String>,
-        expanded: Set<String>
-    ): List<Pair<GeoFence, Int>> =
-        com.trackmaster.app.core.FenceTreeFlattener.flatten(allFences, pMap, expanded)
-
-    // 根据 expandedFenceIds 过滤可见围栏，构建扁平化列表
-    val visibleFences by remember(expandedFenceIds, fences, parentMap) {
-        mutableStateOf(buildVisibleFenceList(fences, parentMap, expandedFenceIds))
-    }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true,
-            usePlatformDefaultWidth = false
-        )
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .fillMaxHeight(0.7f),
-            shape = RoundedCornerShape(28.dp),
-            color = glassPanel()
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // 标题栏
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Map,
-                            contentDescription = null,
-                            tint = NeonBlue,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.fence_list_title, visibleFences.size),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color.White
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = AppIcons.close,
-                            contentDescription = stringResource(R.string.close),
-                            tint = Color.Gray
-                        )
-                    }
-                }
-
-                HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
-
-                if (visibleFences.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = AppIcons.outsideFence,
-                                contentDescription = null,
-                                tint = Color.Gray,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(stringResource(R.string.no_fences), color = Color.Gray, fontSize = 16.sp)
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = 8.dp)
-                    ) {
-                        items(visibleFences.size) { i ->
-                            val (fence, depth) = visibleFences[i]
-                            val matched = fence.id in currentMatchedIds
-                            val isHighlighted = fence.id == highlightedFenceId
-                            val indentPadding = (depth * 16).dp
-                            val fenceHasChildren = hasChildren(fence)
-                            val isExpanded = fence.id in expandedFenceIds
-
-                            Column {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            when {
-                                                isHighlighted -> NeonAmber.copy(alpha = 0.2f)
-                                                matched -> Success.copy(alpha = 0.1f)
-                                                else -> Color.Transparent
-                                            }
-                                        )
-                                        .clickable { onHighlightClick(fence) }
-                                        .padding(start = indentPadding + 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (fenceHasChildren) {
-                                        IconButton(
-                                            onClick = {
-                                                expandedFenceIds = if (isExpanded) {
-                                                    expandedFenceIds - fence.id
-                                                } else {
-                                                    expandedFenceIds + fence.id
-                                                }
-                                            },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                                contentDescription = if (isExpanded) stringResource(R.string.collapse_short) else stringResource(R.string.expand_short),
-                                                tint = NeonBlue,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Spacer(Modifier.width(24.dp))
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(AndroidColor.parseColor(fence.color)))
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            fence.name,
-                                            fontWeight = FontWeight.Medium,
-                                            color = if (isHighlighted) NeonAmber else Color.White
-                                        )
-                                        Text(
-                                            when (fence.type) {
-                                                GeoFenceType.CIRCLE -> stringResource(R.string.circle_with_radius, fence.radius?.toInt() ?: 0)
-                                                GeoFenceType.POLYGON -> stringResource(R.string.polygon_with_vertices, fence.points?.size ?: 0)
-                                            },
-                                            fontSize = 12.sp,
-                                            color = Color.Gray
-                                        )
-                                    }
-                                    if (matched) {
-                                        Icon(
-                                            imageVector = Icons.Filled.CheckCircle,
-                                            contentDescription = stringResource(R.string.hit),
-                                            tint = Success,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    if (isHighlighted) {
-                                        Icon(
-                                            imageVector = AppIcons.insideFence,
-                                            contentDescription = stringResource(R.string.highlighted),
-                                            tint = currentPalette.accent,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    IconButton(onClick = { onEditClick(fence) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(AppIcons.edit, contentDescription = stringResource(R.string.edit), tint = primaryColor(), modifier = Modifier.size(18.dp))
-                                    }
-                                    IconButton(onClick = { onDeleteClick(fence) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(AppIcons.delete, contentDescription = stringResource(R.string.delete), tint = Danger, modifier = Modifier.size(18.dp))
-                                    }
-                                }
-
-                                HorizontalDivider(
-                                    color = Color.Gray.copy(alpha = 0.15f),
-                                    modifier = Modifier.padding(start = indentPadding + 48.dp, end = 12.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EditFenceDialog(
-    fence: GeoFence,
-    fenceColors: List<String>,
-    onDismiss: () -> Unit,
-    onConfirm: (GeoFence) -> Unit,
-    onDelete: () -> Unit
-) {
-    var name by remember { mutableStateOf(fence.name) }
-    var color by remember { mutableStateOf(fence.color) }
-    var alpha by remember { mutableStateOf(fence.alpha) }
-    var radius by remember { mutableStateOf(fence.radius ?: 100f) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.edit_fence)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.fence_name)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(stringResource(R.string.color), fontSize = 12.sp, color = Color.Gray)
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    fenceColors.forEach { c ->
-                        val sel = color == c
-                        Box(
-                            Modifier.size(28.dp).clip(CircleShape)
-                                .background(Color(AndroidColor.parseColor(c)))
-                                .then(if (sel) Modifier.background(Color.White.copy(alpha = 0.4f)) else Modifier)
-                                .clickable { color = c }
-                        )
-                        Spacer(Modifier.width(4.dp))
-                    }
-                }
-
-                Text(stringResource(R.string.transparency, (alpha * 100).toInt()), fontSize = 12.sp, color = Color.Gray)
-                Slider(
-                    value = alpha,
-                    onValueChange = { alpha = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    valueRange = 0.1f..0.8f,
-                    steps = 6
-                )
-
-                if (fence.type == GeoFenceType.CIRCLE) {
-                    Text(stringResource(R.string.radius_meters, radius.toInt()), fontSize = 12.sp, color = Color.Gray)
-                    Slider(
-                        value = radius,
-                        onValueChange = { radius = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        valueRange = 50f..1000f,
-                        steps = 18
-                    )
-                }
-
-                Text(stringResource(R.string.edit_on_map_hint), fontSize = 11.sp, color = NeonBlue)
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onConfirm(fence.copy(name = name, color = color, alpha = alpha, radius = if (fence.type == GeoFenceType.CIRCLE) radius else fence.radius))
-                }
-            ) { Text(stringResource(R.string.edit_on_map)) }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onDelete) { Text(stringResource(R.string.delete), color = Danger) }
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-            }
-        }
-    )
-}
