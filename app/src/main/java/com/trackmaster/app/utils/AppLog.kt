@@ -13,8 +13,8 @@ object AppLog {
         Log.e(tag, message, throwable)
     }
     
-    fun w(tag: String, message: String) {
-        Log.w(tag, message)
+    fun w(tag: String, message: String, throwable: Throwable? = null) {
+        Log.w(tag, message, throwable)
     }
     
     fun i(tag: String, message: String) {

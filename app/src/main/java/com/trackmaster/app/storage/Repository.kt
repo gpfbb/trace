@@ -2,9 +2,13 @@ package com.trackmaster.app.storage
 
 import com.trackmaster.app.core.DailySummary
 import com.trackmaster.app.core.StaySegment
+import com.trackmaster.app.utils.AppLog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 存储仓库 — 内存缓存 + 批量事务写入
@@ -20,6 +24,9 @@ class Repository(
     private val writeBuffer = CopyOnWriteArrayList<StaySegment>()
     private val segmentCache = ConcurrentHashMap<String, List<StaySegment>>()
     private val summaryCache = ConcurrentHashMap<String, List<DailySummary>>()
+
+    // flush 连续失败次数，用于指数退避；成功后归零
+    private val flushRetryCount = AtomicInteger(0)
 
     // 使用同步锁保护 flush 操作，避免并发 flush
     private val flushLock = Any()
@@ -39,34 +46,49 @@ class Repository(
         }
     }
 
-    /** 批量 flush 到底层存储（事务保护） */
+    /** 批量 flush 到底层存储（事务保护 + 失败重试） */
     suspend fun flush() {
-        val batch: ArrayList<StaySegment>
-        synchronized(flushLock) {
-            if (writeBuffer.isEmpty()) return
-            batch = ArrayList(writeBuffer)
-            // 【P0修复】事务成功后再清空 buffer，失败则保留数据重试
-            // 原问题：writeBuffer.clear() 在事务前执行，事务失败后数据丢失
-            // 修复：事务成功后才清空 buffer
-        }
-        // 在临界区外执行数据库操作
-        try {
-            adapter.beginTransaction()
-            adapter.insertSegments(batch)
-            adapter.commitTransaction()
-            // 【P0修复】事务成功后才清空 buffer 和缓存
+        while (true) {
+            val batch: ArrayList<StaySegment>
             synchronized(flushLock) {
-                writeBuffer.removeAll(batch)
+                if (writeBuffer.isEmpty()) return
+                batch = ArrayList(writeBuffer)
+                // 【P0修复】事务成功后再清空 buffer，失败则保留数据重试
+                // 原问题：writeBuffer.clear() 在事务前执行，事务失败后数据丢失
+                // 修复：事务成功后才清空 buffer
             }
-            batch.forEach { seg ->
-                // 【Bug修复】跨天 segment：需清除 startTs 和 endTs 所在日期的缓存
-                segmentCache.remove(formatDateKey(seg.startTs))
-                seg.endTs?.let { segmentCache.remove(formatDateKey(it)) }
+            // 在临界区外执行数据库操作
+            try {
+                adapter.beginTransaction()
+                adapter.insertSegments(batch)
+                adapter.commitTransaction()
+                // 【P0修复】事务成功后才清空 buffer 和缓存
+                synchronized(flushLock) {
+                    writeBuffer.removeAll(batch)
+                }
+                batch.forEach { seg ->
+                    // 【Bug修复】跨天 segment：需清除 startTs 和 endTs 所在日期的缓存
+                    segmentCache.remove(formatDateKey(seg.startTs))
+                    seg.endTs?.let { segmentCache.remove(formatDateKey(it)) }
+                }
+                return
+            } catch (e: CancellationException) {
+                // 协程被取消时不要重试，让 buffer 留在原地等下次 flush
+                throw e
+            } catch (e: Exception) {
+                runCatching { adapter.rollbackTransaction() }
+                // buffer 未被清空，数据仍在内存中。指数退避重试，避免数据库
+                // 瞬时不可用（磁盘满、锁竞争）时把整段停留记录丢掉。
+                val attempt = flushRetryCount.incrementAndGet()
+                if (attempt >= MAX_FLUSH_RETRIES) {
+                    flushRetryCount.set(0)
+                    AppLog.e(TAG, "flush 重试 $MAX_FLUSH_RETRIES 次仍失败，放弃本批 ${batch.size} 条", e)
+                    throw e
+                }
+                val backoffMs = FLUSH_RETRY_BASE_MS shl (attempt - 1).coerceAtMost(4)
+                AppLog.w(TAG, "flush 失败（第 $attempt 次），${backoffMs}ms 后重试，本批 ${batch.size} 条", e)
+                delay(backoffMs)
             }
-        } catch (e: Exception) {
-            adapter.rollbackTransaction()
-            // buffer 未被清空，无需放回，直接抛出异常让调用方重试
-            throw e
         }
     }
 
@@ -121,6 +143,14 @@ class Repository(
     }
 
     companion object {
+        private const val TAG = "Repository"
+
+        /** flush 失败后的最大重试次数 */
+        private const val MAX_FLUSH_RETRIES = 5
+
+        /** 重试退避基数：第 1 次 250ms，之后翻倍，最长约 4s */
+        private const val FLUSH_RETRY_BASE_MS = 250L
+
         fun formatDateKey(ts: Long): String {
             // 【MEDIUM修复】使用 Locale.US 确保日期格式化不受系统语言影响
             val cal = java.util.Calendar.getInstance(Locale.US)
