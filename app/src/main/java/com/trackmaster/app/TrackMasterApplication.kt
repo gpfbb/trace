@@ -190,6 +190,12 @@ class TrackMasterApplication : Application() {
     }
 
     fun stopLocationService() {
+        // 用户主动停止追踪：先取消 AlarmManager 唤醒，否则服务已经停了，
+        // WakeupReceiver 仍会每 8 分钟准时触发、WakeupService 空转三次后退出，
+        // 白耗电并刷日志。
+        // 注意：这里只在用户显式停止时取消。服务被系统回收走的是另一条路径，
+        // 那时必须保留 Alarm 才能把主服务拉回来（见 WakeupService.handleServiceNotBound）。
+        locationService?.cancelWakeupAlarm()
         if (serviceBound) {
             unbindService(serviceConnection)
             serviceBound = false

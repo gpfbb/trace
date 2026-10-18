@@ -20,8 +20,6 @@ class WakeupService : Service() {
         const val ACTION_WAKEUP = "com.trackmaster.app.ACTION_LOCATION_WAKEUP"
         private const val WAKELOCK_TIMEOUT = 30000L // 30秒唤醒锁
 
-        private const val CHECK_INTERVAL_MS = 5 * 60 * 1000L // 5分钟
-
         // 等待"已绑定进程"完成绑定的重试参数（进程刚恢复时的竞态窗口）
         private const val BIND_RETRY_MAX = 3
         private const val BIND_RETRY_DELAY_MS = 500L

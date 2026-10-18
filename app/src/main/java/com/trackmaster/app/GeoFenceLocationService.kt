@@ -152,6 +152,17 @@ class GeoFenceLocationService : Service() {
 
     override fun onBind(intent: Intent?): IBinder = binder
 
+    /**
+     * 取消 AlarmManager 周期唤醒。
+     *
+     * 只在用户主动停止追踪时调用（Application.stopLocationService）。
+     * **不要**在 onDestroy() 里调用：服务被系统回收时同样会走 onDestroy，
+     * 那时取消 Alarm 会让主服务永远无法被唤醒恢复。
+     */
+    fun cancelWakeupAlarm() {
+        powerSaveController.cancelWakeupAlarm()
+    }
+
     override fun onDestroy() {
         AppLog.d(TAG, "定位服务销毁")
         powerSaveController.stopPeriodicCheck()
