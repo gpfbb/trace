@@ -53,9 +53,11 @@ import com.trackmaster.app.core.FenceTreeManager
 import com.trackmaster.app.core.GeoFenceType
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.GeoFencePoint
+import com.trackmaster.app.model.Category
 import com.trackmaster.app.ui.design.AppIcons
 import com.trackmaster.app.ui.design.AppType
 import com.trackmaster.app.ui.design.PrimaryButton
+import com.trackmaster.app.ui.design.Radius
 import com.trackmaster.app.ui.design.Space
 import com.trackmaster.app.ui.design.currentPalette
 import androidx.compose.foundation.border
@@ -78,12 +80,14 @@ fun CreateFenceDialog(
     points: List<GeoFencePoint>,
     color: String,
     alpha: Float,
+    categories: List<Category>,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, color: String, alpha: Float, radius: Float) -> Unit
+    onConfirm: (name: String, color: String, alpha: Float, radius: Float, categoryId: String) -> Unit
 ) {
     val palette = currentPalette
     var name by remember { mutableStateOf("") }
     var radius by remember { mutableStateOf(100f) }
+    var categoryId by remember { mutableStateOf(Category.UNASSIGNED_ID) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -121,6 +125,13 @@ fun CreateFenceDialog(
                         color = palette.labelSecondary
                     )
                 }
+                if (categories.isNotEmpty()) {
+                    CategorySelector(
+                        categories = categories,
+                        selectedId = categoryId,
+                        onSelect = { categoryId = it }
+                    )
+                }
                 Text(
                     text = stringResource(R.string.fence_hint),
                     style = AppType.caption,
@@ -130,7 +141,7 @@ fun CreateFenceDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(name, color, alpha, radius) },
+                onClick = { onConfirm(name, color, alpha, radius, categoryId) },
                 enabled = name.isNotBlank()
             ) {
                 Text(
@@ -403,6 +414,7 @@ private fun FenceListRow(
 fun EditFenceDialog(
     fence: GeoFence,
     fenceColors: List<String>,
+    categories: List<Category>,
     onDismiss: () -> Unit,
     onConfirm: (GeoFence) -> Unit,
     onDelete: () -> Unit
@@ -412,6 +424,7 @@ fun EditFenceDialog(
     var color by remember { mutableStateOf(fence.color) }
     var alpha by remember { mutableStateOf(fence.alpha) }
     var radius by remember { mutableStateOf(fence.radius ?: 100f) }
+    var categoryId by remember { mutableStateOf(fence.categoryId) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -475,6 +488,14 @@ fun EditFenceDialog(
                     )
                 }
 
+                if (categories.isNotEmpty()) {
+                    CategorySelector(
+                        categories = categories,
+                        selectedId = categoryId,
+                        onSelect = { categoryId = it }
+                    )
+                }
+
                 Text(
                     text = stringResource(R.string.edit_on_map_hint),
                     style = AppType.caption,
@@ -490,6 +511,7 @@ fun EditFenceDialog(
                             name = name,
                             color = color,
                             alpha = alpha,
+                            categoryId = categoryId,
                             radius = if (fence.type == GeoFenceType.CIRCLE) radius else fence.radius
                         )
                     )
@@ -547,3 +569,61 @@ private fun ColorSwatch(
  */
 internal fun safeParseColor(hex: String, fallback: Color): Color =
     runCatching { Color(AndroidColor.parseColor(hex)) }.getOrDefault(fallback)
+
+/**
+ * 分类选择器：一行可横向滚动的胶囊，第一个永远是"未分类"。
+ *
+ * 分类列表来自 `MapViewModel.categories`；没有分类时调用方直接不渲染这个
+ * 组件（见两个弹窗里的 `if (categories.isNotEmpty())`）。
+ */
+@Composable
+private fun CategorySelector(
+    categories: List<Category>,
+    selectedId: String,
+    onSelect: (String) -> Unit
+) {
+    val palette = currentPalette
+
+    Text(
+        text = stringResource(R.string.category_label),
+        style = AppType.caption,
+        color = palette.labelSecondary
+    )
+
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(Space.sm)
+    ) {
+        // "未分类"始终排在第一个，让用户可以主动清掉分类。
+        // 它的名字走字符串资源——Category.UNASSIGNED.name 是硬编码中文，
+        // 直接显示会在英文/马来语界面里冒出中文。
+        val uncategorizedLabel = stringResource(R.string.uncategorized)
+        val options = listOf(Category.UNASSIGNED) + categories
+        options.forEach { category ->
+            val selected = category.id == selectedId
+            val label = if (category.id == Category.UNASSIGNED_ID) {
+                uncategorizedLabel
+            } else {
+                category.name
+            }
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(Radius.pill))
+                    .background(if (selected) palette.accentSubtle else palette.fill)
+                    .clickable { onSelect(category.id) }
+                    .padding(horizontal = Space.md, vertical = Space.xs),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!category.icon.isNullOrBlank()) {
+                    Text(text = category.icon, fontSize = 13.sp)
+                    Spacer(Modifier.width(Space.xs))
+                }
+                Text(
+                    text = label,
+                    style = AppType.footnote,
+                    color = if (selected) palette.accent else palette.label
+                )
+            }
+        }
+    }
+}

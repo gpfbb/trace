@@ -110,6 +110,20 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
     }
     var mapType by remember { mutableStateOf(app.appPreferences.mapType) }
 
+    // 分类列表：新建/编辑弹窗里的分类选择器用。
+    // 回到地图时重新读一次，这样在分类管理页新建的分类能立刻选到。
+    val categories by mapViewModel.categories.collectAsState()
+    val lifecycleForCategories = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleForCategories) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                mapViewModel.refreshCategories()
+            }
+        }
+        lifecycleForCategories.lifecycle.addObserver(observer)
+        onDispose { lifecycleForCategories.lifecycle.removeObserver(observer) }
+    }
+
     var showFenceList by remember { mutableStateOf(false) }
     var selectedFence by remember { mutableStateOf<GeoFence?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -368,11 +382,12 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
             points = drawnPoints,
             color = editor.drawingColor,
             alpha = editor.drawingAlpha,
+            categories = categories,
             onDismiss = {
                 showCreateDialog = false
                 editor.cancel()
             },
-            onConfirm = { name, color, alpha, radius ->
+            onConfirm = { name, color, alpha, radius, categoryId ->
                 val fence = when (editor.drawingType) {
                     GeoFenceType.CIRCLE -> {
                         if (drawnPoints.isEmpty()) {
@@ -386,7 +401,8 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                             center = drawnPoints.first(),
                             radius = radius,
                             color = color,
-                            alpha = alpha
+                            alpha = alpha,
+                            categoryId = categoryId
                         )
                     }
 
@@ -401,7 +417,8 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                             type = GeoFenceType.POLYGON,
                             points = drawnPoints,
                             color = color,
-                            alpha = alpha
+                            alpha = alpha,
+                            categoryId = categoryId
                         )
                     }
                 }
@@ -464,6 +481,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
             com.trackmaster.app.ui.map.EditFenceDialog(
                 fence = fence,
                 fenceColors = fenceColors,
+                categories = categories,
             onDismiss = {
                 showEditDialog = false
                 selectedFence = null

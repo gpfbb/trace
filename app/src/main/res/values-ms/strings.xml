@@ -141,6 +141,9 @@
     <string name="edit_on_map_hint">Tekan "Edit pada Peta" untuk tambah atau padam titik pada peta</string>
     <string name="edit_on_map">Edit pada Peta</string>
     <string name="category_management">Pengurusan Kategori</string>
+    <string name="category_management_desc">Cipta kategori untuk kumpulkan pagar anda</string>
+    <string name="category_label">Kategori</string>
+    <string name="uncategorized">Belum dikategorikan</string>
     <string name="no_categories_hint">Tiada kategori lagi, tekan bawah untuk cipta</string>
     <string name="new_category">Kategori Baru</string>
     <string name="edit_category">Edit Kategori</string>

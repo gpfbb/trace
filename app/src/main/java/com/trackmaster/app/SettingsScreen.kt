@@ -64,6 +64,7 @@ import com.trackmaster.app.ui.settings.InfoSection
 fun SettingsPage(
     @Suppress("UNUSED_PARAMETER") onNavigateBack: (() -> Unit)? = null,
     onOpenDataImportExport: (() -> Unit)? = null,
+    onOpenCategoryManager: (() -> Unit)? = null,
     hideNavBar: Boolean = false,
     /**
      * 语言切换后回调，通知宿主刷新 LocalConfiguration。
@@ -344,6 +345,17 @@ fun SettingsPage(
             }
 
             HorizontalDivider(color = currentPalette.separator)
+
+            if (onOpenCategoryManager != null) {
+                SettingsMenuCard(
+                    icon = AppIcons.category,
+                    title = stringResource(R.string.category_management),
+                    description = stringResource(R.string.category_management_desc),
+                    tint = currentPalette.accent,
+                    onClick = onOpenCategoryManager
+                )
+                HorizontalDivider(color = currentPalette.separator)
+            }
 
             if (onOpenDataImportExport != null) {
                 SettingsMenuCard(

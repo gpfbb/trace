@@ -141,6 +141,9 @@
     <string name="edit_on_map_hint">Tap "Edit on Map" to add or delete vertices on the map</string>
     <string name="edit_on_map">Edit on Map</string>
     <string name="category_management">Category Management</string>
+    <string name="category_management_desc">Create categories to group your fences</string>
+    <string name="category_label">Category</string>
+    <string name="uncategorized">Uncategorized</string>
     <string name="no_categories_hint">No categories yet, tap below to create</string>
     <string name="new_category">New Category</string>
     <string name="edit_category">Edit Category</string>

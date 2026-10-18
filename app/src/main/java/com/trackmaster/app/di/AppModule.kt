@@ -16,6 +16,8 @@ import com.trackmaster.app.data.database.FenceExporter
 import com.trackmaster.app.data.repository.AppFenceRepository
 import com.trackmaster.app.data.repository.AppSessionRepository
 import com.trackmaster.app.data.repository.FenceRepository
+import com.trackmaster.app.data.repository.CategoryRepository
+import com.trackmaster.app.data.repository.AppCategoryRepository
 import com.trackmaster.app.data.repository.SessionRepository
 import com.trackmaster.app.storage.SqliteStorageAdapter
 import com.trackmaster.app.storage.StorageAdapter
@@ -64,6 +66,7 @@ val appModule = module {
 
     single<FenceRepository> { AppFenceRepository(get()) }
     single<SessionRepository> { AppSessionRepository(get()) }
+    single<CategoryRepository> { AppCategoryRepository(get()) }
 
     // ============================================================
     // Holder 层 (单例)
@@ -98,7 +101,8 @@ val appModule = module {
 
     viewModel {
         MapViewModel(
-            fenceRepo = get()
+            fenceRepo = get(),
+            categoryRepo = get()
         )
     }
 

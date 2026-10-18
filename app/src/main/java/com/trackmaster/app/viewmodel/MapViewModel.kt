@@ -1,12 +1,36 @@
 package com.trackmaster.app.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.trackmaster.app.data.GeoFence
 import com.trackmaster.app.data.repository.FenceRepository
+import com.trackmaster.app.data.repository.CategoryRepository
+import com.trackmaster.app.model.Category
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class MapViewModel(
-    private val fenceRepo: FenceRepository
+    private val fenceRepo: FenceRepository,
+    private val categoryRepo: CategoryRepository
 ) : ViewModel() {
+
+    private val _categories = MutableStateFlow<List<Category>>(emptyList())
+
+    /** 围栏分类列表，给新建/编辑弹窗里的分类选择器用。 */
+    val categories: StateFlow<List<Category>> = _categories.asStateFlow()
+
+    init {
+        refreshCategories()
+    }
+
+    /** 重新读分类。在分类管理页改完之后回到地图时也应调一次。 */
+    fun refreshCategories() {
+        viewModelScope.launch {
+            _categories.value = categoryRepo.getAllCategories()
+        }
+    }
 
     fun addFence(fence: GeoFence) {
         fenceRepo.allFences.add(fence)

@@ -141,6 +141,9 @@
     <string name="edit_on_map_hint">点击「在地图上编辑」来添加或删除地图上的顶点</string>
     <string name="edit_on_map">在地图上编辑</string>
     <string name="category_management">分类管理</string>
+    <string name="category_management_desc">创建分类来归类你的围栏</string>
+    <string name="category_label">分类</string>
+    <string name="uncategorized">未分类</string>
     <string name="no_categories_hint">暂无分类，点击下方创建</string>
     <string name="new_category">新建分类</string>
     <string name="edit_category">编辑分类</string>

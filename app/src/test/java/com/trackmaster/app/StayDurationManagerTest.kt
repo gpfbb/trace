@@ -113,9 +113,22 @@ class StayDurationManagerTest {
         stayManager = MockStayDurationManager()
     }
 
+    /**
+     * 固定的测试基准时间。
+     *
+     * 这些用例原来用 `Date()` 当起点，再往后加 1 小时。如果测试恰好在
+     * 23:00 之后跑，加完就跨过了午夜——mock 会把时长拆到两天，
+     * 断言就莫名其妙地差几十秒。**跑测试的时刻不应该影响结果**，
+     * 所以固定到某天的上午 10 点。
+     */
+    private fun fixtureTime(): Date = Calendar.getInstance().apply {
+        set(2024, Calendar.JANUARY, 15, 10, 0, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.time
+
     @Test
     fun `test single fence enter and exit`() {
-        val enterTime = Date()
+        val enterTime = fixtureTime()
         stayManager.onFenceEnter("fence1", "家", enterTime)
 
         assertTrue(stayManager.isFenceActive("fence1"))
@@ -133,7 +146,7 @@ class StayDurationManagerTest {
 
     @Test
     fun `test multiple nested fences at same time`() {
-        val time = Date()
+        val time = fixtureTime()
         stayManager.onFenceEnter("fence1", "国家", time)
         stayManager.onFenceEnter("fence2", "省", time)
         stayManager.onFenceEnter("fence3", "市", time)

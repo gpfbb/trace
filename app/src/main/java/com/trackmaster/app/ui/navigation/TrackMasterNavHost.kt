@@ -139,6 +139,7 @@ fun TrackMasterNavHost(
                 SettingsPage(
                     onNavigateBack = { navController.popBackStack() },
                     onOpenDataImportExport = { navController.navigate(Screen.DataImportExport.route) },
+                    onOpenCategoryManager = { navController.navigate(Screen.CategoryManager.route) },
                     onLanguageChangeRequested = onLanguageChangeRequested
                 )
             }
