@@ -120,6 +120,7 @@
     <string name="ready_to_create">%d titik, sedia untuk dicipta</string>
     <string name="create">Cipta</string>
     <string name="editing_fence_tap_to_add">Mengedit "%s" — tekan peta untuk tambah titik</string>
+    <string name="editing_circle_tap_to_move">Mengedit "%s" — tekan peta untuk alihkan pusat</string>
     <string name="delete_last">Padam terakhir</string>
     <string name="save">Simpan</string>
     <string name="create_fence">Cipta Geofence</string>

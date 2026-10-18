@@ -120,6 +120,7 @@
     <string name="ready_to_create">%d vertices, ready to create</string>
     <string name="create">Create</string>
     <string name="editing_fence_tap_to_add">Editing "%s" — tap map to add vertices</string>
+    <string name="editing_circle_tap_to_move">Editing "%s" — tap map to move the center</string>
     <string name="delete_last">Delete Last</string>
     <string name="save">Save</string>
     <string name="create_fence">Create Fence</string>

@@ -79,6 +79,7 @@ import java.util.Random
 import java.util.UUID
 import com.trackmaster.app.ui.design.currentPalette
 import com.trackmaster.app.ui.design.AppIcons
+import androidx.compose.foundation.border
 
 private fun AMapLocation.toLocation(): Location = Location(
     latitude = latitude,
@@ -100,13 +101,9 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
     var localMatchedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var localLocation by remember { mutableStateOf<Location?>(null) }
 
-    var isDrawingMode by remember { mutableStateOf(false) }
-    var selectedFenceType by remember { mutableStateOf(GeoFenceType.CIRCLE) }
-    var drawingPoints by remember { mutableStateOf<List<GeoFencePoint>>(emptyList()) }
-    var selectedColor by remember { mutableStateOf("#FF0000") }
-    var selectedAlpha by remember { mutableStateOf(0.3f) }
-    var drawingPrecisionMode by remember { mutableStateOf(false) }
-    var editingPrecisionMode by remember { mutableStateOf(false) }
+    // 绘制/编辑的状态机。原来这里是 8 个独立状态变量，
+    // 现在收成三态（Idle / Drawing / Editing），互斥关系由类型保证。
+    val editor = remember { com.trackmaster.app.ui.map.MapEditorState() }
     var mapType by remember { mutableStateOf(app.appPreferences.mapType) }
 
     var showFenceList by remember { mutableStateOf(false) }
@@ -115,10 +112,6 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<GeoFence?>(null) }
     var showRecalculateHint by remember { mutableStateOf(false) }
-
-    var isEditingFence by remember { mutableStateOf(false) }
-    var editingPoints by remember { mutableStateOf<List<GeoFencePoint>>(emptyList()) }
-    var editingFence by remember { mutableStateOf<GeoFence?>(null) }
     var showToolsPopup by remember { mutableStateOf(false) }
 
     val fenceColors = listOf(
@@ -178,14 +171,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
     }
 
     val onMapClick: (Double, Double) -> Unit = { lat, lng ->
-        when {
-            isDrawingMode -> {
-                drawingPoints = drawingPoints + GeoFencePoint(lat, lng)
-            }
-            isEditingFence && editingFence != null -> {
-                editingPoints = editingPoints + GeoFencePoint(lat, lng)
-            }
-        }
+        editor.onMapClick(lat, lng)
     }
 
     val currentMapProvider by app.appPreferences.mapProviderFlow.collectAsState()
@@ -199,12 +185,12 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                 currentMatchedFenceIds = localMatchedIds,
                 highlightedFenceId = highlightedFenceId,
                 displayedFenceId = displayedFenceId,
-                isDrawingMode = isDrawingMode,
-                drawingPoints = drawingPoints,
-                selectedFenceType = selectedFenceType,
-                isEditingFence = isEditingFence,
-                editingPoints = editingPoints,
-                isPrecisionMode = drawingPrecisionMode || editingPrecisionMode,
+                isDrawingMode = editor.isDrawing,
+                drawingPoints = editor.activePoints,
+                selectedFenceType = editor.drawingType,
+                isEditingFence = editor.isEditing,
+                editingPoints = editor.activePoints,
+                isPrecisionMode = editor.precisionActive,
                 mapType = mapType,
                 onMapClick = onMapClick
             )
@@ -216,12 +202,12 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                 currentMatchedFenceIds = localMatchedIds,
                 highlightedFenceId = highlightedFenceId,
                 displayedFenceId = displayedFenceId,
-                isDrawingMode = isDrawingMode,
-                drawingPoints = drawingPoints,
-                selectedFenceType = selectedFenceType,
-                isEditingFence = isEditingFence,
-                editingPoints = editingPoints,
-                isPrecisionMode = drawingPrecisionMode || editingPrecisionMode,
+                isDrawingMode = editor.isDrawing,
+                drawingPoints = editor.activePoints,
+                selectedFenceType = editor.drawingType,
+                isEditingFence = editor.isEditing,
+                editingPoints = editor.activePoints,
+                isPrecisionMode = editor.precisionActive,
                 mapType = mapType,
                 onMapClick = onMapClick
             )
@@ -272,7 +258,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
         }
 
         AnimatedVisibility(
-            visible = isDrawingMode,
+            visible = editor.isDrawing,
             enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
             exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
             modifier = Modifier
@@ -281,53 +267,48 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                 .padding(horizontal = 16.dp)
         ) {
             DrawingToolbar(
-                fenceType = selectedFenceType,
-                drawingPoints = drawingPoints,
-                selectedColor = selectedColor,
-                selectedAlpha = selectedAlpha,
+                fenceType = editor.drawingType,
+                drawingPoints = editor.activePoints,
+                selectedColor = editor.drawingColor,
+                selectedAlpha = editor.drawingAlpha,
                 fenceColors = fenceColors,
-                isPrecisionMode = drawingPrecisionMode,
-                onPrecisionModeChange = { drawingPrecisionMode = it },
-                onFenceTypeChange = { selectedFenceType = it },
-                onColorChange = { selectedColor = it },
-                onAlphaChange = { selectedAlpha = it },
-                onUndo = { drawingPoints = drawingPoints.dropLast(1) },
-                onCancel = {
-                    isDrawingMode = false
-                    drawingPoints = emptyList()
-                },
+                isPrecisionMode = editor.drawingPrecision,
+                onPrecisionModeChange = { editor.drawingPrecision = it },
+                onFenceTypeChange = { editor.setDrawingType(it) },
+                onColorChange = { editor.drawingColor = it },
+                onAlphaChange = { editor.drawingAlpha = it },
+                onUndo = { editor.undoLastPoint() },
+                onCancel = { editor.cancel() },
                 onCreate = { showCreateDialog = true }
             )
         }
 
-        AnimatedVisibility(
-            visible = isEditingFence && editingFence != null,
-            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 72.dp)
-                .padding(horizontal = 16.dp)
-        ) {
-            EditingToolbar(
-                fence = editingFence,
-                editingPoints = editingPoints,
-                isPrecisionMode = editingPrecisionMode,
-                onPrecisionModeChange = { editingPrecisionMode = it },
-                onUndo = { editingPoints = editingPoints.dropLast(1) },
-                onCancel = {
-                    isEditingFence = false
-                    editingFence = null
-                    editingPoints = emptyList()
-                },
-                onSave = { updatedFence ->
-                    mapViewModel.saveFence(updatedFence)
-                    isEditingFence = false
-                    editingFence = null
-                    editingPoints = emptyList()
-                    selectedFence = null
-                }
-            )
+        // 编辑模式下 editingFence 一定非空——由 MapEditMode.Editing 保证，
+        // 不需要再写 `isEditingFence && editingFence != null` 这种双重判断。
+        (editor.mode as? com.trackmaster.app.ui.map.MapEditMode.Editing)?.let { editing ->
+            AnimatedVisibility(
+                visible = true,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 72.dp)
+                    .padding(horizontal = 16.dp)
+            ) {
+                EditingToolbar(
+                    fence = editing.fence,
+                    editingPoints = editing.points,
+                    isPrecisionMode = editor.editingPrecision,
+                    onPrecisionModeChange = { editor.editingPrecision = it },
+                    onUndo = { editor.undoLastPoint() },
+                    onCancel = { editor.cancel() },
+                    onSave = { updatedFence ->
+                        mapViewModel.saveFence(updatedFence)
+                        editor.cancel()
+                        selectedFence = null
+                    }
+                )
+            }
         }
 
         Column(
@@ -337,76 +318,60 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (isEditingFence && editingFence != null) {
+            // 撤销按钮：绘制和编辑共用同一个动作，只在有点可撤时出现
+            if (editor.consumesMapClicks && editor.activePoints.isNotEmpty()) {
                 SmallFloatingActionButton(
-                    onClick = { editingPoints = editingPoints.dropLast(1) },
+                    onClick = { editor.undoLastPoint() },
                     containerColor = currentPalette.warning,
                     contentColor = currentPalette.onAccent
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo))
-                }
-            }
-
-            if (isDrawingMode && drawingPoints.isNotEmpty()) {
-                SmallFloatingActionButton(
-                    onClick = { drawingPoints = drawingPoints.dropLast(1) },
-                    containerColor = currentPalette.warning,
-                    contentColor = currentPalette.onAccent
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = stringResource(R.string.undo)
+                    )
                 }
             }
 
             FloatingActionButton(
                 onClick = {
-                    when {
-                        isDrawingMode -> {
-                            isDrawingMode = false
-                            drawingPoints = emptyList()
-                        }
-                        isEditingFence -> {
-                            isEditingFence = false
-                            editingFence = null
-                            editingPoints = emptyList()
-                        }
-                        else -> {
-                            isDrawingMode = true
-                            selectedFenceType = GeoFenceType.CIRCLE
-                        }
-                    }
+                    if (editor.consumesMapClicks) editor.cancel() else editor.startDrawing()
                 },
                 containerColor = when {
-                    isDrawingMode || isEditingFence -> Danger
+                    editor.consumesMapClicks -> currentPalette.danger
                     else -> currentPalette.accent
                 },
                 contentColor = currentPalette.onAccent
             ) {
                 Icon(
                     imageVector = when {
-                        isDrawingMode || isEditingFence -> AppIcons.close
+                        editor.consumesMapClicks -> AppIcons.close
                         else -> AppIcons.add
                     },
-                    contentDescription = if (isDrawingMode || isEditingFence) stringResource(R.string.cancel) else stringResource(R.string.draw)
+                    contentDescription = if (editor.consumesMapClicks) {
+                        stringResource(R.string.cancel)
+                    } else {
+                        stringResource(R.string.draw)
+                    }
                 )
             }
         }
     }
 
     if (showCreateDialog) {
+        val drawnPoints = editor.activePoints
         com.trackmaster.app.ui.map.CreateFenceDialog(
-            fenceType = selectedFenceType,
-            points = drawingPoints,
-            color = selectedColor,
-            alpha = selectedAlpha,
+            fenceType = editor.drawingType,
+            points = drawnPoints,
+            color = editor.drawingColor,
+            alpha = editor.drawingAlpha,
             onDismiss = {
                 showCreateDialog = false
-                drawingPoints = emptyList()
-                isDrawingMode = false
+                editor.cancel()
             },
             onConfirm = { name, color, alpha, radius ->
-                val fence = when (selectedFenceType) {
+                val fence = when (editor.drawingType) {
                     GeoFenceType.CIRCLE -> {
-                        if (drawingPoints.isEmpty()) {
+                        if (drawnPoints.isEmpty()) {
                             showCreateDialog = false
                             return@CreateFenceDialog
                         }
@@ -414,14 +379,15 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                             id = UUID.randomUUID().toString(),
                             name = name,
                             type = GeoFenceType.CIRCLE,
-                            center = drawingPoints.first(),
+                            center = drawnPoints.first(),
                             radius = radius,
                             color = color,
                             alpha = alpha
                         )
                     }
+
                     GeoFenceType.POLYGON -> {
-                        if (drawingPoints.size < 3) {
+                        if (drawnPoints.size < 3) {
                             showCreateDialog = false
                             return@CreateFenceDialog
                         }
@@ -429,7 +395,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                             id = UUID.randomUUID().toString(),
                             name = name,
                             type = GeoFenceType.POLYGON,
-                            points = drawingPoints,
+                            points = drawnPoints,
                             color = color,
                             alpha = alpha
                         )
@@ -440,8 +406,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
 
                 showCreateDialog = false
                 showRecalculateHint = true
-                drawingPoints = emptyList()
-                isDrawingMode = false
+                editor.cancel()
             }
         )
     }
@@ -500,9 +465,8 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                 selectedFence = null
             },
             onConfirm = { updatedFence ->
-                editingFence = updatedFence
-                editingPoints = updatedFence.points?.toList() ?: emptyList()
-                isEditingFence = true
+                // 进入编辑模式：顶点从围栏带过来，之后地图点击会往上加
+                editor.startEditing(updatedFence)
                 showEditDialog = false
             },
                 onDelete = {
@@ -528,7 +492,7 @@ fun MapScreen(app: TrackMasterApplication, mapViewModel: MapViewModel) {
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = currentPalette.danger)
                 ) {
-                    Text(stringResource(R.string.delete), color = Color.White)
+                    Text(stringResource(R.string.delete), color = currentPalette.onDanger)
                 }
             },
             dismissButton = {
@@ -731,7 +695,7 @@ private fun DrawingToolbar(
                     Icon(
                         Icons.AutoMirrored.Filled.Undo,
                         contentDescription = stringResource(R.string.undo),
-                        tint = if (drawingPoints.isNotEmpty()) NeonAmber else Color.Gray,
+                        tint = if (drawingPoints.isNotEmpty()) currentPalette.accent else currentPalette.labelTertiary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -742,7 +706,7 @@ private fun DrawingToolbar(
                     Icon(
                         AppIcons.close,
                         contentDescription = stringResource(R.string.cancel),
-                        tint = Color.Gray,
+                        tint = currentPalette.labelSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -756,7 +720,7 @@ private fun DrawingToolbar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 颜色选择器（可横向滚动）
-                Text(stringResource(R.string.color) + ":", fontSize = 10.sp, color = Color.Gray)
+                Text(stringResource(R.string.color) + ":", fontSize = 10.sp, color = currentPalette.labelSecondary)
                 Spacer(Modifier.width(6.dp))
                 Row(
                     modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
@@ -769,7 +733,7 @@ private fun DrawingToolbar(
                                 .size(24.dp)
                                 .clip(CircleShape)
                                 .background(Color(AndroidColor.parseColor(c)))
-                                .then(if (sel) Modifier.background(Color.White.copy(alpha = 0.5f), CircleShape) else Modifier)
+                                .then(if (sel) Modifier.border(2.dp, currentPalette.label, CircleShape) else Modifier)
                                 .clickable { onColorChange(c) }
                         )
                     }
@@ -778,7 +742,7 @@ private fun DrawingToolbar(
                 Spacer(Modifier.width(8.dp))
 
                 // 透明度
-                Text(stringResource(R.string.transparency, (selectedAlpha * 100).toInt()), fontSize = 10.sp, color = Color.Gray)
+                Text(stringResource(R.string.transparency, (selectedAlpha * 100).toInt()), fontSize = 10.sp, color = currentPalette.labelSecondary)
                 Slider(
                     value = selectedAlpha,
                     onValueChange = onAlphaChange,
@@ -840,9 +804,16 @@ private fun EditingToolbar(
         Column {
             Row(Modifier.fillMaxWidth().padding(8.dp)) {
                 Text(
-                    stringResource(R.string.editing_fence_tap_to_add, fence.name),
+                    // 圆形和多边形的编辑语义不同：圆形加的是新圆心，多边形才是顶点
+                    stringResource(
+                        when (fence.type) {
+                            GeoFenceType.CIRCLE -> R.string.editing_circle_tap_to_move
+                            GeoFenceType.POLYGON -> R.string.editing_fence_tap_to_add
+                        },
+                        fence.name
+                    ),
                     fontSize = 12.sp,
-                    color = NeonBlue,
+                    color = currentPalette.accent,
                     modifier = Modifier.weight(1f)
                 )
                 FilterChip(
@@ -856,11 +827,11 @@ private fun EditingToolbar(
                     Icon(
                         Icons.AutoMirrored.Filled.Undo,
                         contentDescription = stringResource(R.string.delete_last),
-                        tint = if (editingPoints.isNotEmpty()) NeonAmber else Color.Gray
+                        tint = if (editingPoints.isNotEmpty()) currentPalette.accent else currentPalette.labelTertiary
                     )
                 }
                 IconButton(onClick = onCancel) {
-                    Icon(AppIcons.close, contentDescription = stringResource(R.string.cancel), tint = Color.Gray)
+                    Icon(AppIcons.close, contentDescription = stringResource(R.string.cancel), tint = currentPalette.labelSecondary)
                 }
             }
 
@@ -883,9 +854,9 @@ private fun EditingToolbar(
                         GeoFenceType.CIRCLE -> editingPoints.size >= 1
                     },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Success)
+                    colors = ButtonDefaults.buttonColors(containerColor = currentPalette.success)
                 ) {
-                    Text(stringResource(R.string.save), color = Color.White)
+                    Text(stringResource(R.string.save), color = currentPalette.onDanger)
                 }
             }
         }

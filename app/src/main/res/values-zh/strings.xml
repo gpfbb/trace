@@ -120,6 +120,7 @@
     <string name="ready_to_create">%d 个顶点，可以创建</string>
     <string name="create">创建</string>
     <string name="editing_fence_tap_to_add">正在编辑 \"%s\" — 点击地图添加顶点</string>
+    <string name="editing_circle_tap_to_move">正在编辑“%s”— 点击地图移动圆心</string>
     <string name="delete_last">删除最后一个</string>
     <string name="save">保存</string>
     <string name="create_fence">创建围栏</string>
