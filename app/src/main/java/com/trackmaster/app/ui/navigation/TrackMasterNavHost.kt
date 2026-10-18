@@ -25,7 +25,12 @@ import org.koin.compose.koinInject
 @Composable
 fun TrackMasterNavHost(
     navController: NavHostController = rememberNavController(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * 语言切换后回调，用于通知宿主刷新 LocalConfiguration。
+     * 不传则语言切换后界面文字不会立即更新（见 MainActivity 里的说明）。
+     */
+    onLanguageChangeRequested: () -> Unit = {}
 ) {
     val app: TrackMasterApplication = koinInject()
     val mapViewModel: MapViewModel = koinInject()
@@ -91,7 +96,8 @@ fun TrackMasterNavHost(
                         navController.navigate(Screen.Home.route) {
                             popUpTo(Screen.Onboarding.route) { inclusive = true }
                         }
-                    }
+                    },
+                    onLanguageChangeRequested = onLanguageChangeRequested
                 )
             }
 
@@ -132,7 +138,8 @@ fun TrackMasterNavHost(
             ) {
                 SettingsPage(
                     onNavigateBack = { navController.popBackStack() },
-                    onOpenDataImportExport = { navController.navigate(Screen.DataImportExport.route) }
+                    onOpenDataImportExport = { navController.navigate(Screen.DataImportExport.route) },
+                    onLanguageChangeRequested = onLanguageChangeRequested
                 )
             }
 

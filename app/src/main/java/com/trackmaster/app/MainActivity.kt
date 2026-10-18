@@ -9,6 +9,12 @@ import com.trackmaster.app.utils.AppLog
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import com.amap.api.location.AMapLocationClient
 import com.amap.api.maps.AMap
 import com.trackmaster.app.mapstraction.amap.AMapPresenter
@@ -59,6 +65,15 @@ class MainActivity : ComponentActivity() {
         AppLog.d("MainActivity", "onCreate: appPrefs.appLanguage=${appPrefs.appLanguage}")
         LanguageManager.ensureLocale(this)
 
+        // 语言版本号：切换语言后 +1，让 Compose 重新读一遍字符串资源。
+        //
+        // LanguageManager.applyLocale 会就地改 Activity 的 Resources，但 Compose 的
+        // stringResource() 依赖 LocalConfiguration 做缓存——Resources 变了而
+        // LocalConfiguration 没变，所有已有文本节点都会继续显示旧语言，
+        // 只有新进入组合的节点才是新语言。这里显式更新 LocalConfiguration，
+        // 让切换语言后整棵树立刻刷成新语言。
+        var localeVersion by mutableIntStateOf(0)
+
         if (appPrefs.mapProvider == MapProvider.AMAP) {
             AppLog.d("TrackMaster", "初始化高德 SDK")
             AMapLocationClient.updatePrivacyShow(this, true, true)
@@ -66,9 +81,20 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val themeController = com.trackmaster.app.ui.design.rememberThemeController()
-            com.trackmaster.app.ui.design.TrackMasterDesignTheme(controller = themeController) {
-                TrackMasterNavHost()
+            // 读取版本号本身即建立订阅
+            val version = localeVersion
+            val configuration = remember(version) {
+                android.content.res.Configuration(resources.configuration)
+            }
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalConfiguration provides configuration
+            ) {
+                val themeController = com.trackmaster.app.ui.design.rememberThemeController()
+                com.trackmaster.app.ui.design.TrackMasterDesignTheme(controller = themeController) {
+                    TrackMasterNavHost(
+                        onLanguageChangeRequested = { localeVersion++ }
+                    )
+                }
             }
         }
 

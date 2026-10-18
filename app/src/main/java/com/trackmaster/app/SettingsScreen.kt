@@ -39,7 +39,12 @@ import com.trackmaster.app.utils.AppLog
 fun SettingsPage(
     @Suppress("UNUSED_PARAMETER") onNavigateBack: (() -> Unit)? = null,
     onOpenDataImportExport: (() -> Unit)? = null,
-    hideNavBar: Boolean = false
+    hideNavBar: Boolean = false,
+    /**
+     * 语言切换后回调，通知宿主刷新 LocalConfiguration。
+     * 不传则切换语言后已有界面文字不会立即更新。
+     */
+    onLanguageChangeRequested: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as TrackMasterApplication
@@ -575,6 +580,7 @@ fun SettingsPage(
                                         currentLanguage = lang
                                     }
                                     prefs.appLanguage = lang
+                                    onLanguageChangeRequested()
                                     showLanguagePicker = false
                                 }
                                 .padding(vertical = 12.dp),
