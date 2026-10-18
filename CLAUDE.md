@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Doing UI work?** Read [`UI_REDESIGN_PLAN.md`](UI_REDESIGN_PLAN.md) first — it covers the
+> current UI layer's exact state, the three structural problems that must be solved before
+> any redesign, a recommended phase order, and the backend invariants UI work must not break.
+
 ## Build / Test / Lint
 
 ```bash
